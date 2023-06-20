@@ -37,13 +37,8 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   }
 
   const socket = await makeWASocket(phone.userId, phone.id);
-  const Erro = () => {
-    console.log("aaaaaaaaaaaaaaaaaaa");
-    return Error("ooo");
-  };
-  socket.onUnexpectedError(Erro as any, "Erro");
+
   socket.ev.on("connection.update", async (update) => {
-    console.log("update", update);
     if (update.qr) {
       socket.ev.flush(true);
       res.status(200).json({
@@ -52,6 +47,7 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       });
       return;
     }
+
     if (update.connection === "close") {
       socket.ev.flush(true);
       res.status(200).json({
@@ -60,13 +56,12 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       });
       return;
     }
-    if (update.connection === "open") {
-      socket.ev.flush(true);
-      let send: any = [];
-      try {
-        tos.forEach(async (_to) => {
-          const parsedTo = parsePhoneNumber(_to, phoneCountry || "ID");
 
+    if (update.connection === "open") {
+      try {
+        let send: any = [];
+        for (const _to of tos) {
+          const parsedTo = parsePhoneNumber(_to, phoneCountry || "ID");
           const sendResult = await socket.sendMessage(
             `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
             {
@@ -74,11 +69,15 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
             }
           );
           send.push(sendResult);
-        });
+        }
+        socket.ev.flush(true);
         res.status(200).json({ result: true, data: send });
         return;
       } catch (e) {
-        res.status(200).json({ result: false, error: e });
+        socket.ev.flush(true);
+        res
+          .status(200)
+          .json({ result: false, error: "Something wrong with server" });
         return;
       }
     }
