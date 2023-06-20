@@ -1,0 +1,25 @@
+.layout {
+  height: 100%;
+}
+.brand-name {
+  margin: 0;
+}
+
+.white-header {
+  background: #fff;
+}
+
+.space-align-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: auto;
+  min-height: 100%;
+  background: rgb(240, 242, 245);
+}
+
+.space-align-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}

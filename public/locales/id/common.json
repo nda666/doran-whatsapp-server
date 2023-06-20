@@ -1,0 +1,32 @@
+{
+  "phone_number": "Nomor HP",
+  "connection": "Koneksi",
+  "created_at": "Dibuat Pada",
+  "have_account": "Sudah punya akun?",
+  "dont_have_account": "Sudah punya akun?",
+  "signup_success": "Sukses mendaftar",
+  "signup": "Mendaftar",
+  "signin": "Masuk",
+  "name": "Nama",
+  "password": "Kata sandi",
+  "passwordConfirm": "Konfirmasi sandi",
+  "validation": {
+    "invalid_login": "Kredensial login tidak valid",
+    "password_confirm": "Silahkan ketik ulang password",
+    "required": "{{field}} harus di isi",
+    "min": "{{field}} minimal {{value}} karakter",
+    "email": "{{field}} bukan alamat email yang valid"
+  },
+  "confirm_delete": "Konfirmasi hapus",
+  "confirm_delete_ask": "Yakin ingin menghapus baris ini?",
+  "delete": "Menghapus",
+  "edit": "Sunting",
+  "please_scan_qrcode": "Silakan pindai Kode Qr dari perangkat tautan aplikasi whatsapp Anda",
+  "scan_qrcode": "Pindai kode QR",
+  "timeout": "Waktu habis",
+  "whatsaap_qrcode": "Kode Qr Whatsapp",
+  "add_devices": "Tambahkan perangkat",
+  "dashboard": "Dasbor",
+  "phone_devices": "Perangkat Hp",
+  "signout": "Keluar"
+}
