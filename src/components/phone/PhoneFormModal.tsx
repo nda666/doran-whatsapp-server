@@ -66,9 +66,7 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
             .then((values) => {
               onSubmit(values);
             })
-            .catch((info) => {
-              console.log("Validate Failed:", info);
-            });
+            .catch((info) => {});
         }}
       >
         <Form

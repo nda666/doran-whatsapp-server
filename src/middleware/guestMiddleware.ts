@@ -7,11 +7,6 @@ export const guestMiddleware =
   (handler: NextApiHandler) =>
   async (req: NextApiRequest, res: NextApiResponse) => {
     const token = await getToken({ req });
-    console.log("token", token);
-
-    // const user = await prisma.user.findFirst({
-    //   where: { token },
-    // });
     return handler(req, res);
   };
 

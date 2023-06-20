@@ -69,7 +69,6 @@ const PhonePage = () => {
   }, [phoneData.phones]);
 
   useEffect(() => {
-    console.log("state.openForm", state.openForm);
     if (!socketOption || state.openForm) {
       socket?.disconnect();
       return;

@@ -19,7 +19,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   const token = await getToken({ req });
-  console.log("token", req);
   try {
     const phones = await prisma.phone.findMany({
       where: {

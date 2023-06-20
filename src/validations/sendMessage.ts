@@ -5,10 +5,7 @@ import { i18n } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { ZodError, z } from "zod";
 
-export const SendMessageValidation = async (
-  data: any,
-  res: NextApiResponse
-) => {
+export const SendMessageValidation = async (data: any) => {
   const validation = z
     .object({
       to: z.string({
@@ -24,24 +21,42 @@ export const SendMessageValidation = async (
       to: true,
     })
     .refine(
-      (data) =>
-        parsePhoneNumber(
-          data.to,
-          data.phoneCode ? (data.phoneCode as CountryCode) : "ID"
-        ).isValid(),
+      (data) => {
+        const tos = data.to.split(",");
+        let result = true;
+        tos.forEach((x) => {
+          try {
+            let _res = parsePhoneNumber(
+              x,
+              data.phoneCode ? (data.phoneCode as CountryCode) : "ID"
+            ).isValid();
+
+            if (!_res) {
+              result = false;
+              return false;
+            }
+          } catch (e) {
+            result = false;
+            return false;
+          }
+        });
+        return result;
+      },
       {
-        message: i18n?.t("validation.phone_not_valid").toString(),
-        path: ["number"],
+        message: "To number wrong formated",
+        path: ["to"],
       }
     );
 
   try {
-    validation.parse(data);
+    const res = validation.parse(data);
+
     return { result: true, error: null };
   } catch (e) {
     if (e instanceof ZodError) {
-      res.status(422).send(e);
       return { result: false, error: e };
+    } else {
+      return { result: false, error: "Something happen to server" };
     }
   }
 };

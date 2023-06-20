@@ -42,14 +42,12 @@ nextApp.prepare().then(async () => {
       createdWaSock && waSocks.push(createdWaSock);
     });
     socket.on("disconnecting", () => {
-      console.log("user disconnect: " + socket.id);
       waSocks.forEach((waSock) => {
         waSock.ev.flush(true);
       });
     });
 
     socket?.on("disconnect", async (reason) => {
-      console.log("user disconnect: " + reason);
       waSocks.forEach((waSock) => {
         waSock.ev.flush(true);
       });

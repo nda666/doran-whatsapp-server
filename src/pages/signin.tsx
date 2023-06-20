@@ -33,7 +33,6 @@ const Signin = ({
       email: data.email,
       password: data.password,
     });
-    console.log("RESSS", res);
     setState({
       ...state,
       loading: false,
@@ -44,7 +43,6 @@ const Signin = ({
     });
 
     if (res?.ok) {
-      console.log(res);
       form.resetFields();
       Router.replace("/dashboard");
     }

@@ -29,7 +29,6 @@ const useSocket = (
     const socketInstance = io(option);
 
     for (const event of events) {
-      console.log("set socket event: " + event.name);
       socketInstance.on(event.name, event.handler);
     }
     socketInstance.connect();

@@ -7,6 +7,7 @@ import { DisconnectReason } from "@whiskeysockets/baileys";
 import { PhoneNumber, parsePhoneNumber } from "libphonenumber-js";
 import { NextApiRequest, NextApiResponse } from "next";
 import { getToken } from "next-auth/jwt";
+import { i18n } from "next-i18next";
 import { ZodError } from "zod";
 
 const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
@@ -15,11 +16,15 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  const validation = await SendMessageValidation(req.body, res);
+  const validation = await SendMessageValidation(req.body);
+  console.log(validation);
   if (!validation?.result) {
+    res.status(200).json(validation?.error);
     return;
   }
   const { to, text, token, phoneCountry } = req.body;
+
+  const tos = (to as string).split(",");
 
   const phone = await prisma.phone.findUnique({
     where: {
@@ -27,17 +32,26 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
     },
   });
   if (!phone) {
-    return res
-      .status(200)
-      .json({ result: false, message: "Token tidak valid" });
+    res.status(200).json({ result: false, message: "Token tidak valid" });
+    return;
   }
 
-  const parsedTo = parsePhoneNumber(to, phoneCountry || "ID");
-
   const socket = await makeWASocket(phone.userId, phone.id);
-
+  const Erro = () => {
+    console.log("aaaaaaaaaaaaaaaaaaa");
+    return Error("ooo");
+  };
+  socket.onUnexpectedError(Erro as any, "Erro");
   socket.ev.on("connection.update", async (update) => {
     console.log("update", update);
+    if (update.qr) {
+      socket.ev.flush(true);
+      res.status(200).json({
+        result: false,
+        error: "Please scan qr code from phone dashboard page",
+      });
+      return;
+    }
     if (update.connection === "close") {
       socket.ev.flush(true);
       res.status(200).json({
@@ -48,13 +62,19 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
     }
     if (update.connection === "open") {
       socket.ev.flush(true);
+      let send: any = [];
       try {
-        const send = await socket.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
-          {
-            text,
-          }
-        );
+        tos.forEach(async (_to) => {
+          const parsedTo = parsePhoneNumber(_to, phoneCountry || "ID");
+
+          const sendResult = await socket.sendMessage(
+            `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+            {
+              text,
+            }
+          );
+          send.push(sendResult);
+        });
         res.status(200).json({ result: true, data: send });
         return;
       } catch (e) {
