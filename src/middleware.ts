@@ -8,7 +8,7 @@ export default async function middleware(
 ) {
   const token = await getToken({ req });
   const isAuthenticated = !!token;
-
+  console.log("isAuthenticated", isAuthenticated);
   const guestUrl = ["/", "/signin", "/signup"];
   if (guestUrl.includes(req.nextUrl.pathname) && isAuthenticated) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
@@ -30,5 +30,12 @@ export default async function middleware(
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/phone", "/signout"],
+  matcher: [
+    "/",
+    "/signin",
+    "/signup",
+    "/dashboard",
+    "/dashboard/phone",
+    "/signout",
+  ],
 };
