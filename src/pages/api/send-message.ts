@@ -17,7 +17,6 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   }
 
   const validation = await SendMessageValidation(req.body);
-  console.log(validation);
   if (!validation?.result) {
     res.status(200).json(validation?.error);
     return;
@@ -61,6 +60,7 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       try {
         let send: any = [];
         for (const _to of tos) {
+          console.log("SEND TO: " + _to);
           const parsedTo = parsePhoneNumber(_to, phoneCountry || "ID");
           const sendResult = await socket.sendMessage(
             `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
