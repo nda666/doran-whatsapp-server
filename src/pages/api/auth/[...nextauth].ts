@@ -1,10 +1,10 @@
-import NextAuth from "next-auth";
+import NextAuth, { Session } from "next-auth";
 import { Adapter } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { i18n } from "next-i18next";
 import axios, { AxiosError } from "axios";
-import { getToken } from "next-auth/jwt";
+import { GetTokenParams, JWT, getToken } from "next-auth/jwt";
 import { PrismaClient } from "@prisma/client";
 import { PrismaAdapter } from "@/lib/prismaAdapter";
 import { signOut } from "next-auth/react";
@@ -24,9 +24,9 @@ export default NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    authorized({ req, token }) {
-      if (token) return true; // If there is a token, the user is authenticated
-    },
+    // authorize({ token }: { token: JWT }) {
+    //   if (token) return true; // If there is a token, the user is authenticated
+    // },
     async redirect({ url, baseUrl }) {
       // Allows relative callback URLs
       if (url.startsWith("/")) return `${baseUrl}${url}`;
@@ -34,20 +34,19 @@ export default NextAuth({
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       const user = await prisma.user.findUnique({
         where: {
           id: token.id || "",
         },
       });
 
-      if (!user) {
-        return null;
+      if (user && session.user) {
+        session.user.id = user?.id;
+        session.user.token = user?.token;
+        session.user.email = user?.email!;
       }
 
-      session.user.id = user?.id;
-      session.user.token = user?.token;
-      session.user.email = user?.email!;
       return session;
     },
     async jwt({ token, user }) {

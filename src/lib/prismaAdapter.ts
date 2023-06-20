@@ -17,6 +17,8 @@
  */
 import type { PrismaClient, Prisma } from "@prisma/client";
 import type { Adapter, AdapterAccount } from "@auth/core/adapters";
+import { AdapterSession, AdapterUser } from "next-auth/adapters";
+import { Awaitable } from "next-auth";
 
 /**
  * ## Setup
@@ -220,18 +222,25 @@ import type { Adapter, AdapterAccount } from "@auth/core/adapters";
  **/
 export function PrismaAdapter(p: PrismaClient): Adapter {
   return {
-    createUser: (data) => p.user.create({ data }),
-    getUser: (id) => p.user.findUnique({ where: { id } }),
-    getUserByEmail: (email) => p.user.findUnique({ where: { email } }),
+    createUser: (data) =>
+      p.user.create({ data } as { data: any }) as Awaitable<AdapterUser>,
+    getUser: (id) =>
+      p.user.findUnique({ where: { id } }) as Awaitable<AdapterUser | null>,
+    getUserByEmail: (email) =>
+      p.user.findUnique({ where: { email } }) as Awaitable<AdapterUser | null>,
     async getUserByAccount(provider_providerAccountId) {
       const account = await p.account.findUnique({
         where: { provider_providerAccountId },
         select: { user: true },
       });
-      return account?.user ?? null;
+      return (account?.user as Awaitable<AdapterUser | null>) ?? null;
     },
-    updateUser: ({ id, ...data }) => p.user.update({ where: { id }, data }),
-    deleteUser: (id) => p.user.delete({ where: { id } }),
+    updateUser: ({ id, ...data }) =>
+      p.user.update({ where: { id }, data }) as Awaitable<AdapterUser>,
+    deleteUser: (id) =>
+      p.user.delete({ where: { id } }) as
+        | Promise<void>
+        | Awaitable<AdapterUser | null | undefined>,
     linkAccount: (data) =>
       p.account.create({ data }) as unknown as AdapterAccount,
     unlinkAccount: (provider_providerAccountId) =>
@@ -245,7 +254,10 @@ export function PrismaAdapter(p: PrismaClient): Adapter {
       });
       if (!userAndSession) return null;
       const { user, ...session } = userAndSession;
-      return { user, session };
+      return { user, session } as Awaitable<{
+        session: AdapterSession;
+        user: AdapterUser;
+      } | null>;
     },
     createSession: (data) => p.session.create({ data }),
     updateSession: (data) =>

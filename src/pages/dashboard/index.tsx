@@ -1,6 +1,5 @@
 import Layout from "@/components/Layout";
 import { GetServerSideProps } from "next";
-import { User, getServerSession } from "next-auth";
 import { i18n } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { ReactElement } from "react";

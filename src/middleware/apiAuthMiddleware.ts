@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { AuthNextApiRequest } from "@/types/global";
 import { NextApiHandler, NextApiRequest, NextApiResponse } from "next";
 
 // 7f76a027-bfa2-4921-82d0-1229a8532c65
 export const apiAuthMiddleware =
   (handler: NextApiHandler) =>
-  async (req: NextApiRequest, res: NextApiResponse) => {
+  async (req: AuthNextApiRequest, res: NextApiResponse) => {
     const { authorization } = req.headers;
 
     if (!authorization || !authorization.startsWith("Bearer ")) {
