@@ -25,6 +25,7 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
 
   const tos = (to as string).split(",");
 
+  console.log("tos", tos);
   const phone = await prisma.phone.findUnique({
     where: {
       token: token,
@@ -60,7 +61,6 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       try {
         let send: any = [];
         for (const _to of tos) {
-          console.log("SEND TO: " + _to);
           const parsedTo = parsePhoneNumber(_to, phoneCountry || "ID");
           const sendResult = await socket.sendMessage(
             `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
