@@ -3,7 +3,19 @@ import { prisma } from "./prisma";
 import { Phone } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { PhoneFormData } from "@/components/phone/PhoneFormModal";
-export default function usePhoneData(token: string) {
+
+type ResponseResult = {
+  success: boolean;
+  error: any;
+  data: any;
+};
+export type usePhoneDataType = {
+  phones: Phone[] | undefined;
+  save: (data: PhoneFormData) => Promise<ResponseResult>;
+  deleteById: (phoneId: string) => Promise<ResponseResult>;
+  refetchPhone: () => void;
+};
+export default function usePhoneData(token: string): usePhoneDataType {
   const [runRefetchPhone, setRunRefetchPhone] = useState(false);
   const [phones, setPhones] = useState<Phone[] | undefined>([]);
   // const socketRef = useRef<any>();
@@ -60,11 +72,7 @@ export default function usePhoneData(token: string) {
     return result;
   };
   const save = async (data: PhoneFormData) => {
-    const result: {
-      success: boolean;
-      error: any;
-      data: any;
-    } = {
+    const result: ResponseResult = {
       success: false,
       error: undefined,
       data: undefined,

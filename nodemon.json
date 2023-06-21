@@ -1,0 +1,6 @@
+{
+  "watch": ["src", "public/locales"],
+  "ext": "ts,json",
+  "ignore": ["src/**/*.spec.ts"],
+  "exec": "NODE_ENV=development ts-node --project tsconfig.server.json src/server.ts"
+}

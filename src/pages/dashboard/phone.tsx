@@ -5,12 +5,21 @@ import PhoneFormModal, {
   PhoneFormModalRef,
 } from "@/components/phone/PhoneFormModal";
 import PhoneTableButton from "@/components/phone/PhoneTableButton";
+import { copyToClipboard } from "@/lib/copyToClipboard";
 import usePhoneData from "@/lib/usePhoneData";
 import useSocket from "@/lib/useSocket";
 import { SocketEvent } from "@/lib/useSocket";
 import useWhatsappBot from "@/lib/useWhatsappBot";
 import { Phone, User } from "@prisma/client";
-import { Button, Dropdown, Menu, Modal, Table, notification } from "antd";
+import {
+  Button,
+  Dropdown,
+  Menu,
+  Modal,
+  Space,
+  Table,
+  notification,
+} from "antd";
 import { ColumnsType } from "antd/es/table";
 import { AxiosError } from "axios";
 import dayjs from "dayjs";
@@ -49,7 +58,7 @@ const PhonePage = () => {
   const { socket, setEvents } = useSocket(socketOption);
   const { t, i18n } = useTranslation("common");
   const [modal, contextHolder] = Modal.useModal();
-  const [api, notificationContext] = notification.useNotification();
+  const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
   useEffect(() => {
     if ((phoneData.phones?.length || 0) <= 0) {
@@ -106,6 +115,26 @@ const PhonePage = () => {
       title: "Api Token",
       key: "token",
       dataIndex: "token",
+      render: (v) => (
+        <Space direction="horizontal">
+          <Button
+            onClick={async () => {
+              await copyToClipboard({ value: v });
+              notif.destroy();
+              notif.success({
+                closeIcon: false,
+                duration: 3,
+                message:
+                  t("text_copied", { text: '"Token"' }).toString() || "Copied",
+                placement: "bottom",
+              });
+            }}
+          >
+            Copy
+          </Button>
+          <div>{v}</div>
+        </Space>
+      ),
     },
     {
       title: t("isOnline"),
@@ -127,39 +156,15 @@ const PhonePage = () => {
         return (
           <PhoneTableButton
             phone={phone}
-            onEditClick={(_phone) => {
-              _phone &&
-                setState({ ...state, editPhone: _phone, openForm: true });
-            }}
-            onDeleteClick={(_phone) => {
-              _phone &&
-                modal.confirm({
-                  title: t("confirm_delete"),
-                  content: t("confirm_delete_ask"),
-                  onOk: async () => {
-                    const result = await phoneData.deleteById(_phone.id);
-                    api[result.success ? "success" : "error"]({
-                      message: result.success ? t("success") : t("failed"),
-                      description: result.success
-                        ? t("success_delete")
-                        : t("failed_delete"),
-                    });
-                  },
-                });
-            }}
-            onGetQrCodeClick={(_phone) => {
-              _phone &&
-                setState({
-                  ...state,
-                  selectedPhone: _phone,
-                  openQrModal: true,
-                });
-            }}
+            onEditClick={onEditClick}
+            onDeleteClick={onDeleteClick}
+            onGetQrCodeClick={onGetQrCodeClick}
           />
         );
       },
     },
   ];
+
   const onSubmit = async (data: PhoneFormData) => {
     setState({ ...state, formLoading: true });
     const res = await phoneData.save(data);
@@ -175,6 +180,37 @@ const PhonePage = () => {
   };
   const onCancel = () =>
     setState({ ...state, openForm: false, editPhone: undefined });
+
+  const onEditClick = (_phone: Phone | undefined) => {
+    _phone && setState({ ...state, editPhone: _phone, openForm: true });
+  };
+
+  const onDeleteClick = (_phone: Phone | undefined) => {
+    _phone &&
+      modal.confirm({
+        title: t("confirm_delete"),
+        content: t("confirm_delete_ask"),
+        onOk: async () => {
+          const result = await phoneData.deleteById(_phone.id);
+          notif[result.success ? "success" : "error"]({
+            message: result.success ? t("success") : t("failed"),
+            description: result.success
+              ? t("success_delete")
+              : t("failed_delete"),
+          });
+        },
+      });
+  };
+
+  const onGetQrCodeClick = (_phone: Phone | undefined) => {
+    _phone &&
+      setState({
+        ...state,
+        selectedPhone: _phone,
+        openQrModal: true,
+      });
+  };
+
   return (
     <>
       <Button onClick={() => setState({ ...state, openForm: true })}>
@@ -188,7 +224,18 @@ const PhonePage = () => {
         onSubmit={onSubmit}
         editPhone={state.editPhone}
       />
-      <Table dataSource={phoneData.phones} columns={dataColumn} />
+      <Table
+        onRow={(record) => {
+          return {
+            onContextMenu: (event) => {
+              event.preventDefault();
+              console.log(record);
+            },
+          };
+        }}
+        dataSource={phoneData.phones}
+        columns={dataColumn}
+      />
       <ModalQrCode
         userId={session?.user?.id}
         open={state.openQrModal}

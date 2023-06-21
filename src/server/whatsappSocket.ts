@@ -1,13 +1,8 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  BaileysEventMap,
-} from "@whiskeysockets/baileys";
-import { existsSync, readdirSync } from "fs";
-import { Server } from "socket.io";
-import connectionUpdate from "./events/connectionUpdate";
-import { WaSockQrTimeout } from "./constant";
-import { DefaultEventsMap } from "socket.io/dist/typed-events";
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
 import { Socket } from "socket.io";
+import { waSocketLogOption } from "../lib/makeWASocket";
+import { WaSockQrTimeout } from "./constant";
+import connectionUpdate from "./events/connectionUpdate";
 
 export default async function whatsappSocket(
   io: Socket,
@@ -27,6 +22,7 @@ export default async function whatsappSocket(
       auth: state,
       qrTimeout: WaSockQrTimeout,
       syncFullHistory: false,
+      logger: waSocketLogOption,
     });
     waSock.ev.on("creds.update", (authState) => {
       saveCreds();

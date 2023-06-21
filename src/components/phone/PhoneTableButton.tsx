@@ -4,6 +4,7 @@ import {
   DownOutlined,
   EditOutlined,
   QrcodeOutlined,
+  SettingOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Phone } from "@prisma/client";
@@ -49,10 +50,11 @@ export default function PhoneTableButton({
     items,
   };
   return (
-    <Dropdown menu={menuProps}>
+    <Dropdown menu={menuProps} trigger={["click"]}>
       <Button>
         <Space>
-          Button
+          <SettingOutlined />
+          Action
           <DownOutlined />
         </Space>
       </Button>

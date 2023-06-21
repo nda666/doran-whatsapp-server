@@ -8,8 +8,12 @@ export default async function middleware(
 ) {
   const token = await getToken({ req });
   const isAuthenticated = !!token;
-  console.log("isAuthenticated", isAuthenticated);
-  const guestUrl = ["/", "/signin", "/signup"];
+
+  if (req.nextUrl.pathname === "/signup") {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  const guestUrl = ["/", "/signin"];
   if (guestUrl.includes(req.nextUrl.pathname) && isAuthenticated) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }

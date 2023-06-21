@@ -28,5 +28,6 @@
   "add_devices": "Tambahkan perangkat",
   "dashboard": "Dasbor",
   "phone_devices": "Perangkat Hp",
-  "signout": "Keluar"
+  "signout": "Keluar",
+  "text_copied": "{{text}} telah disalin ke papan klip"
 }
