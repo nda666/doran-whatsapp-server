@@ -1,5 +1,5 @@
 import express from "express";
-import * as http from "http";
+import compression from "compression";
 import { prisma } from "./lib/prisma";
 import next from "next";
 import * as socketio from "socket.io";
@@ -9,14 +9,14 @@ import { WASocket } from "@whiskeysockets/baileys";
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
 const dev = process.env.NODE_ENV !== "production";
-const nextApp = next({ dev, hostname, port });
+const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
+const app = express();
+app.use(compression());
+const io = new socketio.Server();
 nextApp.prepare().then(async () => {
-  const app = express();
-  const server = http.createServer(app);
-  const io = new socketio.Server();
-  io.attach(server);
+  // const server = http.createServer(app);
 
   app.get("/hello", async (_, res) => {
     res.send(JSON.stringify(await prisma.phone.findMany()));
@@ -54,9 +54,15 @@ nextApp.prepare().then(async () => {
     });
   });
 
-  app.all("*", (req, res) => nextHandler(req, res));
+  app.all("*", (req, res, next) => {
+    res.setTimeout(20000, function () {
+      res.status(408).end();
+    });
+    nextHandler(req, res);
+  });
 
-  server.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });
+  io.attach(server);
 });
