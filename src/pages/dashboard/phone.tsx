@@ -21,13 +21,10 @@ import {
   notification,
 } from "antd";
 import { ColumnsType } from "antd/es/table";
-import { AxiosError } from "axios";
 import dayjs from "dayjs";
-import { getToken } from "next-auth/jwt";
 import { useSession } from "next-auth/react";
 import { i18n, useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import { useRouter } from "next/router";
 import {
   ReactElement,
   SetStateAction,
@@ -35,7 +32,6 @@ import {
   useRef,
   useState,
 } from "react";
-import io from "socket.io-client";
 
 const PhonePage = () => {
   const [state, setState] = useState<{

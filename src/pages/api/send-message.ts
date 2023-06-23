@@ -21,14 +21,14 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
     res.status(200).json(validation?.error);
     return;
   }
-  const { to, text, token, phoneCountry } = req.body;
+  const { number, message, api_key, phoneCountry } = req.body;
 
-  const tos = (to as string).split(",");
+  const tos = (number as string).split(",");
 
   console.log("tos", tos);
   const phone = await prisma.phone.findUnique({
     where: {
-      token: token,
+      token: api_key,
     },
   });
   if (!phone) {
@@ -65,7 +65,7 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
           const sendResult = await socket.sendMessage(
             `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
             {
-              text,
+              text: message,
             }
           );
           send.push(sendResult);

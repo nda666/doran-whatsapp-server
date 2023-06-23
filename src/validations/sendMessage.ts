@@ -8,21 +8,21 @@ import { ZodError, z } from "zod";
 export const SendMessageValidation = async (data: any) => {
   const validation = z
     .object({
-      to: z.string({
+      number: z.string({
         required_error: "Field to is required",
       }),
       phoneCode: z.string().optional(),
-      text: z.string({
+      message: z.string({
         required_error: "Field text is required",
       }),
     })
     .required({
-      text: true,
-      to: true,
+      message: true,
+      number: true,
     })
     .refine(
       (data) => {
-        const tos = data.to.split(",");
+        const tos = data.number.split(",");
         let result = true;
         tos.forEach((x) => {
           try {
@@ -43,8 +43,8 @@ export const SendMessageValidation = async (data: any) => {
         return result;
       },
       {
-        message: "To number wrong formated",
-        path: ["to"],
+        message: "Number wrong formated",
+        path: ["number"],
       }
     );
 
