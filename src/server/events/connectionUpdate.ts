@@ -51,10 +51,10 @@ export default function connectionUpdate(
       phoneId: phoneId,
     });
     waSock.ev.flush(true);
-    waSock.end(undefined);
   }
 
   if (connection === "close") {
+    waSock.ev.flush(true);
     io?.emit("connectionState", {
       update: "lalalala",
       t: (lastDisconnect?.error as any)?.output?.statusCode,
@@ -74,7 +74,6 @@ export default function connectionUpdate(
     // );
     // reconnect if not logged out
     if (shouldReconnect) {
-      waSock.ev.flush(true);
       fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
         recursive: true,
         force: true,
@@ -82,5 +81,7 @@ export default function connectionUpdate(
       whatsappSocket(io, userId, phoneId);
     }
   } else if (connection === "open") {
+    console.log("OPEN");
+    waSock.ev.flush(true);
   }
 }

@@ -64,9 +64,9 @@ function connectionUpdate(io, waSock, userId, phoneId, update) {
             phoneId: phoneId,
         });
         waSock.ev.flush(true);
-        waSock.end(undefined);
     }
     if (connection === "close") {
+        waSock.ev.flush(true);
         io === null || io === void 0 ? void 0 : io.emit("connectionState", {
             update: "lalalala",
             t: (_b = (_a = lastDisconnect === null || lastDisconnect === void 0 ? void 0 : lastDisconnect.error) === null || _a === void 0 ? void 0 : _a.output) === null || _b === void 0 ? void 0 : _b.statusCode,
@@ -84,7 +84,6 @@ function connectionUpdate(io, waSock, userId, phoneId, update) {
         // );
         // reconnect if not logged out
         if (shouldReconnect) {
-            waSock.ev.flush(true);
             fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
                 recursive: true,
                 force: true,
@@ -93,6 +92,8 @@ function connectionUpdate(io, waSock, userId, phoneId, update) {
         }
     }
     else if (connection === "open") {
+        console.log("OPEN");
+        waSock.ev.flush(true);
     }
 }
 exports.default = connectionUpdate;
