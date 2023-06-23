@@ -41,16 +41,14 @@ export default function connectionUpdate(
   }
   const { connection, lastDisconnect } = update;
   if (update.isNewLogin) {
-    io?.emit("isOnline", {
-      isOnline: update.isNewLogin,
-      phoneId: phoneId,
-    });
     waSock.ev.flush(true);
     whatsappSocket(io, userId, phoneId);
   }
-  if (update.isOnline) {
-    io?.emit("isOnline", update.isOnline);
-  }
+
+  io?.emit("isOnline", {
+    isOnline: update.isNewLogin,
+    phoneId: phoneId,
+  });
 
   if (connection === "close") {
     io?.emit("connectionState", {

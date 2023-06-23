@@ -85,8 +85,9 @@ const PhonePage = () => {
     const events: SetStateAction<SocketEvent[] | null> = [];
 
     events.push({
-      name: `connectionState`,
+      name: `isOnline`,
       handler: (connection) => {
+        console.log("isOnline", connection);
         setPhoneOnline([...phoneOnline, connection.phoneId]);
       },
     });
