@@ -90,6 +90,19 @@ const PhonePage = () => {
         setPhoneOnline([...phoneOnline, connection.phoneId]);
       },
     });
+    events.push({
+      name: `waUser`,
+      handler: (waUser) => {
+        let _phones = phoneData.phones;
+        let editPhones = _phones?.find((x) => x.id === waUser.phoneId);
+        if (editPhones) {
+          editPhones.account_name = waUser.waUser.name;
+          editPhones.number = waUser.waUser.id.split(":")[0];
+          phoneData.setPhones(_phones);
+          console.log("waUser updated", waUser);
+        }
+      },
+    });
 
     events.push({
       name: "connect",
@@ -112,11 +125,23 @@ const PhonePage = () => {
       dataIndex: "name",
     },
     {
-      title: "Api Token",
+      title: t("number"),
+      key: "number",
+      dataIndex: "number",
+    },
+    {
+      title: t("account_name"),
+      key: "account_name",
+      dataIndex: "account_name",
+      render: (v) => <div style={{ whiteSpace: "nowrap" }}>{v}</div>,
+    },
+    {
+      title: t("api_token"),
       key: "token",
       dataIndex: "token",
+
       render: (v) => (
-        <Space direction="horizontal">
+        <Space direction="horizontal" style={{ whiteSpace: "nowrap" }}>
           <Button
             onClick={async () => {
               await copyToClipboard({ value: v });
@@ -137,7 +162,7 @@ const PhonePage = () => {
       ),
     },
     {
-      title: t("isOnline"),
+      title: "Online",
       key: "id",
       dataIndex: "id",
       render: (v) => (phoneOnline.includes(v) ? "Online" : "Offline"),
@@ -146,12 +171,17 @@ const PhonePage = () => {
       title: t("created_at"),
       key: "createdAt",
       dataIndex: "createdAt",
-      render: (v) => dayjs(v).format("DD/MM/YYYY HH:mm"),
+      render: (v) => (
+        <div style={{ whiteSpace: "nowrap" }}>
+          {dayjs(v).format("DD/MM/YYYY HH:mm")}
+        </div>
+      ),
     },
     {
       title: t("action"),
       key: "action",
       dataIndex: "id",
+      fixed: "right",
       render: (v, phone) => {
         return (
           <PhoneTableButton
@@ -225,6 +255,7 @@ const PhonePage = () => {
         editPhone={state.editPhone}
       />
       <Table
+        scroll={{ x: true }}
         onRow={(record) => {
           return {
             onContextMenu: (event) => {

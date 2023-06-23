@@ -1,17 +1,17 @@
-import { WaSockQrTimeout } from "@/server/constant";
 import _makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
 import { pino } from "pino";
+import { prisma } from "./prisma";
 
 export const waSocketLogOption = pino({
   transport: {
     targets: [
-      {
-        level: "debug",
-        target: "pino-pretty",
-        options: {
-          colorize: true,
-        },
-      },
+      // {
+      //   level: "debug",
+      //   target: "pino-pretty",
+      //   options: {
+      //     colorize: true,
+      //   },
+      // },
       {
         level: "error",
         target: "pino-roll",
@@ -43,12 +43,29 @@ const makeWASocket = async (userId: string, phoneId: string) => {
     `./whatsapp-auth/${userId}-${phoneId}`
   );
 
-  return await _makeWASocket({
+  const _waSocket = await _makeWASocket({
     printQRInTerminal: false,
     auth: state,
     syncFullHistory: false,
     logger: waSocketLogOption,
   });
+
+  if (_waSocket.user) {
+    await prisma.phone.update({
+      where: {
+        id: phoneId,
+      },
+      data: {
+        number: _waSocket.user.id.split(":")[0],
+        account_name: _waSocket.user.name,
+      },
+    });
+  }
+
+  _waSocket.ev.on("creds.update", (authState) => {
+    saveCreds();
+  });
+  return _waSocket;
 };
 
 export default makeWASocket;

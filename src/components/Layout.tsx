@@ -29,6 +29,7 @@ export default function Layout({
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [collapsedWidth, setCollapsedWidth] = useState(80);
   const { t } = useTranslation("common");
 
   const router = useRouter();
@@ -41,6 +42,12 @@ export default function Layout({
         trigger={null}
         collapsible
         collapsed={collapsed}
+        collapsedWidth={collapsedWidth}
+        breakpoint="sm"
+        onBreakpoint={(broken) => {
+          setCollapsed(broken);
+          broken ? setCollapsedWidth(0) : setCollapsedWidth(90);
+        }}
         theme="dark"
         style={{
           overflow: "auto",
@@ -49,6 +56,8 @@ export default function Layout({
           left: 0,
           top: 0,
           bottom: 0,
+          zIndex: 1,
+          paddingTop: collapsedWidth == 0 ? 60 : 0,
         }}
       >
         <Space
@@ -118,7 +127,11 @@ export default function Layout({
         style={{
           minHeight: "100%",
           transition: "all 0.2s,background 0s",
-          marginLeft: collapsed ? "80px" : "200px",
+          marginLeft: collapsed
+            ? collapsedWidth
+            : collapsedWidth == 0
+            ? 0
+            : "200px",
         }}
       >
         <Header
@@ -130,11 +143,12 @@ export default function Layout({
             display: "flex",
             alignItems: "center",
             paddingLeft: 10,
+            paddingRight: 10,
             justifyContent: "space-between",
             color: colorWhite,
           }}
         >
-          <Space size={"large"}>
+          <Space style={{ flex: 1 }}>
             <Button
               type="ghost"
               style={{ color: colorWhite }}
@@ -142,7 +156,7 @@ export default function Layout({
             >
               {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </Button>
-            <div>{title}</div>
+            <div style={{ fontWeight: "bold", fontSize: "1.1em" }}>{title}</div>
           </Space>
           <Menu
             theme="dark"

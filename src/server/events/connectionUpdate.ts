@@ -8,6 +8,7 @@ import { Socket } from "socket.io";
 import whatsappSocket from "../whatsappSocket";
 import { updatePhoneStatusAndOnline } from "../../lib/phone";
 import { WaSockQrTimeout } from "../constant";
+import { prisma } from "../../lib/prisma";
 
 export default function connectionUpdate(
   io: Socket,
@@ -16,6 +17,10 @@ export default function connectionUpdate(
   phoneId: string,
   update: Partial<ConnectionState>
 ) {
+  if (waSock.user) {
+    io?.emit("waUser", { phoneId, waUser: waSock.user });
+  }
+
   if (update.connection == "close") {
     // io?.to(`${userId}`).emit(`connectionState`, "FUCJJJ");
     // fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
@@ -46,6 +51,7 @@ export default function connectionUpdate(
   if (update.isOnline) {
     io?.emit("isOnline", update.isOnline);
   }
+
   if (connection === "close") {
     io?.emit("connectionState", {
       update: "lalalala",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { prisma } from "./prisma";
 import { Phone } from "@prisma/client";
 import axios, { AxiosError } from "axios";
@@ -11,6 +11,7 @@ type ResponseResult = {
 };
 export type usePhoneDataType = {
   phones: Phone[] | undefined;
+  setPhones: Dispatch<SetStateAction<Phone[] | undefined>>;
   save: (data: PhoneFormData) => Promise<ResponseResult>;
   deleteById: (phoneId: string) => Promise<ResponseResult>;
   refetchPhone: () => void;
@@ -99,6 +100,7 @@ export default function usePhoneData(token: string): usePhoneDataType {
 
   return {
     phones,
+    setPhones,
     save,
     deleteById,
     refetchPhone,

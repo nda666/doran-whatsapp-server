@@ -63,6 +63,7 @@ nextApp.prepare().then(async () => {
 
   const server = app.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
+    process.send && process.send("ready");
   });
   io.attach(server);
 });

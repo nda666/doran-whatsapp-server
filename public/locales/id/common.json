@@ -29,5 +29,9 @@
   "dashboard": "Dasbor",
   "phone_devices": "Perangkat Hp",
   "signout": "Keluar",
-  "text_copied": "{{text}} telah disalin ke papan klip"
+  "text_copied": "{{text}} telah disalin ke papan klip",
+  "account_name": "Nama akun",
+  "number": "Nomor",
+  "api_token": "Token api",
+  "action": "Tindakan"
 }
