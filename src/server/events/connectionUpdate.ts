@@ -45,10 +45,14 @@ export default function connectionUpdate(
     whatsappSocket(io, userId, phoneId);
   }
 
-  io?.emit("isOnline", {
-    isOnline: update.isNewLogin,
-    phoneId: phoneId,
-  });
+  if (update.isOnline) {
+    io?.emit("isOnline", {
+      isOnline: update.isOnline,
+      phoneId: phoneId,
+    });
+    waSock.ev.flush(true);
+    waSock.end(undefined);
+  }
 
   if (connection === "close") {
     io?.emit("connectionState", {
