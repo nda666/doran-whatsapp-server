@@ -17,6 +17,7 @@
   "scan_qrcode": "Scan Qr Code",
   "whatsaap_qrcode": "Whatsapp Qr Code",
   "please_scan_qrcode": "Please scan the Qr Code from your whatsapp app linken device",
+  "getting_qrcode": "Please wait, while we're getting qr code",
   "timeout": "Timeout",
   "delete": "Delete",
   "add_devices": "Add devices",

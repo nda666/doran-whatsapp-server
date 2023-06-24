@@ -74,7 +74,8 @@ const PhonePage = () => {
   }, [phoneData.phones]);
 
   useEffect(() => {
-    if (!socketOption || state.openForm) {
+    if (!socketOption || state.openQrModal || state.openQrModal) {
+      console.log("disconnect");
       socket?.disconnect();
       return;
     }
@@ -113,7 +114,7 @@ const PhonePage = () => {
       setEvents([]);
       socket?.disconnect();
     };
-  }, [socketOption, state.openForm]);
+  }, [socketOption, state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<Phone> = [
     {

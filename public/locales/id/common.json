@@ -33,5 +33,6 @@
   "account_name": "Nama akun",
   "number": "Nomor",
   "api_token": "Token api",
-  "action": "Tindakan"
+  "action": "Tindakan",
+  "getting_qrcode": "Harap tunggu, sementara kami mendapatkan kode qr"
 }

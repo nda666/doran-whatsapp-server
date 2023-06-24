@@ -79,6 +79,7 @@ model Phone {
   name         String
   number       String?
   account_name String?
+  qrCode       String?      @db.Text
   status       PhoneStatus? @default(value: CLOSE)
   isOnline     Boolean      @default(value: false) @map("is_online")
   token        String       @unique @default(uuid())

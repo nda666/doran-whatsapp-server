@@ -4,58 +4,77 @@ import {
   WASocket,
 } from "@whiskeysockets/baileys";
 import * as fs from "fs";
-import { Socket } from "socket.io";
-import whatsappSocket from "../whatsappSocket";
-import { updatePhoneStatusAndOnline } from "../../lib/phone";
+import makeWASocket, { deleteSession } from "../../lib/makeWASocket";
 import { WaSockQrTimeout } from "../constant";
 import { prisma } from "../../lib/prisma";
+import { getSocketIO } from "../../lib/socket";
 
-export default function connectionUpdate(
-  io: Socket,
+export default async function connectionUpdate(
   waSock: WASocket,
   userId: string,
   phoneId: string,
   update: Partial<ConnectionState>
 ) {
+  const io = getSocketIO;
   if (waSock.user) {
-    io?.emit("waUser", { phoneId, waUser: waSock.user });
+    io?.to(userId).emit("waUser", { phoneId, waUser: waSock.user });
   }
-
-  if (update.connection == "close") {
-    // io?.to(`${userId}`).emit(`connectionState`, "FUCJJJ");
-    // fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
-    //   recursive: true,
-    //   force: true,
-    // });
-    // whatsappSocket(io, userId, phoneId);
-  }
+  io?.to(userId).emit("isOnline", {
+    isOnline: update.isOnline,
+    phoneId: phoneId,
+  });
 
   if (update.qr) {
-    io?.emit(`qr`, {
+    io?.to(userId).emit(`qr`, {
       phoneId,
       qr: update.qr,
       timeout: WaSockQrTimeout,
     });
+    await prisma.phone.update({
+      where: {
+        id: phoneId,
+      },
+      data: {
+        qrCode: update.qr,
+      },
+    });
   } else {
-    io?.emit("connectionState", { ...update, phoneId: phoneId });
+    io?.to(userId).emit("connectionState", { ...update, phoneId: phoneId });
   }
   const { connection, lastDisconnect } = update;
   if (update.isNewLogin) {
-    waSock.ev.flush(true);
-    whatsappSocket(io, userId, phoneId);
+    // waSock.ev.flush(true);
+    // whatsappSocket(io, userId, phoneId);
   }
 
   if (update.isOnline) {
-    io?.emit("isOnline", {
+    io?.to(userId).emit("isOnline", {
       isOnline: update.isOnline,
       phoneId: phoneId,
     });
-    waSock.ev.flush(true);
+
+    await prisma.phone.update({
+      where: {
+        id: phoneId,
+      },
+      data: {
+        isOnline: true,
+      },
+    });
+
+    // waSock.ev.flush(true);
   }
 
   if (connection === "close") {
-    waSock.ev.flush(true);
-    io?.emit("connectionState", {
+    await prisma.phone.update({
+      where: {
+        id: phoneId,
+      },
+      data: {
+        isOnline: false,
+      },
+    });
+    io?.to(userId).emit("connectionState", {
       update: "lalalala",
       t: (lastDisconnect?.error as any)?.output?.statusCode,
     });
@@ -78,10 +97,10 @@ export default function connectionUpdate(
         recursive: true,
         force: true,
       });
-      whatsappSocket(io, userId, phoneId);
     }
+
+    deleteSession(phoneId);
+    makeWASocket(userId, phoneId);
   } else if (connection === "open") {
-    console.log("OPEN");
-    waSock.ev.flush(true);
   }
 }

@@ -2,19 +2,20 @@ import express from "express";
 import compression from "compression";
 import { prisma } from "./lib/prisma";
 import next from "next";
-import * as socketio from "socket.io";
-import whatsappSocket from "./server/whatsappSocket";
 import { WASocket } from "@whiskeysockets/baileys";
+import { getSocketIO } from "./lib/socket";
+import makeWASocket from "./lib/makeWASocket";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
 const dev = process.env.NODE_ENV !== "production";
-const nextApp = next({ dev, hostname, port, customServer: true });
-const nextHandler = nextApp.getRequestHandler();
 
 const app = express();
 app.use(compression());
-const io = new socketio.Server();
+
+const io = getSocketIO;
+const nextApp = next({ dev, hostname, port });
+const nextHandler = nextApp.getRequestHandler();
 nextApp.prepare().then(async () => {
   // const server = http.createServer(app);
 
@@ -33,25 +34,28 @@ nextApp.prepare().then(async () => {
     const userId = socket.handshake.query?.userId?.toString();
     const phoneIds = query?.phoneId?.toString().split(",");
 
-    socket.join(`${userId}`);
-
     const waSocks: WASocket[] = [];
 
     phoneIds?.forEach(async (phoneId) => {
-      const createdWaSock = await whatsappSocket(socket, userId, phoneId);
+      const createdWaSock = await makeWASocket(userId, phoneId);
       createdWaSock && waSocks.push(createdWaSock);
     });
+
+    socket.join(`${userId}`);
+
     socket.on("disconnecting", () => {
+      // console.log("event flushed 2");
       waSocks.forEach((waSock) => {
-        waSock.ev.flush(true);
+        // waSock.ev.flush(true);
       });
     });
 
-    socket?.on("disconnect", async (reason) => {
-      waSocks.forEach((waSock) => {
-        waSock.ev.flush(true);
-      });
-    });
+    // socket?.on("disconnect", async (reason) => {
+    //   console.log("event flushed 1");
+    //   waSocks.forEach((waSock) => {
+    //     waSock.ev.flush(true);
+    //   });
+    // });
   });
 
   app.all("*", (req, res, next) => {
@@ -62,7 +66,7 @@ nextApp.prepare().then(async () => {
   });
 
   const server = app.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`);
+    console.info(`> Ready on http://localhost:${port}`);
     process.send && process.send("ready");
   });
   io.attach(server);

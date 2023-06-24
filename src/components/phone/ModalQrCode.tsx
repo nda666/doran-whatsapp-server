@@ -18,7 +18,7 @@ export default function ModalQrCode({
   userId,
   ...props
 }: ModalQrCodeProps) {
-  const [waQrCode, setWaQrCode] = useState(undefined);
+  const [waQrCode, setWaQrCode] = useState<string | undefined>(undefined);
   const [waQrCodeTimeout, setWaQrCodeTimeout] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,35 +40,28 @@ export default function ModalQrCode({
       {
         name: "connect",
         handler() {
-          console.log("connect", "connected");
+          console.info("connect qr modal IO");
         },
       },
       {
         name: "disconnect",
         handler() {
-          console.log("connect", "disconnect");
+          console.info("disconnect qr modal IO");
         },
       },
       {
-        name: "credsUpdate",
-        handler(credsUpdate) {
-          if ("accountSyncCounter" in credsUpdate) {
+        name: "isOnline",
+        handler: (update) => {
+          if (phone.id == update.phoneId) {
+            if ("isOnline" in update) {
+              props.onClose && update.isOnline && props.onClose();
+            }
           }
-        },
-      },
-      {
-        name: "authState",
-        handler(authState) {
-          console.log("authState", authState);
         },
       },
       {
         name: "connectionState",
         handler(connectionState) {
-          console.log(connectionState);
-          if ("isOnline" in connectionState) {
-            props.onClose && props.onClose();
-          }
           if ("connection" in connectionState) {
             setIsLoading(connectionState.connection === "connecting");
           }
@@ -78,9 +71,8 @@ export default function ModalQrCode({
         name: "qr",
         handler(qr) {
           if (qr.phoneId == phone?.id) {
-            console.log(qr);
             setWaQrCode(qr.qr);
-            setWaQrCodeTimeout(qr.timeout > 0 ? qr.timeout / 1000 : 0);
+            setWaQrCodeTimeout(qr.timeout > 0 ? qr.timeout / 1000 - 5 : 0);
           }
         },
       },
@@ -89,13 +81,20 @@ export default function ModalQrCode({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setWaQrCodeTimeout(waQrCodeTimeout - 1);
+      waQrCodeTimeout >= 0 && setWaQrCodeTimeout(waQrCodeTimeout - 1);
     }, 1000);
-
+    if (waQrCodeTimeout <= 0) {
+      clearInterval(timer);
+    }
     return () => {
       clearInterval(timer);
     };
   }, [waQrCodeTimeout]);
+
+  useEffect(() => {
+    setWaQrCode(phone?.qrCode || "");
+    setWaQrCodeTimeout(30);
+  }, [phone?.qrCode]);
 
   return (
     <>
@@ -114,7 +113,7 @@ export default function ModalQrCode({
           direction="vertical"
           style={{ display: "flex", width: "100%", alignItems: "center" }}
         >
-          {waQrCode ? (
+          {waQrCode && waQrCodeTimeout > 0 ? (
             <>
               <QRCodeSVG
                 style={{ margin: "0 auto" }}
