@@ -28,6 +28,7 @@ import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import {
   ReactElement,
   SetStateAction,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -73,6 +74,13 @@ const PhonePage = () => {
     };
   }, [phoneData.phones]);
 
+  const setPh = (phoneId: string) => {
+    // !phoneOnline.includes(phoneId) &&
+    //   setPhoneOnline((prevArr) => [...prevArr, phoneId]);
+  };
+
+  console.log("phoneOnline", phoneOnline);
+
   useEffect(() => {
     if (!socketOption || state.openQrModal || state.openQrModal) {
       console.log("disconnect");
@@ -84,8 +92,8 @@ const PhonePage = () => {
     events.push({
       name: `isOnline`,
       handler: (connection) => {
-        console.log("isOnline", connection);
-        setPhoneOnline([...phoneOnline, connection.phoneId]);
+        console.log(connection);
+        setPh(connection.phoneId);
       },
     });
     events.push({
@@ -97,7 +105,6 @@ const PhonePage = () => {
           editPhones.account_name = waUser.waUser.name;
           editPhones.number = waUser.waUser.id.split(":")[0];
           phoneData.setPhones(_phones);
-          console.log("waUser updated", waUser);
         }
       },
     });
@@ -161,9 +168,9 @@ const PhonePage = () => {
     },
     {
       title: "Online",
-      key: "id",
-      dataIndex: "id",
-      render: (v) => (phoneOnline.includes(v) ? "Online" : "Offline"),
+      key: "isOnline",
+      dataIndex: "isOnline",
+      render: (v) => (v ? "Online" : "Offline"),
     },
     {
       title: t("created_at"),
