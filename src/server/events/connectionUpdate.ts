@@ -38,9 +38,8 @@ export default async function connectionUpdate(
         qrCode: update.qr,
       },
     });
-  } else {
-    io?.to(userId).emit("connectionState", { ...update, phoneId: phoneId });
   }
+
   const { connection, lastDisconnect } = update;
   if (update.isNewLogin) {
     // waSock.ev.flush(true);
@@ -79,28 +78,34 @@ export default async function connectionUpdate(
       t: (lastDisconnect?.error as any)?.output?.statusCode,
     });
     const shouldReconnectStatus = [
-      DisconnectReason.restartRequired,
       DisconnectReason.loggedOut,
+      DisconnectReason.restartRequired,
     ];
     const shouldReconnect = shouldReconnectStatus.includes(
       (lastDisconnect?.error as any)?.output?.statusCode
     );
-    // console.log(
-    //   "connection closed due to ",
-    //   lastDisconnect?.error,
-    //   ", reconnecting ",
-    //   shouldReconnect
-    // );
+
+    console.log(
+      "connection closed due to ",
+      lastDisconnect?.error,
+      ", reconnecting ",
+      shouldReconnect
+    );
+
+    console.log(waSock.user);
     // reconnect if not logged out
-    if (shouldReconnect) {
+    if (
+      (lastDisconnect?.error as any)?.output?.statusCode ==
+      DisconnectReason.loggedOut
+    ) {
       fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
         recursive: true,
         force: true,
       });
     }
-
-    deleteSession(phoneId);
+    if (shouldReconnect) {
+      deleteSession(phoneId);
+    }
     makeWASocket(userId, phoneId);
-  } else if (connection === "open") {
   }
 }

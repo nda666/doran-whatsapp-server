@@ -91,10 +91,10 @@ export default function ModalQrCode({
     };
   }, [waQrCodeTimeout]);
 
-  useEffect(() => {
-    setWaQrCode(phone?.qrCode || "");
-    setWaQrCodeTimeout(30);
-  }, [phone?.qrCode]);
+  // useEffect(() => {
+  //   setWaQrCode(phone?.qrCode || "");
+  //   setWaQrCodeTimeout(30);
+  // }, [phone?.qrCode]);
 
   return (
     <>
