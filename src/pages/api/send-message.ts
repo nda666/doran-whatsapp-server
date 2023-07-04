@@ -1,4 +1,4 @@
-import makeWASocket from "@/lib/makeWASocket";
+import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
@@ -66,6 +66,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     return;
   } catch (e: any) {
     if (e?.output?.statusCode === 428 && retry < 5) {
+      deleteSession(phone.id);
       retry++;
       await delay(2000);
       await sendMessage(req, res);
