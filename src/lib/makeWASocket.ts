@@ -77,7 +77,7 @@ const makeWASocket = async (
       printQRInTerminal: false,
       auth: state,
       logger: waSocketLogOption,
-      syncFullHistory: false,
+      syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
     });
 

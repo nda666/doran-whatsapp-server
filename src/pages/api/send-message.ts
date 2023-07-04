@@ -71,7 +71,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
       await sendMessage(req, res);
       return;
     }
-    res.status(200).json({ result: false, error: e });
+    res.status(500).json({ result: false, error: e });
     return;
   }
 };
