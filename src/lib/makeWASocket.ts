@@ -12,6 +12,7 @@ import connectionUpdate from "../server/events/connectionUpdate";
 const session = new Map();
 
 const waSocketLogOption = pino({
+  enabled: false,
   level: "error",
   // transport: {
   //   targets: [
