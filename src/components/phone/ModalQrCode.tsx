@@ -27,6 +27,7 @@ export default function ModalQrCode({
       phoneId: phone?.id,
       userId: userId,
     },
+    transports: ["websocket"],
   });
   const { t } = useTranslation();
 

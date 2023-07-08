@@ -68,6 +68,7 @@ const PhonePage = () => {
         phoneId: phoneData.phones?.map((x) => x.id),
       },
       autoConnect: false,
+      transports: ["websocket"],
     });
     return () => {
       setSocketOption(undefined);
