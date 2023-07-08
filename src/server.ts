@@ -16,6 +16,11 @@ app.use(compression());
 const io = getSocketIO;
 const nextApp = next({ dev, hostname, port });
 const nextHandler = nextApp.getRequestHandler();
+
+process.on("SIGINT", async function () {
+  await prisma.$disconnect();
+});
+
 nextApp.prepare().then(async () => {
   // const server = http.createServer(app);
 

@@ -85,14 +85,6 @@ export default async function connectionUpdate(
       (lastDisconnect?.error as any)?.output?.statusCode
     );
 
-    console.log(
-      "connection closed due to ",
-      lastDisconnect?.error,
-      ", reconnecting ",
-      shouldReconnect
-    );
-
-    console.log(waSock.user);
     // reconnect if not logged out
     if (
       (lastDisconnect?.error as any)?.output?.statusCode ==
