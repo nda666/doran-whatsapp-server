@@ -51,7 +51,10 @@ const PhonePage = () => {
   const { data: session } = useSession();
   const phoneData = usePhoneData(session?.user?.token!);
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
-  const [socketOption, setSocketOption] = useState<any>(undefined);
+  const [socketOption, setSocketOption] = useState<any>({
+    autoConnect: false,
+    transports: ["websocket"],
+  });
   const { socket, setEvents } = useSocket(socketOption);
   const { t, i18n } = useTranslation("common");
   const [modal, contextHolder] = Modal.useModal();
@@ -62,6 +65,7 @@ const PhonePage = () => {
       setSocketOption(undefined);
       return;
     }
+    console.log("123123123");
     setSocketOption({
       query: {
         userId: session?.user?.id,
@@ -85,6 +89,7 @@ const PhonePage = () => {
   useEffect(() => {
     if (!socketOption || state.openQrModal || state.openQrModal) {
       console.log("disconnect");
+      setEvents([]);
       socket?.disconnect();
       return;
     }
