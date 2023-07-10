@@ -77,10 +77,13 @@ export default async function connectionUpdate(
       update: "lalalala",
       t: (lastDisconnect?.error as any)?.output?.statusCode,
     });
+
     const shouldReconnectStatus = [
       DisconnectReason.loggedOut,
       DisconnectReason.restartRequired,
+      DisconnectReason.timedOut,
     ];
+
     const shouldReconnect = shouldReconnectStatus.includes(
       (lastDisconnect?.error as any)?.output?.statusCode
     );
