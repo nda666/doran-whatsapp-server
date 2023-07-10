@@ -14,27 +14,28 @@ const session = new Map();
 const waSocketLogOption = pino({
   enabled: false,
   level: "error",
-  // transport: {
-  //   targets: [
-  //     {
-  //       level: "debug",
-  //       target: "pino-pretty",
-  //       options: {
-  //         colorize: true,
-  //       },
-  //     },
-  //     {
-  //       level: "error",
-  //       target: "pino-roll",
-  //       options: {
-  //         file: "./whatsapp-logs/whatsapp.log",
-  //         frequency: "daily",
-  //         colorize: true,
-  //         mkdir: true,
-  //       },
-  //     },
-  //   ],
-  // },
+
+  transport: {
+    targets: [
+      // {
+      //   level: "debug",
+      //   target: "pino-pretty",
+      //   options: {
+      //     colorize: true,
+      //   },
+      // },
+      {
+        level: "error",
+        target: "pino-roll",
+        options: {
+          file: "./whatsapp-logs/whatsapp.log",
+          frequency: "daily",
+          colorize: true,
+          mkdir: true,
+        },
+      },
+    ],
+  },
 });
 // {
 // transport: {
