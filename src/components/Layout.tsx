@@ -3,6 +3,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   WhatsAppOutlined,
+  WechatFilled,
 } from "@ant-design/icons";
 import {
   Layout as AntdLayout,
@@ -119,6 +120,14 @@ export default function Layout({
                 {!collapsed && t("phone_devices")}
               </Space>
             </Link>
+          </Menu.Item>
+          <Menu.Item key={"/dashboard/auto-reply"} title={t("auto_reply")}>
+              <Link href={"/dashboard/auto-reply"}>
+                <Space size={"middle"}>
+                  <WechatFilled/>
+                  {!collapsed && t("auto_reply")}
+                </Space>
+              </Link>
           </Menu.Item>
         </Menu>
       </Sider>

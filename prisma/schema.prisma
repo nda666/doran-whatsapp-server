@@ -90,3 +90,26 @@ model Phone {
 
   @@map(name: "phones")
 }
+
+enum ReplyType {
+  text
+  image
+  button
+  template
+  list
+}
+
+model AutoReply {
+  id          Int
+  user        User           @relation(fields: [userId], references: [id])
+  userId      String
+  phone       Phone          @relation(fields: [phoneId], references: [id])
+  phoneId     String
+  keyword     String
+  type        ReplyType      @default(value: text) 
+  reply       Json?
+  createdAt   DateTime       @default(now()) @map(name: "created_at")
+  updatedAt   DateTime       @updatedAt @map(name: "updated_at")
+
+  @@map(name: "auto_replies")
+}
