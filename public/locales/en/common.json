@@ -23,6 +23,7 @@
   "add_devices": "Add devices",
   "dashboard": "Dashboard",
   "phone_devices": "Phone devices",
+  "auto_reply": "Auto reply",
   "text_copied": "{{text}} has been copied to clipboard",
   "number": "Number",
   "account_name": "Account name",
