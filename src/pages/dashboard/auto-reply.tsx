@@ -234,7 +234,7 @@ const AutoReply = () => {
   return (
     <>
       <Button onClick={() => setState({ ...state, openForm: true })}>
-        {t("add_reply")}
+        {t("new_reply")}
       </Button>
       <PhoneFormModal
         ref={form}

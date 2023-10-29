@@ -62,6 +62,7 @@ model User {
   createdAt     DateTime  @default(now()) @map(name: "created_at")
   updatedAt     DateTime  @updatedAt @map(name: "updated_at")
   phones        Phone[]
+  auto_replies  AutoReply[]
   accounts      Account[]
   sessions      Session[]
 
@@ -85,6 +86,7 @@ model Phone {
   token        String       @unique @default(uuid())
   user         User         @relation(fields: [userId], references: [id])
   userId       String
+  auto_replies AutoReply[]
   createdAt    DateTime     @default(now()) @map(name: "created_at")
   updatedAt    DateTime     @updatedAt @map(name: "updated_at")
 
@@ -99,17 +101,37 @@ enum ReplyType {
   list
 }
 
+enum KeywordType {
+  Equal
+  Contain
+}
+
+enum ReplyWhen {
+  Group
+  Personal
+  All
+}
+
+enum AutoReplyStatus {
+  active
+  inactive
+}
+
 model AutoReply {
-  id          Int
-  user        User           @relation(fields: [userId], references: [id])
-  userId      String
-  phone       Phone          @relation(fields: [phoneId], references: [id])
-  phoneId     String
-  keyword     String
-  type        ReplyType      @default(value: text) 
-  reply       Json?
-  createdAt   DateTime       @default(now()) @map(name: "created_at")
-  updatedAt   DateTime       @updatedAt @map(name: "updated_at")
+  id            Int             @id @default(autoincrement())
+  user          User            @relation(fields: [userId], references: [id])
+  userId        String
+  phone         Phone           @relation(fields: [phoneId], references: [id])
+  phoneId       String
+  keyword       String
+  type_keyword  KeywordType     @default(value: Equal)
+  type          ReplyType       @default(value: text) 
+  reply         Json?
+  reply_status  AutoReplyStatus @default(value: active)
+  reply_when    ReplyWhen       @default(value: All)
+  is_quoted     Boolean         @default(value: false)
+  createdAt     DateTime        @default(now()) @map(name: "created_at")
+  updatedAt     DateTime        @updatedAt @map(name: "updated_at")
 
   @@map(name: "auto_replies")
 }
