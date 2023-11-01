@@ -135,3 +135,16 @@ model AutoReply {
 
   @@map(name: "auto_replies")
 }
+
+model InboxMessage {
+  id          Int       @id @default(autoincrement())
+  message     String
+  sender      String
+  recipient   String
+  sentAt      DateTime  @default(now()) @map(name: "sentAt")
+  receivedAt  DateTime  @default(now()) @map(name: "receivedAt")
+  isSent      Boolean   @default(value: true) @map("is_sent")
+  isRead      Boolean   @default(value: true) @map("is_read")
+
+  @@map(name: "inbox_messages")
+}

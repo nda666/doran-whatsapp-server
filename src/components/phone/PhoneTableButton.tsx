@@ -14,12 +14,16 @@ import { MenuInfo } from "rc-menu/lib/interface";
 
 export interface PhoneTableButtonProps {
   phone: Phone;
+  onAutoReply?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
+  onListReply?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onEditClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onGetQrCodeClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onDeleteClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
 }
 export default function PhoneTableButton({
   phone,
+  onAutoReply,
+  onListReply,
   onEditClick,
   onGetQrCodeClick,
   onDeleteClick,
@@ -38,6 +42,12 @@ export default function PhoneTableButton({
       icon: <QrcodeOutlined />,
       onClick: (e) => onGetQrCodeClick && onGetQrCodeClick(phone, e),
     },
+    // {
+    //   label: t("auto_reply"),
+    //   key: "2",
+    //   icon: <EditOutlined />,
+    //   onClick: (e) => onAutoReply && onAutoReply(phone, e),
+    // },
     {
       label: t("delete"),
       key: "3",
@@ -45,6 +55,15 @@ export default function PhoneTableButton({
       onClick: (e) => onDeleteClick && onDeleteClick(phone, e),
     },
   ];
+
+  if(phone.number) {
+    items.push({
+      label: t("auto_reply"),
+      key: "2",
+      icon: <EditOutlined />,
+      onClick: (e) => onAutoReply && onAutoReply(phone, e),
+    });
+  }
 
   const menuProps = {
     items,

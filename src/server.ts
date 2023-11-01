@@ -38,10 +38,13 @@ nextApp.prepare().then(async () => {
     const query = socket.handshake.query;
     const userId = socket.handshake.query?.userId?.toString();
     const phoneIds = query?.phoneId?.toString().split(",");
+    const uniqPhoneIds = phoneIds!.filter(function(v,i,self) {
+      return i == self.indexOf(v);
+    });
 
     const waSocks: WASocket[] = [];
 
-    phoneIds?.forEach(async (phoneId) => {
+    uniqPhoneIds?.forEach(async (phoneId) => {
       const createdWaSock = await makeWASocket(userId, phoneId);
       createdWaSock && waSocks.push(createdWaSock);
     });

@@ -1,0 +1,12 @@
+-- CreateTable
+CREATE TABLE `inbox_messages` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `message` VARCHAR(191) NOT NULL,
+    `sender` VARCHAR(191) NOT NULL,
+    `recipient` VARCHAR(191) NOT NULL,
+    `sentAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `receivedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `isRead` BOOLEAN NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
