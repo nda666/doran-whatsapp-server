@@ -30,10 +30,11 @@ import React, {
     title?: string;
     loading?: boolean;
     phoneId?: Phone | undefined;
+    editReply?: AutoReply | undefined;
   }
   
   const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFormProps>(
-    ({ open, onSubmitReply, onCancel, phoneId, ...props }, ref) => {
+    ({ open, onSubmitReply, onCancel, phoneId, editReply, ...props }, ref) => {
       const { t } = useTranslation("common");
       const {TextArea} = Input;
       const [form] = Form.useForm();
@@ -43,6 +44,14 @@ import React, {
           form.setFieldValue("phoneId", phoneId.id);
         //   form.setFieldValue("name", editPhone.name);
           form.setFieldValue("whatsapp_account", phoneId.number);
+        }
+
+        if(editReply) {
+          let reply = JSON.parse(JSON.stringify(editReply.reply));
+          // console.log(editReply.reply);
+          form.setFieldValue("whatsapp_account", phoneId!.number);
+          form.setFieldValue('keyword',editReply.keyword);
+          form.setFieldValue("reply", reply.text);
         }
 
         return () => {

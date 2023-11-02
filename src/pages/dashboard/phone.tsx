@@ -216,7 +216,8 @@ const PhonePage = () => {
             onListReply={(_phone: Phone | undefined) => router.push({
               pathname: '/dashboard/auto-reply',
               query: {
-                phone_id: _phone?.id
+                phone_id: _phone?.id,
+                phone_num: _phone?.number
               }
             })}
             onEditClick={onEditClick}

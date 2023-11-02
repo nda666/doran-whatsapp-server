@@ -5,7 +5,8 @@ import PhoneFormModal, {
   PhoneFormData,
   PhoneFormModalRef,
 } from "@/components/phone/PhoneFormModal";
-import PhoneTableButton from "@/components/phone/PhoneTableButton";
+// import PhoneTableButton from "@/components/phone/PhoneTableButton";
+import ReplyTableButton from "@/components/auto-reply/ReplyTableButton";
 import { copyToClipboard } from "@/lib/copyToClipboard";
 import useAutoReplyData from "@/lib/useAutoReplyData";
 import usePhoneData from "@/lib/usePhoneData";
@@ -37,14 +38,14 @@ import {
   useState,
 } from "react";
 
-const PhonePage = () => {
+const AutoReplyPage = () => {
   const [state, setState] = useState<{
     openForm: boolean;
     openReplyForm: boolean;
     formLoading: boolean;
     openQrModal: boolean;
     selectedPhone: Phone | undefined;
-    editPhone: Phone | undefined;
+    editReply: AutoReply | undefined;
     phoneId:  Phone | undefined;
   }>({
     openForm: false,
@@ -52,12 +53,13 @@ const PhonePage = () => {
     formLoading: false,
     openQrModal: false,
     selectedPhone: undefined,
-    editPhone: undefined,
+    editReply: undefined,
     phoneId: undefined
   });
   const router = useRouter();
   // console.log(router.query);
   const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
+  const phone_num = router.query.phone_num;
   const { data: session } = useSession();
   const phoneData = usePhoneData(session?.user?.token!);
   const replyData = useAutoReplyData(session?.user?.token!,phone_id?.toString());
@@ -173,38 +175,37 @@ const PhonePage = () => {
       dataIndex: "type",
     //   render: (v) => (v ? "Online" : "Offline"),
     },
-    // {
-    //   title: t("created_at"),
-    //   key: "createdAt",
-    //   dataIndex: "createdAt",
-    //   render: (v) => (
-    //     <div style={{ whiteSpace: "nowrap" }}>
-    //       {dayjs(v).format("DD/MM/YYYY HH:mm")}
-    //     </div>
-    //   ),
-    // },
-    // {
-    //   title: t("action"),
-    //   key: "action",
-    //   dataIndex: "id",
-    //   fixed: "right",
-    //   render: (v, phone) => {
-    //     return (
-    //       <PhoneTableButton
-    //         phone={phone}
-    //         onAutoReply={
-    //           (_phone: Phone | undefined) => {
-    //             _phone &&
-    //               setState({...state, openReplyForm: true, phoneId: _phone })
-    //           }
-    //         }
-    //         onEditClick={onEditClick}
-    //         onDeleteClick={onDeleteClick}
-    //         onGetQrCodeClick={onGetQrCodeClick}
-    //       />
-    //     );
-    //   },
-    // },
+    {
+      title: t("created_at"),
+      key: "createdAt",
+      dataIndex: "createdAt",
+      render: (v) => (
+        <div style={{ whiteSpace: "nowrap" }}>
+          {dayjs(v).format("DD/MM/YYYY HH:mm")}
+        </div>
+      ),
+    },
+    {
+      title: t("action"),
+      key: "action",
+      dataIndex: "id",
+      fixed: "right",
+      render: (v, auto_replies) => {
+        return (
+          <ReplyTableButton
+            auto_replies={auto_replies}
+            // onAutoReply={
+            //   (_phone: Phone | undefined) => {
+            //     _phone &&
+            //       setState({...state, openReplyForm: true, phoneId: _phone })
+            //   }
+            // }
+            onEditClick={onEditClick}
+            onDeleteClick={onDeleteClick}
+          />
+        );
+      },
+    },
   ];
 
   const onSubmit = async (data: PhoneFormData) => {
@@ -217,7 +218,8 @@ const PhonePage = () => {
       ...state,
       formLoading: false,
       openForm: false,
-      editPhone: undefined,
+      // editPhone: undefined,
+      editReply: undefined
     });
   };
 
@@ -237,19 +239,19 @@ const PhonePage = () => {
   };
 
   const onCancel = () =>
-    setState({ ...state, openForm: false, editPhone: undefined, openReplyForm: false, phoneId: undefined });
+    setState({ ...state, openForm: false, editReply: undefined, openReplyForm: false, phoneId: undefined });
 
-  const onEditClick = (_phone: Phone | undefined) => {
-    _phone && setState({ ...state, editPhone: _phone, openForm: true });
+  const onEditClick = (_reply: AutoReply | undefined) => {
+    _reply && setState({ ...state, editReply: _reply, openReplyForm: true, phoneId: {id: phone_id, number: phone_num} as Phone });
   };
 
-  const onDeleteClick = (_phone: Phone | undefined) => {
-    _phone &&
+  const onDeleteClick = (_reply: AutoReply | undefined) => {
+    _reply &&
       modal.confirm({
         title: t("confirm_delete"),
         content: t("confirm_delete_ask"),
         onOk: async () => {
-          const result = await phoneData.deleteById(_phone.id);
+          const result = await replyData.deleteById(_reply.id,_reply.phoneId);
           notif[result.success ? "success" : "error"]({
             message: result.success ? t("success") : t("failed"),
             description: result.success
@@ -260,18 +262,9 @@ const PhonePage = () => {
       });
   };
 
-  const onGetQrCodeClick = (_phone: Phone | undefined) => {
-    _phone &&
-      setState({
-        ...state,
-        selectedPhone: _phone,
-        openQrModal: true,
-      });
-  };
-
   return (
     <>
-      <Button onClick={() => setState({ ...state, openReplyForm: true })}>
+      <Button onClick={() => setState({ ...state, openReplyForm: true, phoneId: {id: phone_id, number: phone_num} as Phone })}>
         {t("new_reply")}
       </Button>
       <PhoneFormModal
@@ -280,7 +273,7 @@ const PhonePage = () => {
         open={state.openForm}
         onCancel={onCancel}
         onSubmit={onSubmit}
-        editPhone={state.editPhone}
+        // editPhone={state.editPhone}
       />
       <AutoReplyFormModal
       ref={formAutoRep}
@@ -288,6 +281,7 @@ const PhonePage = () => {
       open={state.openReplyForm}
       onCancel={onCancel}
       onSubmitReply={onSubmitReply}
+      editReply={state.editReply}
       phoneId={state.phoneId}
       />
       <Table
@@ -322,9 +316,9 @@ export const getStaticProps = async ({ locale }: { locale: string }) => ({
   },
 });
 
-PhonePage.getLayout = function getLayout(page: ReactElement) {
-  const title = () => i18n?.t("phone_devices") || "";
+AutoReplyPage.getLayout = function getLayout(page: ReactElement) {
+  const title = () => i18n?.t("auto_reply") || "";
   return <Layout title={title().toUpperCase()}>{page}</Layout>;
 };
 
-export default PhonePage;
+export default AutoReplyPage;

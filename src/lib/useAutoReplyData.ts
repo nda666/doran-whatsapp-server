@@ -1,5 +1,7 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { prisma } from "./prisma";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/router";
 import { AutoReply, Phone } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { AutoReplyFormData } from "@/components/auto-reply/AutoReplyFormModal";
@@ -24,7 +26,7 @@ export type useAutoReplyDataType = {
     auto_replies: AutoReply[] | undefined;
     // setPhones: Dispatch<SetStateAction<Phone[] | undefined>>;
     save: (data: AutoReplyFormData) => Promise<ResponseResult>;
-    // deleteById: (phoneId: string) => Promise<ResponseResult>;
+    deleteById: (id:number,phoneId: string) => Promise<ResponseResult>;
     refetchReply: () => void;
 }
 export default function useAutoReplyData(token: string, phone_id?: string | undefined, user_id?: string): useAutoReplyDataType {
@@ -32,7 +34,8 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
 //   const [phones, setPhones] = useState<Phone[] | undefined>([]);
   const [auto_replies, setAutoReplies] = useState<AutoReply[] | undefined>([]);
   // const socketRef = useRef<any>();
-
+  const { data: session } = useSession();
+  const router = useRouter();
   const refetchReply = () => {
     setRunRefetchReplies(true);
   };
@@ -45,8 +48,8 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
     const fetchAutoReplies = async () => {
       setRunRefetchReplies(false);
       const params = {
-        user_id: user_id,
-        phone_id: phone_id,
+        user_id: user_id ? user_id : session?.user?.id,
+        phone_id: phone_id ? phone_id : router.query.phone_id,
       }
       const response = await axios.get(`/api/auto_reply?user_id=${user_id}&phone_id=${phone_id}`, {
         headers: {
@@ -114,12 +117,42 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
     return result;
   };
 
+  const deleteById = async (id:number,phoneId: string) => {
+    const result: {
+      success: boolean;
+      error: any;
+      data: any
+    } = {
+      success: false,
+      error: undefined,
+      data: undefined
+    } 
+
+    try {
+      const resp = await axios.delete(`/api/auto_reply/${id}?phone_id=${phoneId}`,{
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      result.success = true;
+      // result.data = resp.json();
+      result.data = resp.data;
+      // console.log(resp.data);
+      setRunRefetchReplies(true);
+    } catch(e: any) {
+      result.error = e;
+    }
+
+    return result;
+  }
+
   return {
     // phones,
     auto_replies,
     // setPhones,
     save,
-    // deleteById,
+    deleteById,
     refetchReply,
   };
 }
