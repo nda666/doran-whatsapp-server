@@ -121,14 +121,14 @@ export default function Layout({
               </Space>
             </Link>
           </Menu.Item>
-          <Menu.Item key={"/dashboard/auto-reply"} title={t("auto_reply")}>
+          {/* <Menu.Item key={"/dashboard/auto-reply"} title={t("auto_reply")}>
               <Link href={"/dashboard/auto-reply"}>
                 <Space size={"middle"}>
                   <WechatFilled/>
                   {!collapsed && t("auto_reply")}
                 </Space>
               </Link>
-          </Menu.Item>
+          </Menu.Item> */}
         </Menu>
       </Sider>
       <AntdLayout

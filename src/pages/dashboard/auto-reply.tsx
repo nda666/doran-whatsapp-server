@@ -27,6 +27,7 @@ import dayjs from "dayjs";
 import { useSession } from "next-auth/react";
 import { i18n, useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { useRouter } from "next/router";
 import {
   ReactElement,
   SetStateAction,
@@ -54,9 +55,12 @@ const PhonePage = () => {
     editPhone: undefined,
     phoneId: undefined
   });
+  const router = useRouter();
+  // console.log(router.query);
+  const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
   const { data: session } = useSession();
   const phoneData = usePhoneData(session?.user?.token!);
-  const replyData = useAutoReplyData(session?.user?.token!);
+  const replyData = useAutoReplyData(session?.user?.token!,phone_id?.toString());
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
   const [socketOption, setSocketOption] = useState<any>({
     autoConnect: false,
@@ -86,6 +90,8 @@ const PhonePage = () => {
       setSocketOption(undefined);
     };
   }, [phoneData.phones]);
+
+
 
   const setPh = (phoneId: string) => {
     // !phoneOnline.includes(phoneId) &&
@@ -144,6 +150,12 @@ const PhonePage = () => {
       dataIndex: "keyword",
     },
     {
+      title: t("details"),
+      key: "details",
+      dataIndex: "details",
+      render: (v,row) => <div style={{whiteSpace: "nowrap"}}><p>Will respond if Keyword <span style={{display: 'inline-block',padding: '0.1em 0.2em',color: '#fff', backgroundColor: '#12bf24',  border: '1px solid transparent' ,borderRadius: '0.375rem', whiteSpace: 'nowrap', verticalAlign: 'baseline'}}>{row.type_keyword}</span></p></div>
+    },
+    {
       title: t("reply_status"),
       key: "reply_status",
       dataIndex: "reply_status",
@@ -153,6 +165,7 @@ const PhonePage = () => {
       title: t("quoted"),
       key: "quoted",
       dataIndex: "quoted",
+      render: (v) => (v ? "True" : "False")
     },
     {
       title: "type",
@@ -258,7 +271,7 @@ const PhonePage = () => {
 
   return (
     <>
-      <Button onClick={() => setState({ ...state, openForm: true })}>
+      <Button onClick={() => setState({ ...state, openReplyForm: true })}>
         {t("new_reply")}
       </Button>
       <PhoneFormModal

@@ -19,11 +19,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   const token = await getToken({ req });
+  // return res.status(200).json({'text': 'ok'});
+  // res.status(200).json({'text': req.query.phone_id,'text1': 'ok'});
   try {
     const autoreply = await prisma.autoReply.findMany({
       where: {
         userId: req?.user?.id!,
-        phoneId: req?.body.phone_id,
+        phoneId: String(req?.query.phone_id),
       },
       orderBy: {
         createdAt: "desc",

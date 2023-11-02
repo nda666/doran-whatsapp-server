@@ -35,6 +35,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from 'next/router';
 
 const PhonePage = () => {
   const [state, setState] = useState<{
@@ -68,6 +69,7 @@ const PhonePage = () => {
   const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
   const formAutoRep = useRef<AutoReplyFormModalRef>(null)
+  const router = useRouter();
   useEffect(() => {
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
@@ -211,6 +213,12 @@ const PhonePage = () => {
                   setState({...state, openReplyForm: true, phoneId: _phone })
               }
             }
+            onListReply={(_phone: Phone | undefined) => router.push({
+              pathname: '/dashboard/auto-reply',
+              query: {
+                phone_id: _phone?.id
+              }
+            })}
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
             onGetQrCodeClick={onGetQrCodeClick}

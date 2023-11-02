@@ -27,7 +27,7 @@ export type useAutoReplyDataType = {
     // deleteById: (phoneId: string) => Promise<ResponseResult>;
     refetchReply: () => void;
 }
-export default function useAutoReplyData(token: string): useAutoReplyDataType {
+export default function useAutoReplyData(token: string, phone_id?: string | undefined, user_id?: string): useAutoReplyDataType {
   const [runRefetchReplies, setRunRefetchReplies] = useState(false);
 //   const [phones, setPhones] = useState<Phone[] | undefined>([]);
   const [auto_replies, setAutoReplies] = useState<AutoReply[] | undefined>([]);
@@ -44,7 +44,11 @@ export default function useAutoReplyData(token: string): useAutoReplyDataType {
   useEffect(() => {
     const fetchAutoReplies = async () => {
       setRunRefetchReplies(false);
-      const response = await axios.get(`/api/auto_reply`, {
+      const params = {
+        user_id: user_id,
+        phone_id: phone_id,
+      }
+      const response = await axios.get(`/api/auto_reply?user_id=${user_id}&phone_id=${phone_id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
