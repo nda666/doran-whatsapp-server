@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import AutoReplyFormModal, {AutoReplyFormModalRef, AutoReplyFormData} from "@/components/auto-reply/AutoReplyFormModal";
+import AutoReplyFormModal, {AutoReplyFormModalRef, AutoReplyFormData, ImageReply} from "@/components/auto-reply/AutoReplyFormModal";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import PhoneFormModal, {
   PhoneFormData,
@@ -54,13 +54,14 @@ const AutoReplyPage = () => {
     openQrModal: false,
     selectedPhone: undefined,
     editReply: undefined,
-    phoneId: undefined
+    phoneId: undefined,
   });
   const router = useRouter();
   // console.log(router.query);
   const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
   const phone_num = router.query.phone_num;
   const { data: session } = useSession();
+  const [imageReply, setImageReply] = useState<ImageReply>({preview: "", raw: ""});
   const phoneData = usePhoneData(session?.user?.token!);
   const replyData = useAutoReplyData(session?.user?.token!,phone_id?.toString());
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
@@ -167,7 +168,34 @@ const AutoReplyPage = () => {
       title: t("quoted"),
       key: "quoted",
       dataIndex: "quoted",
-      render: (v) => (v ? "True" : "False")
+      render: (v) =>
+      v 
+      ?
+      <span
+      style={{
+        display: 'inline-block',
+        padding: '0.1em 0.2em',
+        color: '#fff', 
+        backgroundColor: '#12bf24',
+        border: '1px solid transparent',
+        borderRadius: '0.375rem',
+        whiteSpace: 'nowrap',
+        verticalAlign: 'baseline'}}>
+          Active
+      </span>
+      :
+      <span
+      style={{
+        display: 'inline-block',
+        padding: '0.1em 0.2em',
+        color: '#fff', 
+        backgroundColor: '#e72e2e',
+        border: '1px solid transparent',
+        borderRadius: '0.375rem',
+        whiteSpace: 'nowrap',
+        verticalAlign: 'baseline'}}>
+          Disable
+      </span>
     },
     {
       title: "type",
@@ -208,22 +236,19 @@ const AutoReplyPage = () => {
     },
   ];
 
-  const onSubmit = async (data: PhoneFormData) => {
-    setState({ ...state, formLoading: true });
-    const res = await phoneData.save(data);
-    if (res.success) {
-      form.current?.resetForm();
+  const handleTambahImageReply = (data: ImageReply) => {
+    // console.log(data);
+    if(data) {
+        // setFieldVa("image",data.raw);
+        setImageReply({
+            preview: data.preview,
+            raw: data.raw
+        });  
     }
-    setState({
-      ...state,
-      formLoading: false,
-      openForm: false,
-      // editPhone: undefined,
-      editReply: undefined
-    });
-  };
+  }
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
+    console.log(data);
     setState({ ...state, formLoading: true });
     // console.log(data);
     const res = await replyData.save(data);
@@ -268,20 +293,14 @@ const AutoReplyPage = () => {
       <Button onClick={() => setState({ ...state, openReplyForm: true, phoneId: {id: phone_id, number: phone_num} as Phone })}>
         {t("new_reply")}
       </Button>
-      <PhoneFormModal
-        ref={form}
-        loading={state.formLoading}
-        open={state.openForm}
-        onCancel={onCancel}
-        onSubmit={onSubmit}
-        // editPhone={state.editPhone}
-      />
+
       <AutoReplyFormModal
       ref={formAutoRep}
       loading={state.formLoading}
       open={state.openReplyForm}
       onCancel={onCancel}
       onSubmitReply={onSubmitReply}
+      // onChangeImageReply={handleTambahImageReply}
       editReply={state.editReply}
       phoneId={state.phoneId}
       />

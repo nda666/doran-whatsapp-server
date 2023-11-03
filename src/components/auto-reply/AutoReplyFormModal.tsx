@@ -5,14 +5,22 @@ import React, {
     useState,
     MouseEvent,
   } from "react";
-  import { Button, Form, FormInstance, Input, Modal, Radio } from "antd";
+  import { Button, Form, FormInstance, Input, Modal, Radio, Upload } from "antd";
+  import { UploadOutlined } from "@ant-design/icons";
   import { useTranslation } from "next-i18next";
   import { parsePhoneNumber } from "libphonenumber-js";
   import { Phone, AutoReply } from "@prisma/client";
   import {MenuInfo} from 'rc-menu/lib/interface';
+  import Resizer from "react-image-file-resizer";
   
   export interface AutoReplyFormModalRef {
     resetForm: () => void;
+  }
+
+  export interface ImageReply {
+    preview?: string;
+    file_name?: string;
+    raw?: any;
   }
   
   export type AutoReplyFormData = {
@@ -20,12 +28,14 @@ import React, {
     whatsapp_account: string;
     type_keyword: string;
     keyword: string,
-    reply: string
+    reply: string,
+    preview?: string;
   };
   
   interface CollectionCreateFormProps {
     open: boolean;
     onSubmitReply: (values: AutoReplyFormData) => void;
+    // onChangeImageReply: (values: ImageReply) => void;
     onCancel: () => void;
     title?: string;
     loading?: boolean;
@@ -34,7 +44,7 @@ import React, {
   }
   
   const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFormProps>(
-    ({ open, onSubmitReply, onCancel, phoneId, editReply, ...props }, ref) => {
+    ({ open, onSubmitReply, onChangeImageReply, onCancel, phoneId, editReply, ...props }, ref) => {
       const { t } = useTranslation("common");
       const {TextArea} = Input;
       const [form] = Form.useForm();
@@ -68,6 +78,37 @@ import React, {
       useImperativeHandle(ref, () => ({
         resetForm,
       }));
+
+      const resizeFile = async (file: any) =>
+      new Promise<File>(async (resolve) => {
+        // Show resized image in preview element
+  
+      Resizer.imageFileResizer(
+          file,
+          250,
+          250,
+          "jpg",
+          80,
+          0,
+          (uri) => {
+            resolve(uri as any);
+          },
+          "file"
+        );
+      });
+
+      const handleUpload = async (e: React.ChangeEvent<any>) => {
+        if(e.target.getAttribute('id') == 'upload-button') {
+          if(e.target.files.length) {
+            console.log('ok');
+            const resized = await resizeFile(e.target.files[0]);
+            onChangeImageReply!({
+                preview: URL.createObjectURL(resized),
+                raw: resized,
+            } as ImageReply);
+          }
+        }
+      }
       return (
         <Modal
           open={open}
@@ -137,6 +178,23 @@ import React, {
             >
                 <Input/>
             </Form.Item>
+            {/* <Upload 
+            onChange={() => document.getElementById('upload-button')?.click()}
+            >
+              <Button icon={<UploadOutlined />}>Click to Upload</Button>
+            </Upload> */}
+            <Button
+            onClick={() => document.getElementById("upload-button")?.click()}
+            >
+              <UploadOutlined />
+              Select File
+            </Button>
+            <input
+            type="file"
+            id="upload-button"
+            style={{display:"none"}}
+            onChange={handleUpload}
+            />
             <Form.Item 
             name={"reply"}
             label={t("text_message")}>

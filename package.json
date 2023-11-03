@@ -38,6 +38,7 @@
     "react-dom": "18.2.0",
     "react-hook-form": "^7.44.3",
     "react-i18next": "^12.3.1",
+    "react-image-file-resizer": "^0.4.8",
     "react-infinite-scroll-component": "^6.1.0",
     "socket.io-client": "^4.6.2",
     "world_countries_lists": "^2.8.1",
