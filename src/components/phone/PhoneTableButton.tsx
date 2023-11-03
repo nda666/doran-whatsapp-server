@@ -50,14 +50,8 @@ export default function PhoneTableButton({
       onClick: (e) => onDeleteClick && onDeleteClick(phone, e),
     },
     {
-      label: t("auto_reply"),
-      key: "4",
-      icon: <EditOutlined />,
-      onClick: (e) => onAutoReply && onAutoReply(phone, e)
-    },
-    {
       label: t("list_replies"),
-      key: "5",
+      key: "4",
       icon: <WechatFilled/>,
       onClick: (e) => onListReply && onListReply(phone,e)
     }

@@ -207,12 +207,12 @@ const PhonePage = () => {
         return (
           <PhoneTableButton
             phone={phone}
-            onAutoReply={
-              (_phone: Phone | undefined) => {
-                _phone &&
-                  setState({...state, openReplyForm: true, phoneId: _phone })
-              }
-            }
+            // onAutoReply={
+            //   (_phone: Phone | undefined) => {
+            //     _phone &&
+            //       setState({...state, openReplyForm: true, phoneId: _phone })
+            //   }
+            // }
             onListReply={(_phone: Phone | undefined) => router.push({
               pathname: '/dashboard/auto-reply',
               query: {
@@ -304,14 +304,15 @@ const PhonePage = () => {
         onSubmit={onSubmit}
         editPhone={state.editPhone}
       />
-      <AutoReplyFormModal
+      {/* <AutoReplyFormModal
       ref={formAutoRep}
       loading={state.formLoading}
       open={state.openReplyForm}
       onCancel={onCancel}
       onSubmitReply={onSubmitReply}
-      phoneId={state.phoneId}
-      />
+      onChangeImageReply={handleTambahImageReply}
+      phoneId={state.phoneId} 
+      />*/}
       <Table
         scroll={{ x: true }}
         onRow={(record) => {

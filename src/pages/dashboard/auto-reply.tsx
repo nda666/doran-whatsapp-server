@@ -300,7 +300,7 @@ const AutoReplyPage = () => {
       open={state.openReplyForm}
       onCancel={onCancel}
       onSubmitReply={onSubmitReply}
-      // onChangeImageReply={handleTambahImageReply}
+      onChangeImageReply={handleTambahImageReply}
       editReply={state.editReply}
       phoneId={state.phoneId}
       />
