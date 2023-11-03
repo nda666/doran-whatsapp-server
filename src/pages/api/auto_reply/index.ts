@@ -56,16 +56,29 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
 //       },
 //     });
 //   }
-
-auto_replies = await prisma.autoReply.create({
-    data: {
-        userId: req.user?.id!,
-        phoneId: req.body.phoneId,
+  if(req.body.id) {
+    auto_replies =await prisma.autoReply.update({
+      where: {
+        id: req.body.id
+      },
+      data: {
         type_keyword: req.body.type_keyword,
         keyword: req.body.keyword,
         reply: {'text': req.body.reply}
-    }
-})
+      }
+    })
+  } 
+  else {
+    auto_replies = await prisma.autoReply.create({
+      data: {
+          userId: req.user?.id!,
+          phoneId: req.body.phoneId,
+          type_keyword: req.body.type_keyword,
+          keyword: req.body.keyword,
+          reply: {'text': req.body.reply}
+      }
+    })
+  }
   return res.status(200).json(auto_replies);
 };
 

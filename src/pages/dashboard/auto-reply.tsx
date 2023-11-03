@@ -235,6 +235,7 @@ const AutoReplyPage = () => {
       formLoading: false,
       openReplyForm: false,
       phoneId: undefined,
+      editReply: undefined
     });
   };
 

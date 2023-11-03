@@ -47,8 +47,11 @@ import React, {
         }
 
         if(editReply) {
+          console.log(phoneId);
           let reply = JSON.parse(JSON.stringify(editReply.reply));
           // console.log(editReply.reply);
+          form.setFieldValue("id",editReply.id);
+          form.setFieldValue("phoneId", phoneId!.id);
           form.setFieldValue("whatsapp_account", phoneId!.number);
           form.setFieldValue('keyword',editReply.keyword);
           form.setFieldValue("reply", reply.text);
@@ -94,9 +97,9 @@ import React, {
             name="phone-form"
             initialValues={{ modifier: "public" }}
           >
-            {/* <Form.Item name="id" hidden>
+            <Form.Item name="id" hidden>
               <Input />
-            </Form.Item> */}
+            </Form.Item>
             <Form.Item name="phoneId" hidden>
               <Input />
             </Form.Item>
