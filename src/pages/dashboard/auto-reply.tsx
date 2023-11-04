@@ -237,7 +237,7 @@ const AutoReplyPage = () => {
   ];
 
   const handleTambahImageReply = (data: ImageReply) => {
-    // console.log(data);
+    console.log(data);
     if(data) {
         // setFieldVa("image",data.raw);
         setImageReply({

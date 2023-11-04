@@ -16,7 +16,7 @@
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@ant-design/icons": "^5.1.4",
-    "antd": "^5.6.1",
+    "antd": "^5.11.0",
     "antd-phone-input": "^0.1.6",
     "axios": "^1.4.0",
     "bcrypt": "^5.1.0",

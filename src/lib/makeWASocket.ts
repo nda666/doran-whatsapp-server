@@ -100,7 +100,25 @@ const makeWASocket = async (
     // for reply
     _waSocket.ev.on("messages.upsert",({messages}) => {
       // console.log(messages);
+      // return;
+      function isLapWord(word:string) {
+        const formatWordClient = word!.match(/\w+\,/);
+
+        if((formatWordClient !== null && Object.keys(formatWordClient))) {
+          const extractWord = formatWordClient[0];
+          const isWord = 'LAP,'
+          if(extractWord.toLowerCase() === isWord.toLowerCase()) {
+            return true;
+          }
+        }
+      }
+      // console.log(messages);
       let messageIn = messages[0].message?.conversation;
+      let quotedMessage:any = null;
+      if(messages[0].message?.extendedTextMessage?.contextInfo) {
+        quotedMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
+      }
+      // console.log(quotedMessage);
       // console.log(messageIn);
       if(messageIn) {
         const phoneReplies = prisma.autoReply.findMany({
@@ -184,6 +202,65 @@ const makeWASocket = async (
           }
         })
         .catch((err) => err);
+      }
+
+      // console.log(quotedMessage);
+      if(quotedMessage) {
+        type quoteMessage = {
+          conversation: any
+        };
+
+        let clientMessage = messages[0].message!.extendedTextMessage!.text;
+        const hasLapWord = isLapWord(String(quotedMessage.conversation));
+
+        if(hasLapWord) {
+          const getPhone = async () => {
+            const findPhone = await prisma.phone.findUnique({
+              where: {
+                id: phoneId
+              }
+            });
+            return findPhone;
+          };
+          
+          const insertQuote = async (quote: string,clientMessage: string, sender_num: string, recipient_num: string) => {
+            const result : {
+              success: boolean,
+              error: any,
+              data: any
+            } = {
+              success: false,
+              error: undefined,
+              data: undefined
+            }
+  
+            try {
+              const response = await prisma.inboxMessage.create({
+                data: {
+                  message: clientMessage,
+                  quote: quote,
+                  sender: sender_num,
+                  recipient: recipient_num
+                }
+              });
+              result.success = true;
+  
+              if(result.success) {
+                result.data = response;
+                return result.data
+              }
+            } catch(e) {
+              console.log('error');
+              result.error = error;
+              return result.error;
+            }
+          }
+  
+          const participantNum = String(messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split('@')[0]);
+          const senderNum = messages[0].key.remoteJid?.split('@')[0];
+          insertQuote(quotedMessage.conversation,String(clientMessage),String(senderNum),String(participantNum));
+        }
+        
       }
 
     });

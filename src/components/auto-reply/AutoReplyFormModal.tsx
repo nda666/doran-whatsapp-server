@@ -5,8 +5,22 @@ import React, {
     useState,
     MouseEvent,
   } from "react";
-  import { Button, Form, FormInstance, Input, Modal, Radio, Upload } from "antd";
-  import { UploadOutlined } from "@ant-design/icons";
+  import { 
+    Button, 
+    Form, 
+    FormInstance, 
+    Input, 
+    Modal, 
+    Radio, 
+    Upload, 
+    Flex, 
+    Row, 
+    Col, 
+    Select} from "antd";
+  import { 
+    UploadOutlined, 
+    PaperClipOutlined, 
+    DeleteOutlined } from "@ant-design/icons";
   import { useTranslation } from "next-i18next";
   import { parsePhoneNumber } from "libphonenumber-js";
   import { Phone, AutoReply } from "@prisma/client";
@@ -45,10 +59,17 @@ import React, {
   
   const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFormProps>(
     ({ open, onSubmitReply, onChangeImageReply, onCancel, phoneId, editReply, ...props }, ref) => {
+      const typeReply = [
+        'text-message',
+        'image-message'
+      ];
+
       const { t } = useTranslation("common");
       const {TextArea} = Input;
       const [form] = Form.useForm();
       const [keywordType, setKeywordType] = useState("Equal");
+      const [fileList, setFileList] = useState<String[]>([]);
+      const [typeMessage, setTypeMessage] = useState("");
       useEffect(() => {
         if (phoneId) {
           form.setFieldValue("phoneId", phoneId.id);
@@ -103,6 +124,10 @@ import React, {
           if(e.target.files.length) {
             console.log('ok');
             console.log(e);
+            console.log(e.target.files);
+            const files = e.target.files[0];
+            console.log(files.name);
+            setFileList([...fileList,files.name]);
             const resized = await resizeFile(e.target.files[0]);
             onChangeImageReply!({
                 preview: URL.createObjectURL(resized),
@@ -110,6 +135,17 @@ import React, {
             } as ImageReply);
           }
         }
+      }
+
+      const removeFile = (e: React.ChangeEvent<any>) => {
+        console.log(fileList);
+        const valueTarget = e.target.value;
+        const index = fileList.indexOf(valueTarget);
+        const newFileList = fileList.slice();
+        newFileList.splice(index,1);
+        setFileList(newFileList);
+        // console.log(e);
+        // console.log(String(e.target.value));
       }
       return (
         <Modal
@@ -175,6 +211,7 @@ import React, {
                     <Radio value={"Contain"}>Contain</Radio>
                 </Radio.Group>
             {/* </Form.Item> */}
+           
             <Form.Item
             name="keyword"
             label={t("keyword")}
@@ -189,36 +226,97 @@ import React, {
             >
                 <Input/>
             </Form.Item>
+
+            <Select
+              placeholder="Select One"
+              style={{
+                width: '100%',
+              }}
+              onChange={(value:string) => {
+                setTypeMessage(value);
+              }}
+              options={[
+                {
+                  value: 'text-message',
+                  label: 'Text Message',
+                },
+                {
+                  value: 'image-message',
+                  label: 'Image Message',
+                },
+              ]}
+            />
+
+            {typeMessage == 'text-message' ?
+              (
+                <Form.Item 
+                name={"reply"}
+                label={t("text_message")}
+                rules={[
+                  {
+                    required: true,
+                    message: t("validation.required", {
+                      field: t("text_message"),
+                    }).toString(),
+                  },
+                ]}>
+                  <TextArea rows={10}/>
+                </Form.Item>
+              )
+              :
+              typeMessage == 'image-message' ?
+              (
+                <>
+                  <Button
+                  style={{display:'block', margin: '1.2em 0'}}
+                  onClick={() => document.getElementById("upload-button")?.click()}
+                  >
+                    <UploadOutlined />
+                    Select File
+                  </Button>
+                  {fileList && fileList.map((item,i) => (
+                    <Row key={i}>
+                      <Col span={24}>
+                          <Flex justify="space-between" align="center" style={{marginTop: '8px'}}>
+                              <PaperClipOutlined/>
+                              <span style={{
+                                whiteSpace: 'nowrap', 
+                                overflow: 'hidden', 
+                                padding: '0 8px', 
+                                // lineHeight: '1.5',
+                                flex: 'auto'
+                                }}>{item}</span>
+                              <span>
+                                <Button
+                                type="text"
+                                value={String(item)}
+                                onClick={(e) => removeFile(e)}
+                                >
+                                  <DeleteOutlined/>
+                                </Button>
+                              </span>
+                          </Flex>
+                      </Col>
+                    </Row>
+                  ))}
+                  <input
+                  type="file"
+                  id="upload-button"
+                  style={{display:"none"}}
+                  onChange={handleUpload}
+                  />
+                </>
+              )
+              :
+              ''
+            }
             {/* <Upload 
             onChange={() => document.getElementById('upload-button')?.click()}
             >
               <Button icon={<UploadOutlined />}>Click to Upload</Button>
             </Upload> */}
-            {/* <Button
-            onClick={() => document.getElementById("upload-button")?.click()}
-            >
-              <UploadOutlined />
-              Select File
-            </Button>
-            <input
-            type="file"
-            id="upload-button"
-            style={{display:"none"}}
-            onChange={handleUpload}
-            /> */}
-            <Form.Item 
-            name={"reply"}
-            label={t("text_message")}
-            rules={[
-              {
-                required: true,
-                message: t("validation.required", {
-                  field: t("text_message"),
-                }).toString(),
-              },
-            ]}>
-              <TextArea rows={10}/>
-            </Form.Item>
+           
+            
           </Form>
         </Modal>
       );

@@ -119,9 +119,9 @@ enum AutoReplyStatus {
 
 model AutoReply {
   id            Int             @id @default(autoincrement())
-  user          User            @relation(fields: [userId], references: [id])
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId        String
-  phone         Phone           @relation(fields: [phoneId], references: [id])
+  phone         Phone           @relation(fields: [phoneId], references: [id], onDelete: Cascade)
   phoneId       String
   keyword       String
   type_keyword  KeywordType     @default(value: Equal)
@@ -139,11 +139,12 @@ model AutoReply {
 model InboxMessage {
   id          Int       @id @default(autoincrement())
   message     String
+  quote       String?
   sender      String
   recipient   String
   sentAt      DateTime  @default(now()) @map(name: "sentAt")
   receivedAt  DateTime  @default(now()) @map(name: "receivedAt")
-  isSent      Boolean   @default(value: true) @map("is_sent")
+  isSent      Boolean   @default(value: false) @map("is_sent")
   isRead      Boolean   @default(value: true) @map("is_read")
 
   @@map(name: "inbox_messages")
