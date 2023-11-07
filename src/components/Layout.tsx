@@ -159,7 +159,7 @@ export default function Layout({
         >
           <Space style={{ flex: 1 }}>
             <Button
-              type="ghost"
+              type="text"
               style={{ color: colorWhite }}
               onClick={() => setCollapsed(!collapsed)}
             >
