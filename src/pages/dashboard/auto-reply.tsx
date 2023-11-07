@@ -1,5 +1,9 @@
 import Layout from "@/components/Layout";
-import AutoReplyFormModal, {AutoReplyFormModalRef, AutoReplyFormData, ImageReply} from "@/components/auto-reply/AutoReplyFormModal";
+import AutoReplyFormModal, {
+  AutoReplyFormModalRef,
+  AutoReplyFormData,
+  ImageReply,
+} from "@/components/auto-reply/AutoReplyFormModal";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import PhoneFormModal, {
   PhoneFormData,
@@ -46,7 +50,7 @@ const AutoReplyPage = () => {
     openQrModal: boolean;
     selectedPhone: Phone | undefined;
     editReply: AutoReply | undefined;
-    phoneId:  Phone | undefined;
+    phoneId: Phone | undefined;
   }>({
     openForm: false,
     openReplyForm: false,
@@ -61,9 +65,15 @@ const AutoReplyPage = () => {
   const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
   const phone_num = router.query.phone_num;
   const { data: session } = useSession();
-  const [imageReply, setImageReply] = useState<ImageReply>({preview: "", raw: ""});
+  const [imageReply, setImageReply] = useState<ImageReply>({
+    preview: "",
+    raw: "",
+  });
   const phoneData = usePhoneData(session?.user?.token!);
-  const replyData = useAutoReplyData(session?.user?.token!,phone_id?.toString());
+  const replyData = useAutoReplyData(
+    session?.user?.token!,
+    phone_id?.toString()
+  );
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
   const [socketOption, setSocketOption] = useState<any>({
     autoConnect: false,
@@ -74,13 +84,12 @@ const AutoReplyPage = () => {
   const [modal, contextHolder] = Modal.useModal();
   const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
-  const formAutoRep = useRef<AutoReplyFormModalRef>(null)
+  const formAutoRep = useRef<AutoReplyFormModalRef>(null);
   useEffect(() => {
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
       return;
     }
-    console.log("123123123");
     setSocketOption({
       query: {
         userId: session?.user?.id,
@@ -94,18 +103,16 @@ const AutoReplyPage = () => {
     };
   }, [phoneData.phones]);
 
-
-
   const setPh = (phoneId: string) => {
     // !phoneOnline.includes(phoneId) &&
     //   setPhoneOnline((prevArr) => [...prevArr, phoneId]);
   };
 
-  console.log("phoneOnline", phoneOnline);
+  // console.log("phoneOnline", phoneOnline);
 
   useEffect(() => {
     if (!socketOption || state.openQrModal || state.openQrModal) {
-      console.log("disconnect");
+      // console.log("disconnect");
       setEvents([]);
       socket?.disconnect();
       return;
@@ -115,7 +122,7 @@ const AutoReplyPage = () => {
     events.push({
       name: `isOnline`,
       handler: (connection) => {
-        console.log(connection);
+        // console.log(connection);
         setPh(connection.phoneId);
       },
     });
@@ -135,7 +142,7 @@ const AutoReplyPage = () => {
     events.push({
       name: "connect",
       handler: () => {
-        console.log("connect");
+        // console.log("connect");
       },
     });
     setEvents(events);
@@ -156,7 +163,27 @@ const AutoReplyPage = () => {
       title: t("details"),
       key: "details",
       dataIndex: "details",
-      render: (v,row) => <div style={{whiteSpace: "nowrap"}}><p>Will respond if Keyword <span style={{display: 'inline-block',padding: '0.1em 0.2em',color: '#fff', backgroundColor: '#12bf24',  border: '1px solid transparent' ,borderRadius: '0.375rem', whiteSpace: 'nowrap', verticalAlign: 'baseline'}}>{row.type_keyword}</span></p></div>
+      render: (v, row) => (
+        <div style={{ whiteSpace: "nowrap" }}>
+          <p>
+            Will respond if Keyword{" "}
+            <span
+              style={{
+                display: "inline-block",
+                padding: "0.1em 0.2em",
+                color: "#fff",
+                backgroundColor: "#12bf24",
+                border: "1px solid transparent",
+                borderRadius: "0.375rem",
+                whiteSpace: "nowrap",
+                verticalAlign: "baseline",
+              }}
+            >
+              {row.type_keyword}
+            </span>
+          </p>
+        </div>
+      ),
     },
     {
       title: t("reply_status"),
@@ -169,39 +196,43 @@ const AutoReplyPage = () => {
       key: "quoted",
       dataIndex: "quoted",
       render: (v) =>
-      v 
-      ?
-      <span
-      style={{
-        display: 'inline-block',
-        padding: '0.1em 0.2em',
-        color: '#fff', 
-        backgroundColor: '#12bf24',
-        border: '1px solid transparent',
-        borderRadius: '0.375rem',
-        whiteSpace: 'nowrap',
-        verticalAlign: 'baseline'}}>
-          Active
-      </span>
-      :
-      <span
-      style={{
-        display: 'inline-block',
-        padding: '0.1em 0.2em',
-        color: '#fff', 
-        backgroundColor: '#e72e2e',
-        border: '1px solid transparent',
-        borderRadius: '0.375rem',
-        whiteSpace: 'nowrap',
-        verticalAlign: 'baseline'}}>
-          Disable
-      </span>
+        v ? (
+          <span
+            style={{
+              display: "inline-block",
+              padding: "0.1em 0.2em",
+              color: "#fff",
+              backgroundColor: "#12bf24",
+              border: "1px solid transparent",
+              borderRadius: "0.375rem",
+              whiteSpace: "nowrap",
+              verticalAlign: "baseline",
+            }}
+          >
+            Active
+          </span>
+        ) : (
+          <span
+            style={{
+              display: "inline-block",
+              padding: "0.1em 0.2em",
+              color: "#fff",
+              backgroundColor: "#e72e2e",
+              border: "1px solid transparent",
+              borderRadius: "0.375rem",
+              whiteSpace: "nowrap",
+              verticalAlign: "baseline",
+            }}
+          >
+            Disable
+          </span>
+        ),
     },
     {
       title: "type",
       key: "type",
       dataIndex: "type",
-    //   render: (v) => (v ? "Online" : "Offline"),
+      //   render: (v) => (v ? "Online" : "Offline"),
     },
     {
       title: t("created_at"),
@@ -244,7 +275,7 @@ const AutoReplyPage = () => {
             raw: data.raw
         });  
     }
-  }
+  };
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
     // console.log(data);
@@ -261,15 +292,27 @@ const AutoReplyPage = () => {
       formLoading: false,
       openReplyForm: false,
       phoneId: undefined,
-      editReply: undefined
+      editReply: undefined,
     });
   };
 
   const onCancel = () =>
-    setState({ ...state, openForm: false, editReply: undefined, openReplyForm: false, phoneId: undefined });
+    setState({
+      ...state,
+      openForm: false,
+      editReply: undefined,
+      openReplyForm: false,
+      phoneId: undefined,
+    });
 
   const onEditClick = (_reply: AutoReply | undefined) => {
-    _reply && setState({ ...state, editReply: _reply, openReplyForm: true, phoneId: {id: phone_id, number: phone_num} as Phone });
+    _reply &&
+      setState({
+        ...state,
+        editReply: _reply,
+        openReplyForm: true,
+        phoneId: { id: phone_id, number: phone_num } as Phone,
+      });
   };
 
   const onDeleteClick = (_reply: AutoReply | undefined) => {
@@ -278,7 +321,7 @@ const AutoReplyPage = () => {
         title: t("confirm_delete"),
         content: t("confirm_delete_ask"),
         onOk: async () => {
-          const result = await replyData.deleteById(_reply.id,_reply.phoneId);
+          const result = await replyData.deleteById(_reply.id, _reply.phoneId);
           notif[result.success ? "success" : "error"]({
             message: result.success ? t("success") : t("failed"),
             description: result.success
@@ -291,19 +334,27 @@ const AutoReplyPage = () => {
 
   return (
     <>
-      <Button onClick={() => setState({ ...state, openReplyForm: true, phoneId: {id: phone_id, number: phone_num} as Phone })}>
+      <Button
+        onClick={() =>
+          setState({
+            ...state,
+            openReplyForm: true,
+            phoneId: { id: phone_id, number: phone_num } as Phone,
+          })
+        }
+      >
         {t("new_reply")}
       </Button>
 
       <AutoReplyFormModal
-      ref={formAutoRep}
-      loading={state.formLoading}
-      open={state.openReplyForm}
-      onCancel={onCancel}
-      onSubmitReply={onSubmitReply}
-      onChangeImageReply={handleTambahImageReply}
-      editReply={state.editReply}
-      phoneId={state.phoneId}
+        ref={formAutoRep}
+        loading={state.formLoading}
+        open={state.openReplyForm}
+        onCancel={onCancel}
+        onSubmitReply={onSubmitReply}
+        onChangeImageReply={handleTambahImageReply}
+        editReply={state.editReply}
+        phoneId={state.phoneId}
       />
       <Table
         scroll={{ x: true }}
@@ -311,7 +362,6 @@ const AutoReplyPage = () => {
           return {
             onContextMenu: (event) => {
               event.preventDefault();
-              console.log(record);
             },
           };
         }}

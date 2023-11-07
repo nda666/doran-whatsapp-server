@@ -1,5 +1,8 @@
 import Layout from "@/components/Layout";
-import AutoReplyFormModal, {AutoReplyFormModalRef, AutoReplyFormData} from "@/components/auto-reply/AutoReplyFormModal";
+import AutoReplyFormModal, {
+  AutoReplyFormModalRef,
+  AutoReplyFormData,
+} from "@/components/auto-reply/AutoReplyFormModal";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import PhoneFormModal, {
   PhoneFormData,
@@ -35,7 +38,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from 'next/router';
+import { useRouter } from "next/router";
 
 const PhonePage = () => {
   const [state, setState] = useState<{
@@ -45,7 +48,7 @@ const PhonePage = () => {
     openQrModal: boolean;
     selectedPhone: Phone | undefined;
     editPhone: Phone | undefined;
-    phoneId:  Phone | undefined;
+    phoneId: Phone | undefined;
   }>({
     openForm: false,
     openReplyForm: false,
@@ -53,7 +56,7 @@ const PhonePage = () => {
     openQrModal: false,
     selectedPhone: undefined,
     editPhone: undefined,
-    phoneId: undefined
+    phoneId: undefined,
   });
   const { data: session } = useSession();
   const phoneData = usePhoneData(session?.user?.token!);
@@ -68,14 +71,13 @@ const PhonePage = () => {
   const [modal, contextHolder] = Modal.useModal();
   const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
-  const formAutoRep = useRef<AutoReplyFormModalRef>(null)
+  const formAutoRep = useRef<AutoReplyFormModalRef>(null);
   const router = useRouter();
   useEffect(() => {
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
       return;
     }
-    console.log("123123123");
     setSocketOption({
       query: {
         userId: session?.user?.id,
@@ -94,11 +96,8 @@ const PhonePage = () => {
     //   setPhoneOnline((prevArr) => [...prevArr, phoneId]);
   };
 
-  console.log("phoneOnline", phoneOnline);
-
   useEffect(() => {
     if (!socketOption || state.openQrModal || state.openQrModal) {
-      console.log("disconnect");
       setEvents([]);
       socket?.disconnect();
       return;
@@ -108,7 +107,6 @@ const PhonePage = () => {
     events.push({
       name: `isOnline`,
       handler: (connection) => {
-        console.log(connection);
         setPh(connection.phoneId);
       },
     });
@@ -128,7 +126,7 @@ const PhonePage = () => {
     events.push({
       name: "connect",
       handler: () => {
-        console.log("connect");
+        // console.log("connect");
       },
     });
     setEvents(events);
@@ -213,13 +211,15 @@ const PhonePage = () => {
             //       setState({...state, openReplyForm: true, phoneId: _phone })
             //   }
             // }
-            onListReply={(_phone: Phone | undefined) => router.push({
-              pathname: '/dashboard/auto-reply',
-              query: {
-                phone_id: _phone?.id,
-                phone_num: _phone?.number
-              }
-            })}
+            onListReply={(_phone: Phone | undefined) =>
+              router.push({
+                pathname: "/dashboard/auto-reply",
+                query: {
+                  phone_id: _phone?.id,
+                  phone_num: _phone?.number,
+                },
+              })
+            }
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
             onGetQrCodeClick={onGetQrCodeClick}
@@ -259,7 +259,13 @@ const PhonePage = () => {
   };
 
   const onCancel = () =>
-    setState({ ...state, openForm: false, editPhone: undefined, openReplyForm: false, phoneId: undefined });
+    setState({
+      ...state,
+      openForm: false,
+      editPhone: undefined,
+      openReplyForm: false,
+      phoneId: undefined,
+    });
 
   const onEditClick = (_phone: Phone | undefined) => {
     _phone && setState({ ...state, editPhone: _phone, openForm: true });
@@ -319,7 +325,7 @@ const PhonePage = () => {
           return {
             onContextMenu: (event) => {
               event.preventDefault();
-              console.log(record);
+              // console.log(record);
             },
           };
         }}
