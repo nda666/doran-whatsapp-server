@@ -26,7 +26,7 @@ export const apiAuthMiddleware =
       req.user = user;
       return handler(req, res);
     } catch (error) {
-      console.log(error);
+      // console.log(error);
       return res.status(401).json({ message: "Unauthorized" });
     }
   };

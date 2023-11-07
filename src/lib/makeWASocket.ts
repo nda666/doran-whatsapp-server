@@ -96,173 +96,196 @@ const makeWASocket = async (
     });
 
     onCreated && onCreated(_waSocket);
-    
+
     // for reply
-    _waSocket.ev.on("messages.upsert",({messages}) => {
+    _waSocket.ev.on("messages.upsert", ({ messages }) => {
       // console.log(messages);
       // return;
-      function isLapWord(word:string) {
+      function isLapWord(word: string) {
         const formatWordClient = word!.match(/\w+\,/);
 
-        if((formatWordClient !== null && Object.keys(formatWordClient))) {
+        if (formatWordClient !== null && Object.keys(formatWordClient)) {
           const extractWord = formatWordClient[0];
-          const isWord = 'LAP,'
-          if(extractWord.toLowerCase() === isWord.toLowerCase()) {
+          const isWord = "LAP,";
+          if (extractWord.toLowerCase() === isWord.toLowerCase()) {
             return true;
           }
         }
       }
       // console.log(messages);
       let messageIn = messages[0].message?.conversation;
-      let quotedMessage:any = null;
-      if(messages[0].message?.extendedTextMessage?.contextInfo) {
-        quotedMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
+      let quotedMessage: any = null;
+      if (messages[0].message?.extendedTextMessage?.contextInfo) {
+        quotedMessage =
+          messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
       }
       // console.log(quotedMessage);
       // console.log(messageIn);
-      if(messageIn) {
+      if (messageIn) {
         const phoneReplies = prisma.autoReply.findMany({
           where: {
             phoneId: phoneId,
             // keyword: messages[0].message?.conversation?.toLowerCase()
-          }
+          },
         });
 
         const formatWordClient = messageIn!.match(/\w+\,/);
 
-        if((formatWordClient !== null && Object.keys(formatWordClient))) {
+        if (formatWordClient !== null && Object.keys(formatWordClient)) {
           const extractWord = formatWordClient[0];
 
-          if((extractWord === 'LAP,')) {
+          if (extractWord === "LAP,") {
             const getPhone = async () => {
               const findPhone = await prisma.phone.findUnique({
                 where: {
-                  id: phoneId
-                }
+                  id: phoneId,
+                },
               });
               return findPhone;
             };
 
-            const insertInbox = async (data:InboxMessage) => {
-              if(Object.keys(data)) {
-                console.log(data);
+            const insertInbox = async (data: InboxMessage) => {
+              if (Object.keys(data)) {
+                // console.log(data);
                 const response = await prisma.inboxMessage.create({
                   data: {
                     message: data.message,
                     recipient: data.recipient,
-                    sender: data.sender
-                  }
+                    sender: data.sender,
+                  },
                 });
-                if(response) {
+                if (response) {
                   return response;
                 }
               }
-            }
+            };
 
-            const dataInbox : InboxMessage[] = [];
+            const dataInbox: InboxMessage[] = [];
             getPhone().then((phonedata) => {
-              if(Object.keys(phonedata as Phone).length !== 0) {
+              if (Object.keys(phonedata as Phone).length !== 0) {
                 dataInbox.push({
                   message: messageIn,
-                  recipient: messages[0].key.remoteJid!.split("@")[0]!, 
+                  recipient: messages[0].key.remoteJid!.split("@")[0]!,
                   sender: phonedata!.number!,
                   // isRead: true,
                 } as InboxMessage);
 
                 insertInbox(dataInbox[0]);
               }
-            })
+            });
           }
         }
 
-        phoneReplies.then((result: AutoReply[]) => {
+        phoneReplies
+          .then((result: AutoReply[]) => {
+            if (result.length) {
+              result.forEach((item) => {
+                if (item.type == "text") {
+                  const replyText = JSON.parse(JSON.stringify(item.reply));
 
-          if(result.length) {
-            result.forEach((item) => {
-              if(item.type == 'text') {
-                const replyText = JSON.parse(JSON.stringify(item.reply));
-
-                if(item.type_keyword.toLowerCase() == 'equal') {
-                  if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
-                    // console.log(replyText);
-                    _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
-                  }
-                } else if(item.type_keyword.toLowerCase() == 'contain') {
-                  // console.log(messageIn);
-                  if(messageIn!.toLowerCase().includes(item.keyword.toLowerCase())) {
-                    console.log(replyText);
-                    _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+                  if (item.type_keyword.toLowerCase() == "equal") {
+                    if (
+                      messageIn!.toLowerCase() == item.keyword.toLowerCase()
+                    ) {
+                      // console.log(replyText);
+                      _waSocket.sendMessage(
+                        messages[0].key.remoteJid!,
+                        replyText
+                      );
+                    }
+                  } else if (item.type_keyword.toLowerCase() == "contain") {
+                    // console.log(messageIn);
+                    if (
+                      messageIn!
+                        .toLowerCase()
+                        .includes(item.keyword.toLowerCase())
+                    ) {
+                      // console.log(replyText);
+                      _waSocket.sendMessage(
+                        messages[0].key.remoteJid!,
+                        replyText
+                      );
+                    }
                   }
                 }
-
-              }
-            })
-          } else {
-            throw 'data empty'
-          }
-        })
-        .catch((err) => err);
+              });
+            } else {
+              throw "data empty";
+            }
+          })
+          .catch((err) => err);
       }
 
       // console.log(quotedMessage);
-      if(quotedMessage) {
+      if (quotedMessage) {
         type quoteMessage = {
-          conversation: any
+          conversation: any;
         };
 
         let clientMessage = messages[0].message!.extendedTextMessage!.text;
         const hasLapWord = isLapWord(String(quotedMessage.conversation));
 
-        if(hasLapWord) {
+        if (hasLapWord) {
           const getPhone = async () => {
             const findPhone = await prisma.phone.findUnique({
               where: {
-                id: phoneId
-              }
+                id: phoneId,
+              },
             });
             return findPhone;
           };
-          
-          const insertQuote = async (quote: string,clientMessage: string, sender_num: string, recipient_num: string) => {
-            const result : {
-              success: boolean,
-              error: any,
-              data: any
+
+          const insertQuote = async (
+            quote: string,
+            clientMessage: string,
+            sender_num: string,
+            recipient_num: string
+          ) => {
+            const result: {
+              success: boolean;
+              error: any;
+              data: any;
             } = {
               success: false,
               error: undefined,
-              data: undefined
-            }
-  
+              data: undefined,
+            };
+
             try {
               const response = await prisma.inboxMessage.create({
                 data: {
                   message: clientMessage,
                   quote: quote,
                   sender: sender_num,
-                  recipient: recipient_num
-                }
+                  recipient: recipient_num,
+                },
               });
               result.success = true;
-  
-              if(result.success) {
+
+              if (result.success) {
                 result.data = response;
-                return result.data
+                return result.data;
               }
-            } catch(e) {
-              console.log('error');
+            } catch (e) {
               result.error = error;
               return result.error;
             }
-          }
-  
-          const participantNum = String(messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split('@')[0]);
-          const senderNum = messages[0].key.remoteJid?.split('@')[0];
-          insertQuote(quotedMessage.conversation,String(clientMessage),String(senderNum),String(participantNum));
-        }
-        
-      }
+          };
 
+          const participantNum = String(
+            messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
+              "@"
+            )[0]
+          );
+          const senderNum = messages[0].key.remoteJid?.split("@")[0];
+          insertQuote(
+            quotedMessage.conversation,
+            String(clientMessage),
+            String(senderNum),
+            String(participantNum)
+          );
+        }
+      }
     });
   }
 
