@@ -5,28 +5,26 @@ import React, {
   useState,
   MouseEvent,
 } from "react";
-import {
-  Button,
-  Form,
-  FormInstance,
-  Input,
-  Modal,
-  Radio,
-  Upload,
-  Flex,
-  Row,
-  Col,
-  Select,
-} from "antd";
-import {
-  UploadOutlined,
-  PaperClipOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import { 
+  Button, 
+  Form, 
+  FormInstance, 
+  Input, 
+  Modal, 
+  Radio, 
+  Upload, 
+  Flex, 
+  Row, 
+  Col, 
+  Select} from "antd";
+import { 
+  UploadOutlined, 
+  PaperClipOutlined, 
+  DeleteOutlined } from "@ant-design/icons";
 import { useTranslation } from "next-i18next";
 import { parsePhoneNumber } from "libphonenumber-js";
 import { Phone, AutoReply } from "@prisma/client";
-import { MenuInfo } from "rc-menu/lib/interface";
+import {MenuInfo} from 'rc-menu/lib/interface';
 import Resizer from "react-image-file-resizer";
 
 export interface AutoReplyFormModalRef {
@@ -49,7 +47,7 @@ export type AutoReplyFormData = {
   reply: string,
   image?: any;
 };
-  
+
 interface CollectionCreateFormProps {
   open: boolean;
   onSubmitReply: (values: AutoReplyFormData) => void;
@@ -60,7 +58,7 @@ interface CollectionCreateFormProps {
   phoneId?: Phone | undefined;
   editReply?: AutoReply | undefined;
 }
-  
+
 const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFormProps>(
   ({ open, onSubmitReply, onChangeImageReply, onCancel, phoneId, editReply, ...props }, ref) => {
     const typeReply = [
@@ -77,19 +75,21 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
     useEffect(() => {
       if (phoneId) {
         form.setFieldValue("phoneId", phoneId.id);
-        //   form.setFieldValue("name", editPhone.name);
+      //   form.setFieldValue("name", editPhone.name);
         form.setFieldValue("whatsapp_account", phoneId.number);
       }
 
-      if (editReply) {
+      if(editReply) {
+        console.log(phoneId);
         let reply = JSON.parse(JSON.stringify(editReply.reply));
         // console.log(editReply.reply);
-        form.setFieldValue("id", editReply.id);
+        form.setFieldValue("id",editReply.id);
         form.setFieldValue("phoneId", phoneId!.id);
         form.setFieldValue("whatsapp_account", phoneId!.number);
-        form.setFieldValue("keyword", editReply.keyword);
+        form.setFieldValue('keyword',editReply.keyword);
         form.setFieldValue("reply", reply.text);
       }
+
       return () => {
         form.resetFields();
         setTypeMessage(undefined);
@@ -100,28 +100,27 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
       form.resetFields();
       setTypeMessage(undefined);
     };
-
     useImperativeHandle(ref, () => ({
       resetForm,
     }));
 
     const resizeFile = async (file: any) =>
-      new Promise<File>(async (resolve) => {
-        // Show resized image in preview element
+    new Promise<File>(async (resolve) => {
+      // Show resized image in preview element
 
-        Resizer.imageFileResizer(
-          file,
-          250,
-          250,
-          "jpg",
-          80,
-          0,
-          (uri) => {
-            resolve(uri as any);
-          },
-          "file"
-        );
-      });
+    Resizer.imageFileResizer(
+        file,
+        250,
+        250,
+        "jpg",
+        80,
+        0,
+        (uri) => {
+          resolve(uri as any);
+        },
+        "file"
+      );
+    });
 
     const handleUpload = async (e: React.ChangeEvent<any>) => {
       // console.log(e);
@@ -221,7 +220,7 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
                   <Radio value={"Contain"}>Contain</Radio>
               </Radio.Group>
           </Form.Item>
-          
+         
           <Form.Item
           name="keyword"
           label={t("keyword")}
@@ -234,7 +233,7 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
             },
           ]}
           >
-            <Input />
+              <Input/>
           </Form.Item>
 
           <Form.Item
@@ -425,8 +424,10 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
           >
             <Button icon={<UploadOutlined />}>Click to Upload</Button>
           </Upload> */}
-      </Form>
-    </Modal>
+         
+          
+        </Form>
+      </Modal>
     );
   }
 );
