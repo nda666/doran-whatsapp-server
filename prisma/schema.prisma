@@ -138,8 +138,9 @@ model AutoReply {
 
 model InboxMessage {
   id          Int       @id @default(autoincrement())
-  message     String
-  quote       String?
+  message     String?   @db.Text
+  quote       String?   @db.Text
+  status      Int?      @db.TinyInt @map(name: "status")
   sender      String
   recipient   String
   sentAt      DateTime  @default(now()) @map(name: "sentAt")

@@ -5,6 +5,12 @@ import { getServerSession } from "next-auth";
 import Nextauth from "../auth/[...nextauth]";
 import { getToken } from "next-auth/jwt";
 import { AuthNextApiRequest } from "@/types/global";
+import { AutoReply } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import formidable from "formidable";
+import { writeFile } from "fs/promises";
+import path from "path";
+import fs from "fs/promises";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   switch (req.method) {
@@ -37,8 +43,27 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   }
 };
 
-const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
+const POST = async (
+  req: AuthNextApiRequest, 
+  res: NextApiResponse
+) => {
   let auto_replies: any = undefined;
+  type image_reply = {
+    url: string;
+  }; 
+  // const reply_field : {
+  //   type?: string | undefined;
+  //   content?: string | undefined
+  // } = {
+  //   type: undefined,
+  //   content: undefined
+  // };
+
+  interface ImageReply {
+    image: image_reply;
+    caption?: string;
+  }
+
 //   if (req.body.phoneId) {
 //     phones = await prisma.autoReply.update({
 //       where: {
@@ -56,6 +81,29 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
 //       },
 //     });
 //   }
+
+let replies: string | undefined = undefined; 
+if(req.body.type_message == 'image') {
+    // return res.status(200).json({"ok": 'test'});
+    let image = req.body.image;
+    // console.log(image);
+    const objReply = {
+      image: {
+        url: 'uploads/'+image
+      },
+      caption: req.body.caption
+    } as ImageReply;
+
+    replies = JSON.stringify(objReply);
+} 
+else if(req.body.type_message == 'text') {
+  const objReply = {
+    [req.body.type_message]: req.body.reply
+  };
+
+  replies = JSON.stringify(objReply);
+}
+
   if(req.body.id) {
     auto_replies =await prisma.autoReply.update({
       where: {
@@ -64,7 +112,7 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       data: {
         type_keyword: req.body.type_keyword,
         keyword: req.body.keyword,
-        reply: {'text': req.body.reply}
+        reply: replies
       }
     })
   } 
@@ -74,8 +122,9 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
           userId: req.user?.id!,
           phoneId: req.body.phoneId,
           type_keyword: req.body.type_keyword,
+          type: req.body.type_message,
           keyword: req.body.keyword,
-          reply: {'text': req.body.reply}
+          reply: replies && JSON.parse(replies)
       }
     })
   }

@@ -237,7 +237,6 @@ const AutoReplyPage = () => {
   ];
 
   const handleTambahImageReply = (data: ImageReply) => {
-    console.log(data);
     if(data) {
         // setFieldVa("image",data.raw);
         setImageReply({
@@ -248,9 +247,11 @@ const AutoReplyPage = () => {
   }
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
-    console.log(data);
-    setState({ ...state, formLoading: true });
     // console.log(data);
+    if(imageReply && (data.type_message == 'image')) {
+      data.image = imageReply.raw
+    }
+    setState({ ...state, formLoading: true });
     const res = await replyData.save(data);
     if (res.success) {
       form.current?.resetForm();

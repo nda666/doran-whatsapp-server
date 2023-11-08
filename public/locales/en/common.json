@@ -32,6 +32,7 @@
   "quoted": "Quoted",
   "whatsapp_account": "Whatsapp Account",
   "type_keyword": "Type Keyword",
+  "type_message": "Type Message",
   "text_message": "Text Message",
   "text_copied": "{{text}} has been copied to clipboard",
   "number": "Number",

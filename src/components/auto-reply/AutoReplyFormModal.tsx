@@ -35,15 +35,17 @@ import React, {
     preview?: string;
     file_name?: string;
     raw?: any;
+    image_reply?: any;
   }
   
   export type AutoReplyFormData = {
     phoneId?: string;
     whatsapp_account: string;
     type_keyword: string;
+    type_message: string;
     keyword: string,
     reply: string,
-    preview?: string;
+    image?: any;
   };
   
   interface CollectionCreateFormProps {
@@ -68,8 +70,8 @@ import React, {
       const {TextArea} = Input;
       const [form] = Form.useForm();
       const [keywordType, setKeywordType] = useState("Equal");
-      const [fileList, setFileList] = useState<String[]>([]);
-      const [typeMessage, setTypeMessage] = useState("");
+      const [fileList, setFileList] = useState<any[]>([]);
+      const [typeMessage, setTypeMessage] = useState<String | undefined>(undefined);
       useEffect(() => {
         if (phoneId) {
           form.setFieldValue("phoneId", phoneId.id);
@@ -90,11 +92,13 @@ import React, {
 
         return () => {
           form.resetFields();
+          setTypeMessage(undefined);
         };
       }, [phoneId]);
   
       const resetForm = () => {
         form.resetFields();
+        setTypeMessage(undefined);
       };
       useImperativeHandle(ref, () => ({
         resetForm,
@@ -122,12 +126,10 @@ import React, {
         // console.log(e);
         if(e.target.getAttribute('id') == 'upload-button') {
           if(e.target.files.length) {
-            console.log('ok');
-            console.log(e);
-            console.log(e.target.files);
             const files = e.target.files[0];
             console.log(files.name);
-            setFileList([...fileList,files.name]);
+            // setFileList([...fileList,files.name]);
+            setFileList([files.name]);
             const resized = await resizeFile(e.target.files[0]);
             onChangeImageReply!({
                 preview: URL.createObjectURL(resized),
@@ -138,7 +140,7 @@ import React, {
       }
 
       const removeFile = (e: React.ChangeEvent<any>) => {
-        console.log(fileList);
+        // console.log(fileList);
         const valueTarget = e.target.value;
         const index = fileList.indexOf(valueTarget);
         const newFileList = fileList.slice();
@@ -147,6 +149,9 @@ import React, {
         // console.log(e);
         // console.log(String(e.target.value));
       }
+
+      const allow_mime = ['image/jpeg','image/gif','image/png','image/jpg'];
+
       return (
         <Modal
           open={open}
@@ -196,10 +201,14 @@ import React, {
             >
               <Input disabled/>
             </Form.Item>
-            {/* <Form.Item
+            <Form.Item
             name={"type_keyword"}
             label={t("type_keyword")}
-            > */}
+            valuePropName={"keywordType"}
+            getValueFromEvent={(event) => {
+              return event.target.value
+            }}
+            >
                 <Radio.Group
                 onChange={(e) => {
                     setKeywordType(e.target.value)
@@ -210,7 +219,7 @@ import React, {
                     <Radio value={"Equal"}>Equal</Radio>
                     <Radio value={"Contain"}>Contain</Radio>
                 </Radio.Group>
-            {/* </Form.Item> */}
+            </Form.Item>
            
             <Form.Item
             name="keyword"
@@ -227,27 +236,32 @@ import React, {
                 <Input/>
             </Form.Item>
 
-            <Select
-              placeholder="Select One"
-              style={{
-                width: '100%',
-              }}
-              onChange={(value:string) => {
-                setTypeMessage(value);
-              }}
-              options={[
-                {
-                  value: 'text-message',
-                  label: 'Text Message',
-                },
-                {
-                  value: 'image-message',
-                  label: 'Image Message',
-                },
-              ]}
-            />
+            <Form.Item
+            label={t("type_message")}
+            name={"type_message"}
+            >
+              <Select
+                placeholder="Select One"
+                style={{
+                  width: '100%',
+                }}
+                onChange={(value:string) => {
+                  setTypeMessage(value);
+                }}
+                options={[
+                  {
+                    value: 'text',
+                    label: 'Text Message',
+                  },
+                  {
+                    value: 'image',
+                    label: 'Image Message',
+                  },
+                ]}
+              />
+            </Form.Item>
 
-            {typeMessage == 'text-message' ?
+            {(typeMessage == 'text') && 
               (
                 <Form.Item 
                 name={"reply"}
@@ -263,8 +277,8 @@ import React, {
                   <TextArea rows={10}/>
                 </Form.Item>
               )
-              :
-              typeMessage == 'image-message' ?
+            }
+            {(typeMessage == 'image') &&
               (
                 <>
                   <Button
@@ -274,6 +288,7 @@ import React, {
                     <UploadOutlined />
                     Select File
                   </Button>
+
                   {fileList && fileList.map((item,i) => (
                     <Row key={i}>
                       <Col span={24}>
@@ -305,10 +320,104 @@ import React, {
                   style={{display:"none"}}
                   onChange={handleUpload}
                   />
+
+                {/* <Form.Item
+                label="Image"
+                name={"image_reply"}
+                valuePropName="fileList"
+                getValueFromEvent={(event) => {
+                  return event.fileList
+                }}
+                rules={[
+                  {
+                    required: true,
+                    message: "please upload image"
+                  },
+                  {
+                    validator(_, fileList) {
+                      return new Promise((resolve,reject) => {
+                        console.log(fileList);
+
+                        if(!allow_mime.includes(fileList[0].type)) {
+                          reject('type file not allowed, upload the appropriate image file');
+                        }
+                        else if(fileList && fileList[0].size > 2000000) {
+                          reject("file size exceeded");
+                        } else {
+                          resolve('success');
+                        }
+                      })
+                    }
+                  }
+                ]}
+                style={{marginTop:'20px',marginBottom:'0'}}
+                >
+                  <Upload
+                  maxCount={1}
+                  beforeUpload={(file) => {
+                    return new Promise((resolve,reject) => {
+                      if(!allow_mime.includes(file.type)) {
+                        reject('type file not allowed, upload the appropriate image file');
+                      } else if(file.size > 2000000) {
+                        reject("file size exceeded");
+                      } else {
+                        setFileList([file])
+                        resolve('success');
+                      }
+                    })
+                  }}
+                  // customRequest={(info) => {
+                  //   console.log(info.file);
+                  //   setFileList([...fileList, info])
+                  // }}
+                  showUploadList={false}
+                  >
+                    <Button
+                    style={{display:"block"}}
+                    >Select file
+                    <UploadOutlined />
+                    </Button>
+                  </Upload>
+                </Form.Item>
+                {fileList?.map((item_file,index) => {
+                  return (
+                      <Row key={index}>
+                      <Col span={24}>
+                          <Flex justify="space-between" align="center" style={{marginTop: '8px'}}>
+                              <PaperClipOutlined/>
+                              <span style={{
+                                whiteSpace: 'nowrap', 
+                                overflow: 'hidden', 
+                                padding: '0 8px', 
+                                // lineHeight: '1.5',
+                                flex: 'auto'
+                                }}>{item_file.name}</span>
+                              <span>
+                                <Button
+                                type="text"
+                                value={item_file}
+                                onClick={(e) => removeFile(e)}
+                                >
+                                  <DeleteOutlined/>
+                                </Button>
+                              </span>
+                          </Flex>
+                      </Col>
+                    </Row>
+                  )
+                })} */}
+
+                  <Form.Item
+                  name="caption"
+                  label={"Caption"}
+                  style={{marginTop:'20px',marginBottom:'0'}}
+                  >
+                    <Input
+                    placeholder="Caption"
+                    />
+                  </Form.Item>
                 </>
               )
-              :
-              ''
             }
             {/* <Upload 
             onChange={() => document.getElementById('upload-button')?.click()}

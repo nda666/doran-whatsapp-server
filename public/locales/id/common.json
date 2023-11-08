@@ -35,6 +35,7 @@
   "keyword": "Kata Kunci",
   "type_keyword": "Tipe Kata Kunci",
   "text_message": "Pesan Teks",
+  "type_message": "Tipe Pesan",
   "details": "Detail",
   "reply_status": "Status Reply",
   "status": "Status",

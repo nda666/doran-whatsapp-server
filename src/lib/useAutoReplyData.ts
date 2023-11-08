@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { AutoReply, Phone } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { AutoReplyFormData } from "@/components/auto-reply/AutoReplyFormModal";
+import { File } from "buffer";
 // import { PhoneFormData } from "@/components/phone/PhoneFormModal";
 
 type ResponseResult = {
@@ -36,6 +37,7 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
   // const socketRef = useRef<any>();
   const { data: session } = useSession();
   const router = useRouter();
+  const imgExt = ['jpg','jpeg','png','gif'];
   const refetchReply = () => {
     setRunRefetchReplies(true);
   };
@@ -92,21 +94,58 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
 //     return result;
 //   };
   const save = async (data: AutoReplyFormData) => {
+    let uploadStatus = false;
     const result: ResponseResult = {
       success: false,
       error: undefined,
       data: undefined,
     };
+    
+    // return result;
+    if(data.type_message == 'image') {
+      if(data.image !== null && data.image as File) {
+        // console.log(data.image);
+        const imgFile: File = data.image as File;
+        let image_extension = imgFile!.name.split(".").pop();
+        if(imgExt.includes(image_extension!)) {
+          const formData = new FormData();
+          // let change_name = new Date().getTime()+"_"+phone_id+"."+image_extension;
+          formData.append('image',data.image);
+          console.log(formData);
+          const responseImg = await axios.post(`/api/image?phone_id=${phone_id}`,formData);
+          // result.data = responseImg;
+          if(responseImg.status == 200) {
+            const {file} = responseImg.data;
+            let change_name: string = '';
+            if(file) {
+              for(let imgFile of file.image) {
+                change_name = imgFile.newFilename;
+              }
+            }
+            // return result;
+            data.image = change_name && change_name;
+            uploadStatus = true;
+          }
+        }
+      }
+    }
 
+    if(data.type_message == "text") uploadStatus = true;
     try {
-      const resp = await axios.post(`/api/auto_reply`, data, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      result.success = true;
-      result.data = resp.data;
-      setRunRefetchReplies(true);
+      if(uploadStatus) {
+        console.log(uploadStatus);
+        const resp = await axios.post(`/api/auto_reply`, data, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        result.success = true;
+        result.data = resp.data;
+        setRunRefetchReplies(true);
+        // uploadStatus = false;
+      } else {
+        throw new Error('failed insert');
+      }
     } catch (e) {
       if (e instanceof AxiosError) {
         result.error = e;
@@ -114,6 +153,7 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
         result.error = e;
       }
     }
+
     return result;
   };
 
