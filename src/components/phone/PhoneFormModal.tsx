@@ -16,6 +16,7 @@ export interface PhoneFormModalRef {
 export type PhoneFormData = {
   id?: string;
   name: string;
+  is_save_group?: boolean;
 };
 
 interface CollectionCreateFormProps {

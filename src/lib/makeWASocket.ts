@@ -4,14 +4,16 @@ import _makeWASocket, {
   WASocket,
   useMultiFileAuthState,
   delay,
+  GroupMetadata,
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
 import { prisma } from "./prisma";
 import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
-import { AutoReply, InboxMessage, Phone } from "@prisma/client";
+import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { error } from "console";
+import { getgroups } from "process";
 
 const session = new Map();
 
@@ -99,7 +101,7 @@ const makeWASocket = async (
     onCreated && onCreated(_waSocket);
     
     // for reply
-    _waSocket.ev.on("messages.upsert",({messages}) => {
+    _waSocket.ev.on("messages.upsert",async ({messages}) => {
       function isLapWord(word:string) {
         const formatWordClient = word!.match(/\w+\,/);
 
@@ -116,9 +118,76 @@ const makeWASocket = async (
       if(messages[0].message?.extendedTextMessage?.contextInfo) {
         quotedMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
       }
-      // console.log(quotedMessage);
-      // console.log(messageIn);
+
       if(messageIn) {
+        const metadata = await _waSocket.groupMetadata(messages[0].key!.remoteJid!);
+
+        const getPhone = async () => {
+          const findPhone = await prisma.phone.findUnique({
+            where: {
+              id: phoneId
+            }
+          });
+          return findPhone;
+        };
+
+        if(metadata) {
+          let konv_date = new Date(metadata.creation! * 1000);
+          let year = konv_date.toLocaleString("id-ID",{year: "numeric"});
+          let month = konv_date.toLocaleString("id-ID",{month: "2-digit"});
+          let day = konv_date.toLocaleString("id-ID",{day: "2-digit"});
+
+          let date = year + "-" + month + "-" + day + " "+konv_date.getHours()+":"+konv_date.getMinutes()+":"+konv_date.getSeconds();
+          const datetime = new Date(date);
+
+          getPhone().then(async (dataphone) => {
+            if(dataphone?.is_save_group) {
+              // try implicit
+
+              const groups = await prisma.group.count({
+                where: {
+                  group_id: metadata.id
+                },
+                select: {
+                  group_id: true
+                }
+              });
+
+              if(!Number(groups.group_id)) {
+                const insertGroup = async (metadata: GroupMetadata) => {
+                  const participant_list = metadata.participants.map((participant) => (
+                    {whatsapp_id: participant.id, admin: participant.admin}
+                  ));
+                  try {
+                    const savegroup = await prisma.group.create({
+                      data: {
+                        group_id: metadata.id,
+                        subject: metadata.subject,
+                        owner: String(metadata.subjectOwner),
+                        creation: datetime,
+                        size: metadata.size,
+                        desc: metadata.desc,
+                        restrict: metadata.restrict,
+                        announce: metadata.announce,
+                        participants: {
+                          create: participant_list
+                        }
+                      }
+                    })
+                    
+                    savegroup && 'Group saved succesfully'
+                  } catch(err) {
+                    console.log(err);
+                  }
+  
+                }
+                insertGroup(metadata);
+              }
+              // return;
+            }
+          });
+        }
+
         const phoneReplies = prisma.autoReply.findMany({
           where: {
             // phoneId: phoneId,
@@ -137,14 +206,6 @@ const makeWASocket = async (
 
         const hasLapWord = isLapWord(String(messageIn));
         if(hasLapWord) {
-          const getPhone = async () => {
-            const findPhone = await prisma.phone.findUnique({
-              where: {
-                id: phoneId
-              }
-            });
-            return findPhone;
-          };
 
           const insertInbox = async (data:InboxMessage) => {
             if(Object.keys(data)) {

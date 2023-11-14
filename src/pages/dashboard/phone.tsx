@@ -24,6 +24,7 @@ import {
   Space,
   Table,
   notification,
+  Switch
 } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -187,6 +188,25 @@ const PhonePage = () => {
       render: (v) => (v ? "Online" : "Offline"),
     },
     {
+      title: "Save Group",
+      key: "is_save_group",
+      dataIndex: "is_save_group",
+      render: (v,phone) => (
+        <Switch
+        defaultChecked={v ? true : false}
+        checkedChildren="On"
+        unCheckedChildren="Off"
+        onChange={(checked) => {
+          onSaveGroup(phone, checked);
+          // setIsSendGroup({
+          //   phoneId: String(phone.id),
+          //   is_send_group: checked,
+          // })
+        }}
+        />
+      ),
+    },
+    {
       title: t("created_at"),
       key: "createdAt",
       dataIndex: "createdAt",
@@ -287,6 +307,20 @@ const PhonePage = () => {
         },
       });
   };
+
+  const onSaveGroup = (_phone: Phone | undefined, checked: boolean) => {
+    const enable_save_group = async (data: PhoneFormData) => {
+      const result = await phoneData.save(data);
+      if(result.success) {
+        console.log('ok');
+      }
+    }
+    
+    if(_phone) {
+      const data = {..._phone, is_save_group: checked};
+      enable_save_group(data);
+    }
+  }
 
   const onGetQrCodeClick = (_phone: Phone | undefined) => {
     _phone &&
