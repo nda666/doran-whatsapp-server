@@ -124,6 +124,7 @@ else if(req.body.type_message == 'text') {
           type_keyword: req.body.type_keyword,
           type: req.body.type_message,
           keyword: req.body.keyword,
+          is_save_inbox: req.body.is_save_inbox,
           reply: replies && JSON.parse(replies)
       }
     })

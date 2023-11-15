@@ -16,7 +16,9 @@ import {
   Flex, 
   Row, 
   Col, 
-  Select} from "antd";
+  Select,
+  Checkbox,
+  Space} from "antd";
 import { 
   UploadOutlined, 
   PaperClipOutlined, 
@@ -46,6 +48,7 @@ export type AutoReplyFormData = {
   keyword: string,
   reply: string,
   image?: any;
+  is_save_inbox?: boolean;
 };
 
 interface CollectionCreateFormProps {
@@ -72,6 +75,20 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
     const [keywordType, setKeywordType] = useState("Equal");
     const [fileList, setFileList] = useState<any[]>([]);
     const [typeMessage, setTypeMessage] = useState<String | undefined>(undefined);
+    const [isSaveInbox, setIsSaveInbox] = useState(false);
+    const buttonItemLayout =  {
+      wrapperCol: {
+        span: 14,
+        offset: 4,
+      },
+    }
+
+    const tailLayout = {
+      wrapperCol: {
+        offset: 90,
+        span: 16,
+      },
+    };
     useEffect(() => {
       if (phoneId) {
         form.setFieldValue("phoneId", phoneId.id);
@@ -169,10 +186,40 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
           form
             ?.validateFields()
             .then((values) => {
+              // console.log(values);
               onSubmitReply(values);
             })
             .catch((info) => {});
         }}
+        footer={(_,{OkBtn, CancelBtn}) => (
+          <>
+            <Flex gap="middle" justify="space-between" align="center">
+              <Form.Item 
+              // name={"is_save_inbox"} 
+              // valuePropName="checked"
+              initialValue={isSaveInbox}
+              getValueFromEvent={(event) => {
+                return event.target.checked
+              }}
+              >
+                <Checkbox
+                onChange={(e) => {
+                  console.log(e.target.checked)
+                  // let ischeck = e.target.checked;
+                  form.setFieldValue("is_save_inbox",e.target.checked);
+                  setIsSaveInbox(e.target.checked)
+                }}
+                // value={isSaveInbox}
+                checked={isSaveInbox}
+                >Simpan Pesan Masuk</Checkbox>
+              </Form.Item>
+              <Space>
+                <CancelBtn/>
+                <OkBtn/>
+              </Space>
+            </Flex>
+          </>
+        )}
       >
         <Form
           disabled={props?.loading}
@@ -186,6 +233,14 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
           </Form.Item>
           <Form.Item name="phoneId" hidden>
             <Input />
+          </Form.Item>
+          <Form.Item 
+          name="is_save_inbox" 
+          initialValue={isSaveInbox}
+          hidden>
+              <Checkbox
+              checked={isSaveInbox}
+              />
           </Form.Item>
           <Form.Item
             name="whatsapp_account"

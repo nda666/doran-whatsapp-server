@@ -131,6 +131,7 @@ model AutoReply {
   reply_status  AutoReplyStatus @default(value: active)
   reply_when    ReplyWhen       @default(value: All)
   is_quoted     Boolean         @default(value: false)
+  is_save_inbox Boolean         @default(value: false)
   createdAt     DateTime        @default(now()) @map(name: "created_at")
   updatedAt     DateTime        @updatedAt @map(name: "updated_at")
 
