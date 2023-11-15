@@ -21,6 +21,7 @@
   "timeout": "Timeout",
   "delete": "Delete",
   "add_devices": "Add devices",
+  "active_save_group": "Enable group store",
   "dashboard": "Dashboard",
   "phone_devices": "Phone devices",
   "auto_reply": "Auto Reply",

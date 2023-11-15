@@ -4,14 +4,17 @@ import _makeWASocket, {
   WASocket,
   useMultiFileAuthState,
   delay,
+  GroupMetadata,
+  MessageType
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
 import { prisma } from "./prisma";
 import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
-import { AutoReply, InboxMessage, Phone } from "@prisma/client";
+import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { error } from "console";
+import { getgroups } from "process";
 
 const session = new Map();
 
@@ -99,7 +102,8 @@ const makeWASocket = async (
     onCreated && onCreated(_waSocket);
     
     // for reply
-    _waSocket.ev.on("messages.upsert",({messages}) => {
+    _waSocket.ev.on("messages.upsert",async ({messages}) => {
+
       function isLapWord(word:string) {
         const formatWordClient = word!.match(/\w+\,/);
 
@@ -111,14 +115,89 @@ const makeWASocket = async (
           }
         }
       }
-      let messageIn = messages[0].message?.conversation;
+
+      let messageIn = messages[0].message!.conversation;
+      const messageType = Object.keys(messages[0].message!)[0];
+      // console.log(messageType);
       let quotedMessage:any = null;
       if(messages[0].message?.extendedTextMessage?.contextInfo) {
         quotedMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
       }
-      // console.log(quotedMessage);
-      // console.log(messageIn);
+
+      const getPhone = async () => {
+        const findPhone = await prisma.phone.findUnique({
+          where: {
+            id: phoneId
+          }
+        });
+        return findPhone;
+      };
+
+      // return;
       if(messageIn) {
+        // console.log('ok');
+        
+        const checkIdGroupFormat = /^[0-9]+@g\.us$/;
+        if(checkIdGroupFormat.test(messages[0].key.remoteJid!)) {
+          const metadata = await _waSocket.groupMetadata(messages[0].key!.remoteJid!);
+          if(metadata) {
+            let konv_date = new Date(metadata.creation! * 1000);
+            let year = konv_date.toLocaleString("id-ID",{year: "numeric"});
+            let month = konv_date.toLocaleString("id-ID",{month: "2-digit"});
+            let day = konv_date.toLocaleString("id-ID",{day: "2-digit"});
+
+            let date = year + "-" + month + "-" + day + " "+konv_date.getHours()+":"+konv_date.getMinutes()+":"+konv_date.getSeconds();
+            const datetime = new Date(date);
+
+            getPhone().then(async (dataphone) => {
+              if(dataphone?.is_save_group) {
+                // try implicit
+
+                const groups = await prisma.group.count({
+                  where: {
+                    group_id: metadata.id
+                  },
+                  select: {
+                    group_id: true
+                  }
+                });
+
+                if(!Number(groups.group_id)) {
+                  const insertGroup = async (metadata: GroupMetadata) => {
+                    const participant_list = metadata.participants.map((participant) => (
+                      {whatsapp_id: participant.id, admin: participant.admin}
+                    ));
+                    try {
+                      const savegroup = await prisma.group.create({
+                        data: {
+                          group_id: metadata.id,
+                          subject: metadata.subject,
+                          owner: String(metadata.subjectOwner),
+                          creation: datetime,
+                          size: metadata.size,
+                          desc: metadata.desc,
+                          restrict: metadata.restrict,
+                          announce: metadata.announce,
+                          participants: {
+                            create: participant_list
+                          }
+                        }
+                      })
+                      
+                      savegroup && 'Group saved succesfully'
+                    } catch(err) {
+                      console.log(err);
+                    }
+    
+                  }
+                  insertGroup(metadata);
+                }
+                // return;
+              }
+            });
+          } 
+        }
+
         const phoneReplies = prisma.autoReply.findMany({
           where: {
             // phoneId: phoneId,
@@ -137,14 +216,6 @@ const makeWASocket = async (
 
         const hasLapWord = isLapWord(String(messageIn));
         if(hasLapWord) {
-          const getPhone = async () => {
-            const findPhone = await prisma.phone.findUnique({
-              where: {
-                id: phoneId
-              }
-            });
-            return findPhone;
-          };
 
           const insertInbox = async (data:InboxMessage) => {
             if(Object.keys(data)) {
@@ -180,25 +251,63 @@ const makeWASocket = async (
           })
         }
 
-        phoneReplies.then((result: AutoReply[]) => {
+        phoneReplies.then(async (result: AutoReply[]) => {
 
           if(result.length) {
+            const insertInbox = async (data:InboxMessage) => {
+              if(Object.keys(data)) {
+                console.log(data);
+                const response = await prisma.inboxMessage.create({
+                  data: {
+                    message: data.message,
+                    recipient: data.recipient,
+                    sender: data.sender
+                  }
+                });
+                if(response) {
+                  return response;
+                }
+              }
+            }
+
+            let phones = await getPhone();
+            let phone_number = await phones?.number;
             result.forEach((item) => {
               const replyText = JSON.parse(JSON.stringify(item.reply));
               if(item.type == 'text') {
                 if(item.type_keyword.toLowerCase() == 'equal') {
+                  
                   if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
                     // console.log(replyText);
+                    if(item.is_save_inbox) {
+                      const dataInbox : InboxMessage[] = [{
+                        message: messageIn!,
+                        recipient: messages[0].key.remoteJid!.split("@")[0]!,
+                        sender: phone_number
+                      } as InboxMessage];
+                      
+                      insertInbox(dataInbox[0]);
+                    }
                     _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
                   }
                 } else if(item.type_keyword.toLowerCase() == 'contain') {
                   // console.log(messageIn);
                   if(item.keyword.toLowerCase().includes(messageIn!.toLowerCase())) {
                     // console.log(replyText);
+                    if(item.is_save_inbox) {
+                      const dataInbox : InboxMessage[] = [{
+                        message: messageIn!,
+                        recipient: messages[0].key.remoteJid!.split("@")[0]!,
+                        sender: phone_number
+                      } as InboxMessage];
+                      
+                      insertInbox(dataInbox[0]);
+                    }
+
                     _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
                   }
                 }
-
+  
               }
               if(item.type == 'image') {
                 replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
@@ -220,10 +329,10 @@ const makeWASocket = async (
             throw 'data empty'
           }
         })
-        .catch((err) => err);
+        .catch((err: any) => err);
       }
 
-      // console.log(quotedMessage);
+
       if(quotedMessage) {
         type quoteMessage = {
           conversation: any
@@ -231,7 +340,7 @@ const makeWASocket = async (
 
         let clientMessage = messages[0].message!.extendedTextMessage!.text;
         const hasLapWord = isLapWord(String(quotedMessage.conversation));
-        // console.log(hasLapWord);
+
         if(hasLapWord) {
           const getPhone = async () => {
             const findPhone = await prisma.phone.findUnique({
@@ -242,7 +351,12 @@ const makeWASocket = async (
             return findPhone;
           };
           
-          const insertQuote = async (quote: string,clientMessage: string, sender_num: string, recipient_num: string) => {
+          const insertQuote = async (
+            quote: string,
+            clientMessage: string, 
+            sender_num: string, 
+            recipient_num: string
+          ) => {
             const result : {
               success: boolean,
               error: any,

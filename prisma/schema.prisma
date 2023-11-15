@@ -76,19 +76,20 @@ enum PhoneStatus {
 }
 
 model Phone {
-  id           String       @id @default(uuid())
-  name         String
-  number       String?
-  account_name String?
-  qrCode       String?      @db.Text
-  status       PhoneStatus? @default(value: CLOSE)
-  isOnline     Boolean      @default(value: false) @map("is_online")
-  token        String       @unique @default(uuid())
-  user         User         @relation(fields: [userId], references: [id])
-  userId       String
-  auto_replies AutoReply[]
-  createdAt    DateTime     @default(now()) @map(name: "created_at")
-  updatedAt    DateTime     @updatedAt @map(name: "updated_at")
+  id            String       @id @default(uuid())
+  name          String
+  number        String?
+  account_name  String?
+  qrCode        String?      @db.Text
+  status        PhoneStatus? @default(value: CLOSE)
+  isOnline      Boolean      @default(value: false) @map("is_online")
+  token         String       @unique @default(uuid())
+  user          User         @relation(fields: [userId], references: [id])
+  userId        String
+  auto_replies  AutoReply[]
+  is_save_group Boolean      @default(value: false) @map("is_save_group")
+  createdAt     DateTime     @default(now()) @map(name: "created_at")
+  updatedAt     DateTime     @updatedAt @map(name: "updated_at")
 
   @@map(name: "phones")
 }
@@ -130,6 +131,7 @@ model AutoReply {
   reply_status  AutoReplyStatus @default(value: active)
   reply_when    ReplyWhen       @default(value: All)
   is_quoted     Boolean         @default(value: false)
+  is_save_inbox Boolean         @default(value: false)
   createdAt     DateTime        @default(now()) @map(name: "created_at")
   updatedAt     DateTime        @updatedAt @map(name: "updated_at")
 
@@ -149,4 +151,28 @@ model InboxMessage {
   isRead      Boolean   @default(value: true) @map("is_read")
 
   @@map(name: "inbox_messages")
+}
+
+model Group {
+  id             Int   @id @default(autoincrement())
+  group_id       String
+  subject        String
+  creation       DateTime?
+  size           Int?
+  owner          String
+  desc           String?  @db.Text
+  restrict       Boolean  @default(value: false) @map(name: "restrict")
+  announce       Boolean  @default(value: false) @map(name: "announce")
+  participants   Participant[]
+
+  @@map(name: "groups")
+}
+
+model Participant {
+  id            Int           @id @default(autoincrement())
+  whatsapp_id   String
+  admin         String?
+  groups        Group[]
+
+  @@map(name: "participants")
 }

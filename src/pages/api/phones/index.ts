@@ -43,6 +43,7 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       },
       data: {
         name: req.body.name,
+        is_save_group: req.body.is_save_group
       },
     });
   } else {
