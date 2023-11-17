@@ -147,7 +147,7 @@ export default function Layout({
           style={{
             position: "sticky",
             top: 0,
-            zIndex: 1,
+            zIndex: 3,
             width: "100%",
             display: "flex",
             alignItems: "center",
