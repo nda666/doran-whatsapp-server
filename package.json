@@ -8,7 +8,7 @@
     "dev:ts": "ts-node --project tsconfig.server.json src/server.ts",
     "build": "next build && tsc --project tsconfig.server.json",
     "build:next": "next build",
-    "start": "NODE_ENV=production node dist/server.js",
+    "start": "NODE_ENV=production node dist/src/server.js",
     "start:next": "next start",
     "lint": "next lint",
     "prisma": "prisma"
