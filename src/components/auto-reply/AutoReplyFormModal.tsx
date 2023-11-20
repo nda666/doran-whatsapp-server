@@ -54,6 +54,7 @@ export type AutoReplyFormData = {
   keyword: string,
   reply: string,
   image?: any;
+  image_type: string;
   is_save_inbox?: boolean;
   buttons: ButtonMessage[];
 };

@@ -105,6 +105,7 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
     if(data.type_message == 'image') {
       if(data.image !== null && data.image as File) {
         // console.log(data.image);
+        data.image_type = 'file';
         const imgFile: File = data.image as File;
         let image_extension = imgFile!.name.split(".").pop();
         if(imgExt.includes(image_extension!)) {
@@ -127,6 +128,11 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
             uploadStatus = true;
           }
         }
+      }
+      else if(data.image !== null && data.image as string) {
+        data.image_type = 'text';
+        data.image = data.image && data.image;
+        uploadStatus = true;
       }
     }
 

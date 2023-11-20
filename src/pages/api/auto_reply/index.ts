@@ -96,16 +96,28 @@ const POST = async (
 let replies: string | undefined = undefined; 
 if(req.body.type_message == 'image') {
     // return res.status(200).json({"ok": 'test'});
-    let image = req.body.image;
-    // console.log(image);
-    const objReply = {
-      image: {
-        url: 'uploads/'+image
-      },
-      caption: req.body.caption
-    } as ImageReply;
+    if(req.body.image_type === 'file') {
+      let image = req.body.image;
+      // console.log(image);
+      const objReply = {
+        image: {
+          url: 'uploads/'+image
+        },
+        caption: req.body.caption
+      } as ImageReply;
+  
+      replies = JSON.stringify(objReply);
+    }
+    else if(req.body.image_type === 'text') {
+      const objReply = {
+        image: {
+          url: req.body.image
+        },
+        caption: req.body.caption
+      } as ImageReply;
 
-    replies = JSON.stringify(objReply);
+      replies = JSON.stringify(objReply);
+    }
 } 
 else if(req.body.type_message == 'text') {
   const objReply = {
