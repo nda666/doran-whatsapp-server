@@ -149,6 +149,7 @@ model InboxMessage {
   receivedAt  DateTime  @default(now()) @map(name: "receivedAt")
   isSent      Boolean   @default(value: false) @map("is_sent")
   isRead      Boolean   @default(value: true) @map("is_read")
+  keterangan  String?   @db.VarChar(255) @map("keterangan")
 
   @@map(name: "inbox_messages")
 }

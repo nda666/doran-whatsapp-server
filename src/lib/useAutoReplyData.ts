@@ -130,7 +130,7 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
       }
     }
 
-    if(data.type_message == "text") uploadStatus = true;
+    if(data.type_message == "text" || data.type_message == 'button') uploadStatus = true;
     try {
       if(uploadStatus) {
         console.log(uploadStatus);
@@ -141,6 +141,7 @@ export default function useAutoReplyData(token: string, phone_id?: string | unde
         });
         result.success = true;
         result.data = resp.data;
+        console.log(resp.data);
         setRunRefetchReplies(true);
         // uploadStatus = false;
       } else {

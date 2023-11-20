@@ -37,6 +37,7 @@
   "type_keyword": "Tipe Kata Kunci",
   "text_message": "Pesan Teks",
   "type_message": "Tipe Pesan",
+  "footer_message": "Pesan Footer",
   "details": "Detail",
   "reply_status": "Status Reply",
   "status": "Status",

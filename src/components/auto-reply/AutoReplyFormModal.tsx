@@ -40,6 +40,12 @@ export interface ImageReply {
   image_reply?: any;
 }
 
+export type ButtonMessage = {
+  label?: string;
+  name: string;
+  value?: string;
+}
+
 export type AutoReplyFormData = {
   phoneId?: string;
   whatsapp_account: string;
@@ -49,6 +55,7 @@ export type AutoReplyFormData = {
   reply: string,
   image?: any;
   is_save_inbox?: boolean;
+  buttons: ButtonMessage[];
 };
 
 interface CollectionCreateFormProps {
@@ -76,6 +83,13 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
     const [fileList, setFileList] = useState<any[]>([]);
     const [typeMessage, setTypeMessage] = useState<String | undefined>(undefined);
     const [isSaveInbox, setIsSaveInbox] = useState(false);
+    const [numIndex, setNumIndex] = useState(0);
+    // const [buttonList, setButtonList] = useState([{name: '', value: ''}]);
+    const [buttonList, setButtonList] = useState<{
+      name: string;
+      label: string;
+      value: string;
+    }[] | undefined>([]);
     const buttonItemLayout =  {
       wrapperCol: {
         span: 14,
@@ -112,6 +126,28 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
         setTypeMessage(undefined);
       };
     }, [phoneId]);
+
+    useEffect(() => {
+      // const inputValues = {...form.getFieldsValue()};
+      // // console.log(inputValues);
+      // const filPropFormat = /^button[1-9]$/
+      // for (const propVal in inputValues) {
+      //   if(filPropFormat.test(propVal)) {
+      //     console.log(propVal);
+      //     console.log(inputValues[propVal]);
+      //     delete inputValues[propVal];
+      //   }
+      // }
+
+      // inputValues.buttons = buttonList;
+      // console.log(inputValues);
+      form.setFieldValue('buttons',[
+        ...buttonList!
+      ]);
+
+      // form.setFieldsValue(inputValues);
+
+    },[buttonList])
 
     const resetForm = () => {
       form.resetFields();
@@ -167,6 +203,35 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
       // console.log(String(e.target.value));
     }
 
+    const handleChange = (e: React.ChangeEvent,i: number) => {
+      let newButtonList = [...buttonList!];
+      newButtonList[i].value = e.target.getAttribute('value') || '';
+      setButtonList(newButtonList);
+    }
+
+    const addButton = () => {
+      setNumIndex(numIndex + 1);
+      // let nameInput = `button[${numIndex+1}]`;
+      let nameInput = `button${numIndex+1}`;
+      const label = `button ${numIndex+1}`;
+      let collectVal = [];
+      collectVal.push(form.getFieldValue('buttons'));
+
+      setButtonList([
+        ...buttonList!,
+      {name: nameInput, label: label, value: ''}
+      ]);
+    }
+
+    const removeButton = () => {
+      if(buttonList!.length > 1) {
+        buttonList!.pop();
+        setButtonList([...buttonList!])
+      } else {
+        setButtonList([]);
+      }
+    }
+
     const allow_mime = ['image/jpeg','image/gif','image/png','image/jpg'];
 
     return (
@@ -187,7 +252,15 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
             ?.validateFields()
             .then((values) => {
               // console.log(values);
-              onSubmitReply(values);
+              const inputValues = {...values};
+              const filPropFormat = /^button[1-9]$/
+              for (const propVal in inputValues) {
+                if(filPropFormat.test(propVal)) {
+                  delete inputValues[propVal];
+                }
+              }
+              // onSubmitReply(values);
+              onSubmitReply(inputValues);
             })
             .catch((info) => {});
         }}
@@ -241,6 +314,12 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
               <Checkbox
               checked={isSaveInbox}
               />
+          </Form.Item>
+          <Form.Item
+          name="buttons"
+          hidden
+          >
+            <Input/>
           </Form.Item>
           <Form.Item
             name="whatsapp_account"
@@ -312,6 +391,10 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
                   value: 'image',
                   label: 'Image Message',
                 },
+                {
+                  value: 'button',
+                  label: 'Button Message'
+                }
               ]}
             />
           </Form.Item>
@@ -471,6 +554,51 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
                   placeholder="Caption"
                   />
                 </Form.Item>
+              </>
+            )
+          }
+          {(typeMessage == 'button') && 
+            (
+              <>
+              <Form.Item
+              name={"reply"}
+              label={t("text_message")}
+              rules={ [
+                {
+                  required: true,
+                  message: t("validation.required", {
+                    field: t("text_messagge"),
+                  }).toString()
+                }
+              ]}
+              >
+                <TextArea rows={3}/>
+              </Form.Item>
+
+              <Form.Item
+              name={"footer_message"}
+              label={t("footer_message")}
+              >
+                <Input/>
+              </Form.Item>
+
+              <Flex gap="small" wrap="wrap" style={{marginBottom: '1.5em'}}>
+                <Button type="primary" onClick={addButton}>Add Button</Button>
+                <Button type="primary" danger onClick={removeButton}>Reduce Button</Button>
+              </Flex>
+              
+              {buttonList!.length && buttonList!.map((buttonEl,index) => {
+                return (
+                  <Form.Item
+                  key={index}
+                  label={"Button " + (index+1)}
+                  name={buttonEl.name}
+                  // name="buttons"
+                  >
+                    <Input value={buttonList![index].value} onChange={e => handleChange(e,index)}/>
+                  </Form.Item>
+                )
+              })}
               </>
             )
           }
