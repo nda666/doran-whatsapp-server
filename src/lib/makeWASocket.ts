@@ -15,6 +15,7 @@ import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import axios, { AxiosError } from "axios";
 import { error } from "console";
 import { getgroups } from "process";
+import toBase64 from "./toBase64";
 
 const session = new Map();
 
@@ -115,6 +116,13 @@ const makeWASocket = async (
           }
         }
       }
+
+      // const toBase64 = (file:any) => new Promise((resolve, reject) => {
+      //   const reader = new FileReader();
+      //   reader.readAsDataURL(file);
+      //   reader.onload = () => resolve(reader.result);
+      //   reader.onerror = reject;
+      // });
 
       let messageIn = messages[0].message!.conversation;
       const messageType = Object.keys(messages[0].message!)[0];
@@ -272,7 +280,7 @@ const makeWASocket = async (
 
             let phones = await getPhone();
             let phone_number = await phones?.number;
-            result.forEach((item) => {
+            result.forEach(async (item) => {
               const replyText = JSON.parse(JSON.stringify(item.reply));
               if(item.type == 'text') {
                 if(item.type_keyword.toLowerCase() == 'equal') {
@@ -310,7 +318,9 @@ const makeWASocket = async (
   
               }
               if(item.type == 'image') {
-                replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
+                const image64 = await toBase64('./public/'+ replyText.image.url);
+                // replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
+                replyText.image = Buffer.from(image64);
                 if(item.type_keyword.toLowerCase() == 'equal') {
                   if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
                     // console.log(replyText);
