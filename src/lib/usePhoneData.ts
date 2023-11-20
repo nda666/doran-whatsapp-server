@@ -14,6 +14,7 @@ export type usePhoneDataType = {
   setPhones: Dispatch<SetStateAction<Phone[] | undefined>>;
   save: (data: PhoneFormData) => Promise<ResponseResult>;
   deleteById: (phoneId: string) => Promise<ResponseResult>;
+  isSaveGroup: (phoneId: string, is_save_group: boolean ) => Promise<ResponseResult>;
   refetchPhone: () => void;
 };
 export default function usePhoneData(token: string): usePhoneDataType {
@@ -97,12 +98,47 @@ export default function usePhoneData(token: string): usePhoneDataType {
     }
     return result;
   };
+  const isSaveGroup = async (phoneId: string, is_save_group: boolean) => {
+    // console.log(phoneId);
+    const result: {
+      success: boolean;
+      error: any;
+      data: any;
+    } = {
+      success: false,
+      error: undefined,
+      data: undefined,
+    };
+
+    try {
+      const resp = await axios.patch(`/api/phones/${phoneId}/toggle-group`, {
+        is_save_group: is_save_group
+      },{
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      result.success = true;
+      result.data = resp.data;
+      setRunRefetchPhone(true);
+    } catch(e) {
+      if (e instanceof AxiosError) {
+        result.error = e;
+      } else {
+        result.error = e;
+      }
+    }
+
+    return result;
+  }
 
   return {
     phones,
     setPhones,
     save,
     deleteById,
+    isSaveGroup,
     refetchPhone,
   };
 }

@@ -309,16 +309,24 @@ const PhonePage = () => {
   };
 
   const onSaveGroup = (_phone: Phone | undefined, checked: boolean) => {
-    const enable_save_group = async (data: PhoneFormData) => {
-      const result = await phoneData.save(data);
+    // const enable_save_group = async (data: PhoneFormData) => {
+    //   const result = await phoneData.save(data);
+    //   if(result.success) {
+    //     console.log('ok');
+    //   }
+    // }
+    const enable_save_group = async (phoneId: string, is_save_group: boolean) => {
+      const result = await phoneData.isSaveGroup(phoneId, is_save_group);
       if(result.success) {
         console.log('ok');
       }
     }
     
     if(_phone) {
-      const data = {..._phone, is_save_group: checked};
-      enable_save_group(data);
+      // const data = {..._phone, is_save_group: checked};
+      // enable_save_group(data);
+      const {id} = _phone;
+      enable_save_group(id, checked);
     }
   }
 

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import Nextauth from "../auth/[...nextauth]";
 import { getToken } from "next-auth/jwt";
 import { AuthNextApiRequest } from "@/types/global";
+import { ButtonMessage } from "@/components/auto-reply/AutoReplyFormModal";
 import { AutoReply } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import formidable from "formidable";
@@ -64,6 +65,16 @@ const POST = async (
     caption?: string;
   }
 
+  type ButtonText = {
+    displayText: string;
+  }
+
+  interface collectButton {
+    buttonId: string,
+    buttonText: ButtonText,
+    type: number
+  }
+
 //   if (req.body.phoneId) {
 //     phones = await prisma.autoReply.update({
 //       where: {
@@ -102,6 +113,30 @@ else if(req.body.type_message == 'text') {
   };
 
   replies = JSON.stringify(objReply);
+}
+else if(req.body.type_message == 'button') {
+  let buttons = req.body.buttons;
+  
+  const buttons_list = buttons.map((item: ButtonMessage) => {
+    return {
+      buttonId: item.name,
+      buttonText: {
+        displayText: item.value
+      },
+      type: 1
+    }
+  })
+
+  const buttonMessage = {
+    text: req.body.reply,
+    footer: req.body.footer_message,
+    buttons: buttons_list,
+    headerType: 1
+  }
+  
+  replies = JSON.stringify(buttonMessage);
+  // console.log(buttons_list);
+  // return res.status(200).json(buttonMessage);
 }
 
   if(req.body.id) {

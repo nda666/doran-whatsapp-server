@@ -324,6 +324,31 @@ const makeWASocket = async (
                   }
                 }
               }
+
+              // Pesan Button
+              // if(item.type == 'button') {
+              //   if(item.type_keyword.toLowerCase() == 'equal') {
+              //     // console.log('ok');
+              //     if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
+              //       console.log('ok');
+              //       // send a buttons message!
+              //       const buttons = [
+              //         {buttonId: 'id1', buttonText: {displayText: 'Button 1'}, type: 1},
+              //         {buttonId: 'id2', buttonText: {displayText: 'Button 2'}, type: 1},
+              //         {buttonId: 'id3', buttonText: {displayText: 'Button 3'}, type: 1}
+              //       ]
+
+              //       const buttonMessage = {
+              //           text: "Hi it's button message",
+              //           footer: 'Hello World',
+              //           buttons: buttons,
+              //           headerType: 1
+              //       }
+
+              //       _waSocket.sendMessage(messages[0].key.remoteJid!, buttonMessage);
+              //     }
+              //   }
+              // }
             })
           } else {
             throw 'data empty'

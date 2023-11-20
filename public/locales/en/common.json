@@ -38,6 +38,7 @@
   "text_copied": "{{text}} has been copied to clipboard",
   "number": "Number",
   "account_name": "Account name",
+  "footer_message": "Footer Message",
   "api_token": "Api token",
   "action": "Action",
   "validation": {

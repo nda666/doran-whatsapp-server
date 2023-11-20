@@ -278,7 +278,8 @@ const AutoReplyPage = () => {
   };
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
-    // console.log(data);
+    console.log(data);
+    // return;
     if(imageReply && (data.type_message == 'image')) {
       data.image = imageReply.raw
     }
