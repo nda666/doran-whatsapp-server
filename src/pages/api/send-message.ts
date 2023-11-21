@@ -34,7 +34,6 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   const { number, message, api_key, phoneCountry } = req.body;
 
   const tos = (number as string).split(",");
-
   const phone = await prisma.phone.findUnique({
     where: {
       token: api_key,
@@ -46,7 +45,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   }
 
   const socket = await makeWASocket(phone.userId, phone.id);
-
+  console.log(socket);
   try {
     let send: any = [];
     for (const _to of tos) {
