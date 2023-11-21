@@ -12,39 +12,11 @@ import { prisma } from "./prisma";
 import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
 import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
-import axios, { AxiosError } from "axios";
 import { error } from "console";
-import { getgroups } from "process";
 import toBase64 from "./toBase64";
 
 const session = new Map();
 
-// const waSocketLogOption = pino({
-//   enabled: true,
-//   level: "error",
-
-//   transport: {
-//     targets: [
-//       {
-//         level: "error",
-//         target: "pino-pretty",
-//         options: {
-//           colorize: true,
-//         },
-//       },
-//       {
-//         level: "error",
-//         target: "pino-roll",
-//         options: {
-//           file: "./whatsapp-logs/whatsapp.log",
-//           frequency: "daily",
-//           colorize: true,
-//           mkdir: true,
-//         },
-//       },
-//     ],
-//   },
-// });
 // {
 // transport: {
 //   targets: [
@@ -74,6 +46,7 @@ const makeWASocket = async (
   phoneId: string,
   onCreated?: (waSock: WASocket) => void
 ): Promise<WASocket> => {
+  console.log("SESSION: " + session);
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(
     `./whatsapp-auth/${userId}-${phoneId}`
@@ -83,10 +56,36 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
     console.info("GET from session: " + phoneId);
   } else {
+    const waSocketLogOption = pino({
+      enabled: true,
+      level: "error",
+
+      transport: {
+        targets: [
+          {
+            level: "error",
+            target: "pino-pretty",
+            options: {
+              colorize: true,
+            },
+          },
+          {
+            level: "error",
+            target: "pino-roll",
+            options: {
+              file: "./whatsapp-logs/whatsapp.log",
+              frequency: "daily",
+              colorize: true,
+              mkdir: true,
+            },
+          },
+        ],
+      },
+    });
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
-      // logger: waSocketLogOption,
+      logger: waSocketLogOption,
       syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
     });

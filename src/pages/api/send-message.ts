@@ -1,10 +1,9 @@
-import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
+// import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
-import { delay } from "@whiskeysockets/baileys";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
 import { NextApiResponse } from "next";
+import { io } from "socket.io-client";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -21,6 +20,7 @@ const handler = async (req: SendMessageRequest, res: NextApiResponse) => {
     res.status(405).send("");
     return;
   }
+
   retry = 0;
   const validation = await SendMessageValidation(req.body);
   if (!validation?.result) {
@@ -43,37 +43,40 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     res.status(200).json({ result: false, message: "Token tidak valid" });
     return;
   }
+  const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
+  console.log(url);
+  const socketIo = io(url!, {
+    path: "/socket.io",
+    autoConnect: true,
+    timeout: 10000,
+  });
+  console.log(socketIo);
+  socketIo.on("connect", () => {
+    console.log("Socket connected");
 
-  const socket = await makeWASocket(phone.userId, phone.id);
-  console.log(socket);
-  try {
-    let send: any = [];
-    for (const _to of tos) {
-      const parsedTo = parsePhoneNumber(
-        _to,
-        (phoneCountry || "ID") as CountryCode
-      );
-      const sendResult = await socket.sendMessage(
-        `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
-        {
-          text: message!,
-        }
-      );
-      send.push(sendResult);
-    }
-    res.status(200).json({ result: true, data: send });
-    return;
-  } catch (e: any) {
-    if (e?.output?.statusCode === 428 && retry < 5) {
-      deleteSession(phone.id);
-      retry++;
-      await delay(2000);
-      await sendMessage(req, res);
-      return;
-    }
-    res.status(500).json({ result: false, error: e });
-    return;
-  }
+    // Now that the connection is established, emit the event
+    socketIo.emit("sendTextMessage", {
+      phoneId: phone.id,
+      userId: phone.userId,
+      tos,
+      phoneCountry,
+      message,
+    });
+    res.status(200).json({ success: true });
+    socketIo.close();
+  });
+
+  // Handle connection errors
+  socketIo.on("connect_error", (err) => {
+    console.error("Socket connection error:", err);
+    res.status(400).json({ message: "Gagal koneksi ke IO" });
+  });
+
+  // Handle connection timeout
+  socketIo.on("connect_timeout", () => {
+    console.error("Socket connection timeout");
+    res.status(400).json({ message: "Gagal koneksi ke IO" });
+  });
 };
 
 export default handler;
