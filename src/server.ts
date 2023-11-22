@@ -3,12 +3,12 @@ import compression from "compression";
 import http from "http";
 import { prisma } from "./lib/prisma";
 import next from "next";
-import { WASocket, delay } from "@whiskeysockets/baileys";
+import { WASocket } from "@whiskeysockets/baileys";
+// import { getSocketIO } from "./lib/socket";
 import * as socketio from "socket.io";
-
-import makeWASocket, { deleteSession } from "./lib/makeWASocket";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
+import makeWASocket from "./lib/makeWASocket";
 import sendMessageFromIo from "./lib/sendMessageFromIo";
+import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -16,6 +16,14 @@ const dev = process.env.NODE_ENV !== "production";
 
 const app = express();
 app.use(compression());
+
+// const io = getSocketIO;
+const io = new socketio.Server({
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"], // Add allowed methods if needed
+  },
+});
 
 const nextApp = next({ dev, hostname, port });
 const nextHandler = nextApp.getRequestHandler();
@@ -53,12 +61,14 @@ nextApp.prepare().then(async () => {
         tos,
         phoneCountry,
         message,
+        image
       }: {
         phoneId: string;
         userId: string;
         tos: string[];
         phoneCountry: string;
         message: string;
+        image: any;
       }) => {
         await sendMessageFromIo({
           userId,
@@ -66,17 +76,54 @@ nextApp.prepare().then(async () => {
           message,
           phoneCountry,
           tos,
+          image
         });
       }
     );
 
-    if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
-      const query = socket.handshake.query;
-      const userId = socket.handshake.query?.userId?.toString();
-      const phoneIds = query?.phoneId?.toString().split(",");
-      const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
-        return i == self.indexOf(v);
-      });
+    socket.on(
+      "sendGroupMessage",
+      async ({
+        phoneId,
+        userId,
+        // tos,
+        phoneCountry,
+        message,
+        image,
+        id_group
+      } : {
+        phoneId: string;
+        userId: string;
+        // tos: string[];
+        phoneCountry: string;
+        message: string;
+        image: any;
+        id_group: string;
+      }) => {
+        await sendGroupMessageFromIo({
+          userId,
+          phoneId,
+          // tos,
+          phoneCountry,
+          message,
+          image,
+          id_group
+        });
+      }
+    )
+
+    if (!socket.handshake.query?.phoneId) {
+      throw new Error("phone id is required");
+    }
+    if (!socket.handshake.query?.userId) {
+      throw new Error("user id is required");
+    }
+    const query = socket.handshake.query;
+    const userId = socket.handshake.query?.userId?.toString();
+    const phoneIds = query?.phoneId?.toString().split(",");
+    const uniqPhoneIds = phoneIds!.filter(function(v,i,self) {
+      return i == self.indexOf(v);
+    });
 
       const waSocks: WASocket[] = [];
 
@@ -85,8 +132,14 @@ nextApp.prepare().then(async () => {
         createdWaSock && waSocks.push(createdWaSock);
       });
 
-      socket.join(`${userId}`);
-    }
+    socket.join(`${userId}`);
+
+    // socket.on("disconnecting", () => {
+    //   // console.log("event flushed 2");
+    //   waSocks.forEach((waSock) => {
+    //     // waSock.ev.flush(true);
+    //   });
+    // });
 
     // socket?.on("disconnect", async (reason) => {
     //   console.log("event flushed 1");

@@ -8,35 +8,38 @@ delay,
 proto,
 } from "@whiskeysockets/baileys";
 
-const sendMessageFromIo = async ({
+const sendGroupMessageFromIo = async ({
     phoneId,
     userId,
-    tos,
+    // tos,
     phoneCountry,
     message,
-    image
+    image,
+    id_group
 } : {
     phoneId: string;
     userId: string;
-    tos: string[];
+    // tos: string[];
     phoneCountry: string
     message: string;
     image?: any;
+    id_group: string;
 }) => {
     let retry = 0;
 
     let send: any = [];
-    for(const _to of tos) {
-        const sendResult = await sendMessage(
-            _to,
-            phoneCountry,
-            message,
-            retry,
-            phoneId,
-            userId,
-            image
-        );
-    }
+    const sendResult = await sendGroupMessage(
+        // _to,
+        phoneCountry,
+        message,
+        retry,
+        phoneId,
+        userId,
+        image,
+        id_group
+    );
+    // for(const _to of tos) {
+    // }
 }
 
 const isBase64 = (str: string) => {
@@ -52,24 +55,30 @@ const isBase64 = (str: string) => {
     }
 }
 
-const sendMessage = async (
-    _to: string,
+const sendGroupMessage = async (
+    // _to: string,
     phoneCountry: string,
     message: string,
     retry: number,
     phoneId: string,
     userId: string,
-    image?: any
+    image?: any,
+    id_group?: string
 ) : Promise<proto.WebMessageInfo | undefined> => {
     const createdWaSock = await makeWASocket(userId, phoneId);
     try {
-        const parsedTo = parsePhoneNumber(
-        _to,
-        (phoneCountry || "ID") as CountryCode
-        );
+        let is_exist_idgroup = await createdWaSock.groupMetadata(id_group!);
+        if(!is_exist_idgroup) {
+            throw "ID Group not register"
+        }
+
+        // const parsedTo = parsePhoneNumber(
+        // _to,
+        // (phoneCountry || "ID") as CountryCode
+        // );
         if(!image) {
             return await createdWaSock.sendMessage(
-            `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+            `${id_group}`,
             {
                 text: message!,
             }
@@ -87,10 +96,9 @@ const sendMessage = async (
                 // const file = new File([blob], fileName || 'image', {type: 'image/png' || 'image/png'});
                 // return res.status(200).json({'binary': binaryString});
                 return await createdWaSock.sendMessage(
-                `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+                `${id_group}`,
                 {
                     image: binaryString,
-                    caption: message
                 }
                 );
                 
@@ -98,7 +106,7 @@ const sendMessage = async (
             else if(image !== null && !isBase64(image)) {
                 // return res.status(200).json('ok');
                 return await createdWaSock.sendMessage(
-                    `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+                    `${id_group}`,
                     {
                     image: {
                         url: image
@@ -113,13 +121,15 @@ const sendMessage = async (
         deleteSession(phoneId);
         retry++;
         await delay(2000);
-        return await sendMessage(
-            _to,
+        return await sendGroupMessage(
+            // _to,
             phoneCountry,
             message,
             retry,
             phoneId,
-            userId
+            userId,
+            image,
+            id_group
         );
         } else {
         throw e;
@@ -127,4 +137,4 @@ const sendMessage = async (
     }
 }
 
-export default sendMessageFromIo;
+export default sendGroupMessageFromIo;

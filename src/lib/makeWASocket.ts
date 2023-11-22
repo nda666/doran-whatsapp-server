@@ -95,6 +95,7 @@ const makeWASocket = async (
       saveCreds();
     });
 
+    // return _waSocket;
     _waSocket.ev.on("connection.update", async (update) => {
       connectionUpdate(_waSocket, userId, phoneId, update);
     });
