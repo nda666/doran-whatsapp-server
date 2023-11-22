@@ -79,20 +79,24 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
       message,
       image,
     });
-    res.status(200).json({ success: true });
+    res.status(200).json({ result: true });
     socketIo.close();
   });
 
   // Handle connection errors
   socketIo.on("connect_error", (err) => {
     console.error("Socket connection error:", err);
-    res.status(400).json({ message: "Gagal koneksi ke IO", error: err });
+    res
+      .status(400)
+      .json({ result: false, message: "Gagal koneksi ke IO", error: err });
   });
 
   // Handle connection timeout
   socketIo.on("connect_timeout", () => {
     console.error("Socket connection timeout");
-    res.status(400).json({ message: "Gagal koneksi ke IO: TIMEOUT" });
+    res
+      .status(400)
+      .json({ result: false, message: "Gagal koneksi ke IO: TIMEOUT" });
   });
 };
 
