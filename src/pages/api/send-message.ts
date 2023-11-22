@@ -64,7 +64,8 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     path: "/socket.io",
     autoConnect: true,
     timeout: 10000,
-    transports: ["polling", "websocket"],
+    transports:
+      process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
   });
 
   socketIo.on("connect", () => {
