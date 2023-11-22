@@ -12,7 +12,6 @@ import { prisma } from "./prisma";
 import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
 import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
-import { error } from "console";
 import toBase64 from "./toBase64";
 
 const session = new Map();
@@ -54,7 +53,7 @@ const makeWASocket = async (
   let _waSocket = {} as WASocket;
   if (session.get(phoneId)) {
     _waSocket = session.get(phoneId);
-    console.info("GET from session: " + phoneId);
+    console.info("GET from session: " + _waSocket.user);
   } else {
     const waSocketLogOption = pino({
       enabled: true,
@@ -125,7 +124,6 @@ const makeWASocket = async (
 
       let messageIn = messages[0].message!.conversation;
       const messageType = Object.keys(messages[0].message!)[0];
-      // console.log(messageType);
       let quotedMessage: any = null;
       if (messages[0].message?.extendedTextMessage?.contextInfo) {
         quotedMessage =
@@ -143,8 +141,6 @@ const makeWASocket = async (
 
       // return;
       if (messageIn) {
-        // console.log('ok');
-
         const checkIdGroupFormat = /^[0-9]+@g\.us$/;
         if (checkIdGroupFormat.test(messages[0].key.remoteJid!)) {
           const metadata = await _waSocket.groupMetadata(
@@ -241,7 +237,6 @@ const makeWASocket = async (
         if (hasLapWord) {
           const insertInbox = async (data: InboxMessage) => {
             if (Object.keys(data)) {
-              console.log(data);
               const response = await prisma.inboxMessage.create({
                 data: {
                   message: data.message,
@@ -280,7 +275,6 @@ const makeWASocket = async (
             if (result.length) {
               const insertInbox = async (data: InboxMessage) => {
                 if (Object.keys(data)) {
-                  console.log(data);
                   const response = await prisma.inboxMessage.create({
                     data: {
                       message: data.message,
@@ -303,7 +297,6 @@ const makeWASocket = async (
                     if (
                       messageIn!.toLowerCase() == item.keyword.toLowerCase()
                     ) {
-                      // console.log(replyText);
                       if (item.is_save_inbox) {
                         const dataInbox: InboxMessage[] = [
                           {
@@ -322,13 +315,11 @@ const makeWASocket = async (
                       );
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
-                    // console.log(messageIn);
                     if (
                       item.keyword
                         .toLowerCase()
                         .includes(messageIn!.toLowerCase())
                     ) {
-                      // console.log(replyText);
                       if (item.is_save_inbox) {
                         const dataInbox: InboxMessage[] = [
                           {
@@ -359,20 +350,17 @@ const makeWASocket = async (
                     if (
                       messageIn!.toLowerCase() == item.keyword.toLowerCase()
                     ) {
-                      // console.log(replyText);
                       _waSocket.sendMessage(
                         messages[0].key.remoteJid!,
                         replyText
                       );
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
-                    // console.log(item.keyword.toLowerCase().includes(messageIn!.toLowerCase()));
                     if (
                       item.keyword
                         .toLowerCase()
                         .includes(messageIn!.toLowerCase())
                     ) {
-                      // console.log('ok');
                       _waSocket.sendMessage(
                         messages[0].key.remoteJid!,
                         replyText
@@ -463,8 +451,7 @@ const makeWASocket = async (
                 return result.data;
               }
             } catch (e) {
-              console.log("error");
-              result.error = error;
+              result.error = e;
               return result.error;
             }
           };

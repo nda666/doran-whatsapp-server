@@ -4,8 +4,7 @@ import http from "http";
 import { prisma } from "./lib/prisma";
 import next from "next";
 import { WASocket } from "@whiskeysockets/baileys";
-// import { getSocketIO } from "./lib/socket";
-import * as socketio from "socket.io";
+import { getSocketIO } from "./lib/socket";
 import makeWASocket from "./lib/makeWASocket";
 import sendMessageFromIo from "./lib/sendMessageFromIo";
 import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
@@ -24,6 +23,9 @@ process.on("SIGINT", async function () {
   await prisma.$disconnect();
 });
 
+const waSocks: WASocket[] = [];
+const io = getSocketIO;
+
 nextApp.prepare().then(async () => {
   // const server = http.createServer(app);
 
@@ -38,13 +40,12 @@ nextApp.prepare().then(async () => {
     console.info(`> Ready on http://localhost:${port}`);
     process.send && process.send("ready");
   });
-  const io = new socketio.Server({
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"], // Add allowed methods if needed
-    },
-  });
+
   io?.on("connection", async (socket) => {
+    // socket.onAny(async (event) => {
+    //   console.log("EVENT ", event);
+    // });
+
     socket.on(
       "sendTextMessage",
       async ({
@@ -104,27 +105,22 @@ nextApp.prepare().then(async () => {
       }
     );
 
-    if (!socket.handshake.query?.phoneId) {
-      throw new Error("phone id is required");
+    if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
+      const query = socket.handshake.query;
+      const userId = socket.handshake.query?.userId?.toString();
+      const phoneIds = query?.phoneId?.toString().split(",");
+      const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
+        return i == self.indexOf(v);
+      });
+
+      uniqPhoneIds?.forEach(async (phoneId) => {
+        const createdWaSock = await makeWASocket(userId, phoneId);
+
+        createdWaSock && waSocks.push(createdWaSock);
+      });
+
+      socket.join(`${userId}`);
     }
-    if (!socket.handshake.query?.userId) {
-      throw new Error("user id is required");
-    }
-    const query = socket.handshake.query;
-    const userId = socket.handshake.query?.userId?.toString();
-    const phoneIds = query?.phoneId?.toString().split(",");
-    const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
-      return i == self.indexOf(v);
-    });
-
-    const waSocks: WASocket[] = [];
-
-    uniqPhoneIds?.forEach(async (phoneId) => {
-      const createdWaSock = await makeWASocket(userId, phoneId);
-      createdWaSock && waSocks.push(createdWaSock);
-    });
-
-    socket.join(`${userId}`);
 
     // socket.on("disconnecting", () => {
     //   // console.log("event flushed 2");

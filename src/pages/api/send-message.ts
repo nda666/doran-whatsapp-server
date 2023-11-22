@@ -64,12 +64,10 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     path: "/socket.io",
     autoConnect: true,
     timeout: 10000,
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
   });
 
   socketIo.on("connect", () => {
-    console.log("socket connected");
-
     // Now that the connection is established, emit the event
     socketIo.emit("sendTextMessage", {
       phoneId: phone.id,
