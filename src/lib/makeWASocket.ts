@@ -1,5 +1,5 @@
-import "pino-pretty";
-import "pino-roll";
+// import "pino-pretty";
+// import "pino-roll";
 import _makeWASocket, {
   WASocket,
   useMultiFileAuthState,
@@ -19,32 +19,32 @@ import toBase64 from "./toBase64";
 
 const session = new Map();
 
-const waSocketLogOption = pino({
-  enabled: false,
-  level: "error",
+// const waSocketLogOption = pino({
+//   enabled: false,
+//   level: "error",
 
-  transport: {
-    targets: [
-      // {
-      //   level: "debug",
-      //   target: "pino-pretty",
-      //   options: {
-      //     colorize: true,
-      //   },
-      // },
-      {
-        level: "error",
-        target: "pino-roll",
-        options: {
-          file: "./whatsapp-logs/whatsapp.log",
-          frequency: "daily",
-          colorize: true,
-          mkdir: true,
-        },
-      },
-    ],
-  },
-});
+//   transport: {
+//     targets: [
+//       // {
+//       //   level: "debug",
+//       //   target: "pino-pretty",
+//       //   options: {
+//       //     colorize: true,
+//       //   },
+//       // },
+//       {
+//         level: "error",
+//         target: "pino-roll",
+//         options: {
+//           file: "./whatsapp-logs/whatsapp.log",
+//           frequency: "daily",
+//           colorize: true,
+//           mkdir: true,
+//         },
+//       },
+//     ],
+//   },
+// });
 // {
 // transport: {
 //   targets: [
@@ -74,6 +74,7 @@ const makeWASocket = async (
   phoneId: string,
   onCreated?: (waSock: WASocket) => void
 ): Promise<WASocket> => {
+  console.log("SESSION: " + session);
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(
     `./whatsapp-auth/${userId}-${phoneId}`
@@ -83,6 +84,32 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
     console.info("GET from session: " + phoneId);
   } else {
+    const waSocketLogOption = pino({
+      enabled: true,
+      level: "error",
+
+      transport: {
+        targets: [
+          {
+            level: "error",
+            target: "pino-pretty",
+            options: {
+              colorize: true,
+            },
+          },
+          {
+            level: "error",
+            target: "pino-roll",
+            options: {
+              file: "./whatsapp-logs/whatsapp.log",
+              frequency: "daily",
+              colorize: true,
+              mkdir: true,
+            },
+          },
+        ],
+      },
+    });
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
@@ -96,6 +123,7 @@ const makeWASocket = async (
       saveCreds();
     });
 
+    // return _waSocket;
     _waSocket.ev.on("connection.update", async (update) => {
       connectionUpdate(_waSocket, userId, phoneId, update);
     });
