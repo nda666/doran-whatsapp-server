@@ -17,14 +17,6 @@ const dev = process.env.NODE_ENV !== "production";
 const app = express();
 app.use(compression());
 
-// const io = getSocketIO;
-const io = new socketio.Server({
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"], // Add allowed methods if needed
-  },
-});
-
 const nextApp = next({ dev, hostname, port });
 const nextHandler = nextApp.getRequestHandler();
 
@@ -61,7 +53,7 @@ nextApp.prepare().then(async () => {
         tos,
         phoneCountry,
         message,
-        image
+        image,
       }: {
         phoneId: string;
         userId: string;
@@ -76,7 +68,7 @@ nextApp.prepare().then(async () => {
           message,
           phoneCountry,
           tos,
-          image
+          image,
         });
       }
     );
@@ -90,8 +82,8 @@ nextApp.prepare().then(async () => {
         phoneCountry,
         message,
         image,
-        id_group
-      } : {
+        id_group,
+      }: {
         phoneId: string;
         userId: string;
         // tos: string[];
@@ -107,10 +99,10 @@ nextApp.prepare().then(async () => {
           phoneCountry,
           message,
           image,
-          id_group
+          id_group,
         });
       }
-    )
+    );
 
     if (!socket.handshake.query?.phoneId) {
       throw new Error("phone id is required");
@@ -121,16 +113,16 @@ nextApp.prepare().then(async () => {
     const query = socket.handshake.query;
     const userId = socket.handshake.query?.userId?.toString();
     const phoneIds = query?.phoneId?.toString().split(",");
-    const uniqPhoneIds = phoneIds!.filter(function(v,i,self) {
+    const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
       return i == self.indexOf(v);
     });
 
-      const waSocks: WASocket[] = [];
+    const waSocks: WASocket[] = [];
 
-      uniqPhoneIds?.forEach(async (phoneId) => {
-        const createdWaSock = await makeWASocket(userId, phoneId);
-        createdWaSock && waSocks.push(createdWaSock);
-      });
+    uniqPhoneIds?.forEach(async (phoneId) => {
+      const createdWaSock = await makeWASocket(userId, phoneId);
+      createdWaSock && waSocks.push(createdWaSock);
+    });
 
     socket.join(`${userId}`);
 

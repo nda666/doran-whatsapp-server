@@ -39,16 +39,15 @@ const isBase64 = (str: string) => {
     const encodedString = btoa(decodeString);
 
     return encodedString === str;
+  } catch (e) {
+    return false;
   }
-  catch (e) {
-    return false
-  }
-}
+};
 
 const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   const { number, message, api_key, phoneCountry, image } = req.body;
   const tos = (number as string).split(",");
-  
+
   const phone = await prisma.phone.findUnique({
     where: {
       token: api_key,
@@ -64,20 +63,21 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   const socketIo = io(url!, {
     path: "/socket.io",
     autoConnect: true,
-    timeout: 10000
+    timeout: 10000,
+    transports: ["websocket"],
   });
-  
+
   socketIo.on("connect", () => {
     console.log("socket connected");
 
-     // Now that the connection is established, emit the event
+    // Now that the connection is established, emit the event
     socketIo.emit("sendTextMessage", {
       phoneId: phone.id,
       userId: phone.userId,
       tos,
       phoneCountry,
       message,
-      image
+      image,
     });
     res.status(200).json({ success: true });
     socketIo.close();
@@ -86,16 +86,15 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   // Handle connection errors
   socketIo.on("connect_error", (err) => {
     console.error("Socket connection error:", err);
-    res.status(400).json({ message: "Gagal koneksi ke IO" });
+    res.status(400).json({ message: "Gagal koneksi ke IO", error: err });
   });
 
   // Handle connection timeout
   socketIo.on("connect_timeout", () => {
     console.error("Socket connection timeout");
-    res.status(400).json({ message: "Gagal koneksi ke IO" });
+    res.status(400).json({ message: "Gagal koneksi ke IO: TIMEOUT" });
   });
 };
-
 
 // const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 //   return res.status(200).json("ok");
