@@ -26,7 +26,10 @@ const useSocket = (
       disconnectSocket();
       return;
     }
-    const socketInstance = io(option);
+    const socketInstance = io(
+      process.env.NEXT_PUBLIC_APP_URL?.toString() ?? "",
+      option
+    );
 
     for (const event of events) {
       socketInstance.on(event.name, event.handler);

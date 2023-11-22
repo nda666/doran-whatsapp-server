@@ -24,7 +24,7 @@ import {
   Space,
   Table,
   notification,
-  Switch
+  Switch,
 } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -80,6 +80,7 @@ const PhonePage = () => {
       return;
     }
     setSocketOption({
+      path: "/socket.io",
       query: {
         userId: session?.user?.id,
         phoneId: phoneData.phones?.map((x) => x.id),
@@ -191,18 +192,18 @@ const PhonePage = () => {
       title: "Save Group",
       key: "is_save_group",
       dataIndex: "is_save_group",
-      render: (v,phone) => (
+      render: (v, phone) => (
         <Switch
-        defaultChecked={v ? true : false}
-        checkedChildren="On"
-        unCheckedChildren="Off"
-        onChange={(checked) => {
-          onSaveGroup(phone, checked);
-          // setIsSendGroup({
-          //   phoneId: String(phone.id),
-          //   is_send_group: checked,
-          // })
-        }}
+          defaultChecked={v ? true : false}
+          checkedChildren="On"
+          unCheckedChildren="Off"
+          onChange={(checked) => {
+            onSaveGroup(phone, checked);
+            // setIsSendGroup({
+            //   phoneId: String(phone.id),
+            //   is_send_group: checked,
+            // })
+          }}
         />
       ),
     },
@@ -315,20 +316,23 @@ const PhonePage = () => {
     //     console.log('ok');
     //   }
     // }
-    const enable_save_group = async (phoneId: string, is_save_group: boolean) => {
+    const enable_save_group = async (
+      phoneId: string,
+      is_save_group: boolean
+    ) => {
       const result = await phoneData.isSaveGroup(phoneId, is_save_group);
-      if(result.success) {
-        console.log('ok');
+      if (result.success) {
+        console.log("ok");
       }
-    }
-    
-    if(_phone) {
+    };
+
+    if (_phone) {
       // const data = {..._phone, is_save_group: checked};
       // enable_save_group(data);
-      const {id} = _phone;
+      const { id } = _phone;
       enable_save_group(id, checked);
     }
-  }
+  };
 
   const onGetQrCodeClick = (_phone: Phone | undefined) => {
     _phone &&
