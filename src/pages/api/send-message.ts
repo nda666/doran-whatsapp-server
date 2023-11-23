@@ -1,4 +1,5 @@
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
+
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
@@ -30,18 +31,6 @@ const handler = async (req: SendMessageRequest, res: NextApiResponse) => {
     return;
   }
   await sendMessage(req, res);
-};
-
-const isBase64 = (str: string) => {
-  try {
-    const decodeString = atob(str);
-
-    const encodedString = btoa(decodeString);
-
-    return encodedString === str;
-  } catch (e) {
-    return false;
-  }
 };
 
 const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
