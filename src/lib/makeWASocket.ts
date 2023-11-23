@@ -122,7 +122,10 @@ const makeWASocket = async (
       //   reader.onerror = reject;
       // });
 
-      let messageIn = messages[0].message!.extendedTextMessage?.text;
+      let messageByPhone = messages[0].message!.conversation;
+      let messageByWeb = messages[0].message!.extendedTextMessage?.text;
+
+      let messageIn = messageByPhone = messageByWeb;
       const messageType = Object.keys(messages[0].message!)[0];
       let quotedMessage: any = null;
       if (messages[0].message?.extendedTextMessage?.contextInfo) {
@@ -141,6 +144,7 @@ const makeWASocket = async (
 
       // return;
       if (messageIn) {
+        // console.log(messageIn);
         const checkIdGroupFormat = /^[0-9]+@g\.us$/;
         if (checkIdGroupFormat.test(messages[0].key.remoteJid!)) {
           const metadata = await _waSocket.groupMetadata(
@@ -294,6 +298,7 @@ const makeWASocket = async (
                 const replyText = JSON.parse(JSON.stringify(item.reply));
                 if (item.type == "text") {
                   if (item.type_keyword.toLowerCase() == "equal") {
+                    // console.log(messageIn!.toLowerCase() == item.keyword.toLowerCase());
                     if (
                       messageIn!.toLowerCase() == item.keyword.toLowerCase()
                     ) {
