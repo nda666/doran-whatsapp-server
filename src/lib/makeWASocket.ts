@@ -115,7 +115,14 @@ const makeWASocket = async (
         }
       }
 
-      let messageIn = messages[0].message!.conversation;
+      // const toBase64 = (file:any) => new Promise((resolve, reject) => {
+      //   const reader = new FileReader();
+      //   reader.readAsDataURL(file);
+      //   reader.onload = () => resolve(reader.result);
+      //   reader.onerror = reject;
+      // });
+
+      let messageIn = messages[0].message!.extendedTextMessage?.text;
       const messageType = Object.keys(messages[0].message!)[0];
       let quotedMessage: any = null;
       if (messages[0].message?.extendedTextMessage?.contextInfo) {
@@ -309,7 +316,9 @@ const makeWASocket = async (
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
                     if (
-                      messageIn!.toLowerCase().includes(item.keyword.toLowerCase())
+                      messageIn!
+                        .toLowerCase()
+                        .includes(item.keyword.toLowerCase())
                     ) {
                       if (item.is_save_inbox) {
                         const dataInbox: InboxMessage[] = [
@@ -348,7 +357,9 @@ const makeWASocket = async (
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
                     if (
-                      messageIn!.toLowerCase().includes(item.keyword.toLowerCase())
+                      messageIn!
+                        .toLowerCase()
+                        .includes(item.keyword.toLowerCase())
                     ) {
                       _waSocket.sendMessage(
                         messages[0].key.remoteJid!,
@@ -484,6 +495,10 @@ const makeWASocket = async (
 
 export const deleteSession = (phoneId: string) => {
   session.delete(phoneId);
+};
+
+export const getAllSession = () => {
+  return session;
 };
 
 export default makeWASocket;
