@@ -115,13 +115,6 @@ const makeWASocket = async (
         }
       }
 
-      // const toBase64 = (file:any) => new Promise((resolve, reject) => {
-      //   const reader = new FileReader();
-      //   reader.readAsDataURL(file);
-      //   reader.onload = () => resolve(reader.result);
-      //   reader.onerror = reject;
-      // });
-
       let messageIn = messages[0].message!.conversation;
       const messageType = Object.keys(messages[0].message!)[0];
       let quotedMessage: any = null;
@@ -219,17 +212,17 @@ const makeWASocket = async (
 
         const phoneReplies = prisma.autoReply.findMany({
           where: {
-            // phoneId: phoneId,
+            phoneId: phoneId,
             // keyword: messageIn.toLowerCase()
-            AND: [
-              { phoneId: phoneId },
-              {
-                OR: [
-                  { keyword: messageIn.toLowerCase() },
-                  { keyword: { contains: messageIn.toLowerCase() } },
-                ],
-              },
-            ],
+            // AND: [
+            //   { phoneId: phoneId },
+            //   {
+            //     OR: [
+            //       { keyword: messageIn.toLowerCase() },
+            //       { keyword: { contains: messageIn.toLowerCase() } },
+            //     ],
+            //   },
+            // ],
           },
         });
 
@@ -316,9 +309,7 @@ const makeWASocket = async (
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
                     if (
-                      item.keyword
-                        .toLowerCase()
-                        .includes(messageIn!.toLowerCase())
+                      messageIn!.toLowerCase().includes(item.keyword.toLowerCase())
                     ) {
                       if (item.is_save_inbox) {
                         const dataInbox: InboxMessage[] = [
@@ -357,9 +348,7 @@ const makeWASocket = async (
                     }
                   } else if (item.type_keyword.toLowerCase() == "contain") {
                     if (
-                      item.keyword
-                        .toLowerCase()
-                        .includes(messageIn!.toLowerCase())
+                      messageIn!.toLowerCase().includes(item.keyword.toLowerCase())
                     ) {
                       _waSocket.sendMessage(
                         messages[0].key.remoteJid!,

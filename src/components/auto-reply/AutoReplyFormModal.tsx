@@ -112,7 +112,7 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
       }
 
       if(editReply) {
-        console.log(phoneId);
+        // console.log(phoneId);
         let reply = JSON.parse(JSON.stringify(editReply.reply));
         // console.log(editReply.reply);
         form.setFieldValue("id",editReply.id);
@@ -120,6 +120,11 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
         form.setFieldValue("whatsapp_account", phoneId!.number);
         form.setFieldValue('keyword',editReply.keyword);
         form.setFieldValue("reply", reply.text);
+        setKeywordType(editReply.type_keyword);
+        form.setFieldValue("type_keyword",editReply.type_keyword);
+        setTypeMessage(editReply.type);
+        form.setFieldValue("type_message",editReply.type);
+        setIsSaveInbox(editReply.is_save_inbox);
       }
 
       return () => {
@@ -278,7 +283,7 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
               >
                 <Checkbox
                 onChange={(e) => {
-                  console.log(e.target.checked)
+                  // console.log(e.target.checked)
                   // let ischeck = e.target.checked;
                   form.setFieldValue("is_save_inbox",e.target.checked);
                   setIsSaveInbox(e.target.checked)
@@ -377,6 +382,7 @@ const AutoReplyFormModal = forwardRef<AutoReplyFormModalRef, CollectionCreateFor
           >
             <Select
               placeholder="Select One"
+              defaultValue={(typeMessage !== undefined) ? String(typeMessage) : ''}
               style={{
                 width: '100%',
               }}

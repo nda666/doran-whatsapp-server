@@ -159,7 +159,9 @@ else if(req.body.type_message == 'button') {
       data: {
         type_keyword: req.body.type_keyword,
         keyword: req.body.keyword,
-        reply: replies
+        reply: replies && JSON.parse(replies),
+        type: req.body.type_message,
+        is_save_inbox: req.body.is_save_inbox
       }
     })
   } 
