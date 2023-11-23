@@ -74,7 +74,7 @@ export default NextAuth({
       async authorize(credentials, req) {
         try {
           const result = await axios.post(
-            process.env.APP_URL + "/api/signin",
+            process.env.NEXT_PUBLIC_APP_URL + "/api/signin",
             credentials
           );
           if (result.status == 200) {

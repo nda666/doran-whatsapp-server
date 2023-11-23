@@ -80,7 +80,7 @@ const sendGroupMessage = async (req: SendMessageRequest, res: NextApiResponse) =
   }
 
 
-  const url = process.env.APP_URL?.toString();
+  const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
   const socketIo = io(url!, {
     path: "/socket.io",
