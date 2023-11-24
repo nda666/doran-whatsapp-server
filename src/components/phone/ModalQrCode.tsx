@@ -33,8 +33,8 @@ export default function ModalQrCode({
 
   useEffect(() => {
     if (!open || !phone) {
-      setEvents(null);
       socket?.disconnect();
+      setEvents(null);
       return;
     }
     setEvents([
@@ -78,6 +78,10 @@ export default function ModalQrCode({
         },
       },
     ]);
+    return () => {
+      socket?.disconnect();
+      setEvents(null);
+    };
   }, [open, phone]);
 
   useEffect(() => {
