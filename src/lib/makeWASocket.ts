@@ -61,13 +61,13 @@ const makeWASocket = async (
 
       transport: {
         targets: [
-          {
-            level: "error",
-            target: "pino-pretty",
-            options: {
-              colorize: true,
-            },
-          },
+          // {
+          //   level: "error",
+          //   target: "pino-pretty",
+          //   options: {
+          //     colorize: true,
+          //   },
+          // },
           {
             level: "error",
             target: "pino-roll",
