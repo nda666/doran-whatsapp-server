@@ -11,7 +11,6 @@ const useSocket = (
 ) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [events, setEvents] = useState<SocketEvent[] | null>(null);
-
   const disconnectSocket = () => {
     if (events) {
       for (const event of events) {
@@ -22,16 +21,15 @@ const useSocket = (
   };
 
   useEffect(() => {
-    if (!events) {
+    if (!events || events?.length == 0) {
       disconnectSocket();
       return;
     }
-
+    disconnectSocket();
     const socketInstance = io(
       process.env.NEXT_PUBLIC_APP_URL?.toString() ?? "",
       option
     );
-
     for (const event of events) {
       socketInstance.on(event.name, event.handler);
     }

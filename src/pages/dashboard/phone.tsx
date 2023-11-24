@@ -77,11 +77,10 @@ const PhonePage = () => {
         phoneId: phoneData.phones?.map((x) => x.id),
       },
       autoConnect: false,
-      transports:
-        process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
+      transports: ["websocket"],
     });
     return () => {
-      setSocketOption(undefined);
+      // setSocketOption(undefined);
     };
   }, [phoneData.phones]);
 
@@ -91,7 +90,7 @@ const PhonePage = () => {
   };
 
   useEffect(() => {
-    if (!socketOption || state.openQrModal || state.openQrModal) {
+    if (!socketOption || state.openForm || state.openQrModal) {
       setEvents([]);
       socket?.disconnect();
       return;
@@ -129,7 +128,7 @@ const PhonePage = () => {
       setEvents([]);
       socket?.disconnect();
     };
-  }, [state.openForm, state.openQrModal]);
+  }, [socketOption, state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<Phone> = [
     {
