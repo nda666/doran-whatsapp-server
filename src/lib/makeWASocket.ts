@@ -103,6 +103,7 @@ const makeWASocket = async (
 
     // for reply
     _waSocket.ev.on("messages.upsert", async ({ messages }) => {
+      // console.log(messages);
       function isLapWord(word: string) {
         const formatWordClient = word!.match(/\w+\,/);
 
@@ -125,7 +126,9 @@ const makeWASocket = async (
       let messageByPhone = messages[0].message!.conversation;
       let messageByWeb = messages[0].message!.extendedTextMessage?.text;
 
-      let messageIn = messageByPhone = messageByWeb;
+      // let messageIn = messageByPhone = messageByWeb;
+      // let messageIn = messageByPhone;
+      let messageIn = messageByWeb;
       const messageType = Object.keys(messages[0].message!)[0];
       let quotedMessage: any = null;
       if (messages[0].message?.extendedTextMessage?.contextInfo) {
