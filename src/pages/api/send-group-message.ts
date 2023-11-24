@@ -46,29 +46,32 @@ const isBase64 = (str: string) => {
     const encodedString = btoa(decodeString);
 
     return encodedString === str;
+  } catch (e) {
+    return false;
   }
-  catch (e) {
-    return false
-  }
-}
+};
 
-const sendGroupMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
-  const { 
-    // number, 
-    message, 
-    api_key, 
-    phoneCountry, 
-    image, 
-    id_group } = req.body;
+const sendGroupMessage = async (
+  req: SendMessageRequest,
+  res: NextApiResponse
+) => {
+  const {
+    // number,
+    message,
+    api_key,
+    phoneCountry,
+    image,
+    id_group,
+  } = req.body;
   // const tos = (number as string).split(",");
-  if(!id_group) {
+  if (!id_group) {
     res.status(500).json({
       status: false,
-      response: 'group ID number not included'
+      response: "group ID number not included",
     });
     return;
   }
-  
+
   const phone = await prisma.phone.findUnique({
     where: {
       token: api_key,
@@ -79,19 +82,16 @@ const sendGroupMessage = async (req: SendMessageRequest, res: NextApiResponse) =
     return;
   }
 
-
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
   const socketIo = io(url!, {
     path: "/socket.io",
     autoConnect: true,
-    timeout: 10000
+    timeout: 10000,
   });
-  
-  socketIo.on("connect", () => {
-    console.log("socket connected");
 
-     // Now that the connection is established, emit the event
+  socketIo.on("connect", () => {
+    // Now that the connection is established, emit the event
     socketIo.emit("sendGroupMessage", {
       phoneId: phone.id,
       userId: phone.userId,
@@ -99,7 +99,7 @@ const sendGroupMessage = async (req: SendMessageRequest, res: NextApiResponse) =
       phoneCountry,
       message,
       image,
-      id_group
+      id_group,
     });
     res.status(200).json({ success: true });
     socketIo.close();
@@ -116,9 +116,7 @@ const sendGroupMessage = async (req: SendMessageRequest, res: NextApiResponse) =
     console.error("Socket connection timeout");
     res.status(400).json({ message: "Gagal koneksi ke IO" });
   });
-
 };
-
 
 // const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 //   return res.status(200).json("ok");

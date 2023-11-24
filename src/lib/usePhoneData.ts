@@ -34,7 +34,6 @@ export default function usePhoneData(token: string): usePhoneDataType {
   }, []);
 
   useEffect(() => {
-    console.log("runRefetchPhone", runRefetchPhone);
     const fetchPhones = async () => {
       setRunRefetchPhone(false);
       const response = await axios.get(`/api/phones`, {
@@ -104,7 +103,7 @@ export default function usePhoneData(token: string): usePhoneDataType {
     return result;
   };
   const isSaveGroup = async (phoneId: string, is_save_group: boolean) => {
-    // console.log(phoneId);
+    //
     const result: {
       success: boolean;
       error: any;

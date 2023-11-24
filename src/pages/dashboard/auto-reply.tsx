@@ -61,7 +61,7 @@ const AutoReplyPage = () => {
     phoneId: undefined,
   });
   const router = useRouter();
-  // console.log(router.query);
+  //
   const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
   const phone_num = router.query.phone_num;
   const { data: session } = useSession();
@@ -108,11 +108,11 @@ const AutoReplyPage = () => {
     //   setPhoneOnline((prevArr) => [...prevArr, phoneId]);
   };
 
-  // console.log("phoneOnline", phoneOnline);
+  //
 
   useEffect(() => {
     if (!socketOption || state.openQrModal || state.openQrModal) {
-      // console.log("disconnect");
+      //
       setEvents([]);
       socket?.disconnect();
       return;
@@ -122,7 +122,7 @@ const AutoReplyPage = () => {
     events.push({
       name: `isOnline`,
       handler: (connection) => {
-        // console.log(connection);
+        //
         setPh(connection.phoneId);
       },
     });
@@ -142,7 +142,7 @@ const AutoReplyPage = () => {
     events.push({
       name: "connect",
       handler: () => {
-        // console.log("connect");
+        //
       },
     });
     setEvents(events);
@@ -268,20 +268,19 @@ const AutoReplyPage = () => {
   ];
 
   const handleTambahImageReply = (data: ImageReply) => {
-    if(data) {
-        // setFieldVa("image",data.raw);
-        setImageReply({
-            preview: data.preview,
-            raw: data.raw
-        });  
+    if (data) {
+      // setFieldVa("image",data.raw);
+      setImageReply({
+        preview: data.preview,
+        raw: data.raw,
+      });
     }
   };
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
-    console.log(data);
     // return;
-    if(imageReply && (data.type_message == 'image')) {
-      data.image = imageReply.raw
+    if (imageReply && data.type_message == "image") {
+      data.image = imageReply.raw;
     }
     setState({ ...state, formLoading: true });
     const res = await replyData.save(data);

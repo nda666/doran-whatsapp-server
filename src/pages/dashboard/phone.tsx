@@ -119,7 +119,7 @@ const PhonePage = () => {
     events.push({
       name: "connect",
       handler: () => {
-        // console.log("connect");
+        //
       },
     });
     setEvents(events);
@@ -257,7 +257,7 @@ const PhonePage = () => {
 
   const onSubmitReply = async (data: AutoReplyFormData) => {
     setState({ ...state, formLoading: true });
-    // console.log(data);
+    //
     const res = await replyData.save(data);
     if (res.success) {
       form.current?.resetForm();
@@ -304,7 +304,7 @@ const PhonePage = () => {
     // const enable_save_group = async (data: PhoneFormData) => {
     //   const result = await phoneData.save(data);
     //   if(result.success) {
-    //     console.log('ok');
+    //
     //   }
     // }
     const enable_save_group = async (
@@ -313,7 +313,6 @@ const PhonePage = () => {
     ) => {
       const result = await phoneData.isSaveGroup(phoneId, is_save_group);
       if (result.success) {
-        console.log("ok");
       }
     };
 
@@ -362,7 +361,7 @@ const PhonePage = () => {
           return {
             onContextMenu: (event) => {
               event.preventDefault();
-              // console.log(record);
+              //
             },
           };
         }}

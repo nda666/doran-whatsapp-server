@@ -45,7 +45,6 @@ const makeWASocket = async (
   phoneId: string,
   onCreated?: (waSock: WASocket) => void
 ): Promise<WASocket> => {
-  console.log("SESSION: " + session);
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(
     `./whatsapp-auth/${userId}-${phoneId}`
@@ -155,7 +154,7 @@ const makeWASocket = async (
 
         // return;
         if (messageIn) {
-          // console.log(messageIn);
+          //
           const checkIdGroupFormat = /^[0-9]+@g\.us$/;
           if (checkIdGroupFormat.test(messages[0].key.remoteJid!)) {
             const metadata = await _waSocket.groupMetadata(
@@ -222,9 +221,7 @@ const makeWASocket = async (
                         });
 
                         savegroup && "Group saved succesfully";
-                      } catch (err) {
-                        console.log(err);
-                      }
+                      } catch (err) {}
                     };
                     insertGroup(metadata);
                   }
@@ -311,7 +308,7 @@ const makeWASocket = async (
                   const replyText = JSON.parse(JSON.stringify(item.reply));
                   if (item.type == "text") {
                     if (item.type_keyword.toLowerCase() == "equal") {
-                      // console.log(messageIn!.toLowerCase() == item.keyword.toLowerCase());
+                      //
                       if (
                         messageIn!.toLowerCase() == item.keyword.toLowerCase()
                       ) {
@@ -390,9 +387,9 @@ const makeWASocket = async (
                   // Pesan Button
                   // if(item.type == 'button') {
                   //   if(item.type_keyword.toLowerCase() == 'equal') {
-                  //     // console.log('ok');
+                  //     //
                   //     if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
-                  //       console.log('ok');
+                  //
                   //       // send a buttons message!
                   //       const buttons = [
                   //         {buttonId: 'id1', buttonText: {displayText: 'Button 1'}, type: 1},

@@ -34,7 +34,7 @@ nextApp.prepare().then(async () => {
 
   io?.on("connection", async (socket) => {
     // socket.onAny(async (event) => {
-    //   console.log("EVENT ", event);
+    //
     // });
 
     socket.on(
@@ -114,14 +114,14 @@ nextApp.prepare().then(async () => {
     }
 
     // socket.on("disconnecting", () => {
-    //   // console.log("event flushed 2");
+    //   //
     //   waSocks.forEach((waSock) => {
     //     // waSock.ev.flush(true);
     //   });
     // });
 
     // socket?.on("disconnect", async (reason) => {
-    //   console.log("event flushed 1");
+    //
     //   waSocks.forEach((waSock) => {
     //     waSock.ev.flush(true);
     //   });

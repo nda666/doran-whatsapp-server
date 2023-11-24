@@ -44,14 +44,11 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   }
 };
 
-const POST = async (
-  req: AuthNextApiRequest, 
-  res: NextApiResponse
-) => {
+const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   let auto_replies: any = undefined;
   type image_reply = {
     url: string;
-  }; 
+  };
   // const reply_field : {
   //   type?: string | undefined;
   //   content?: string | undefined
@@ -67,116 +64,112 @@ const POST = async (
 
   type ButtonText = {
     displayText: string;
-  }
-
-  interface collectButton {
-    buttonId: string,
-    buttonText: ButtonText,
-    type: number
-  }
-
-//   if (req.body.phoneId) {
-//     phones = await prisma.autoReply.update({
-//       where: {
-//         id: req.body.phoneId,
-//       },
-//       data: {
-//         name: req.body.name,
-//       },
-//     });
-//   } else {
-//     phones = await prisma.phone.create({
-//       data: {
-//         userId: req.user?.id!,
-//         name: req.body.name,
-//       },
-//     });
-//   }
-
-let replies: string | undefined = undefined; 
-if(req.body.type_message == 'image') {
-    // return res.status(200).json({"ok": 'test'});
-    if(req.body.image_type === 'file') {
-      let image = req.body.image;
-      // console.log(image);
-      const objReply = {
-        image: {
-          url: 'uploads/'+image
-        },
-        caption: req.body.caption
-      } as ImageReply;
-  
-      replies = JSON.stringify(objReply);
-    }
-    else if(req.body.image_type === 'text') {
-      const objReply = {
-        image: {
-          url: req.body.image
-        },
-        caption: req.body.caption
-      } as ImageReply;
-
-      replies = JSON.stringify(objReply);
-    }
-} 
-else if(req.body.type_message == 'text') {
-  const objReply = {
-    [req.body.type_message]: req.body.reply
   };
 
-  replies = JSON.stringify(objReply);
-}
-else if(req.body.type_message == 'button') {
-  let buttons = req.body.buttons;
-  
-  const buttons_list = buttons.map((item: ButtonMessage) => {
-    return {
-      buttonId: item.name,
-      buttonText: {
-        displayText: item.value
-      },
-      type: 1
-    }
-  })
-
-  const buttonMessage = {
-    text: req.body.reply,
-    footer: req.body.footer_message,
-    buttons: buttons_list,
-    headerType: 1
+  interface collectButton {
+    buttonId: string;
+    buttonText: ButtonText;
+    type: number;
   }
-  
-  replies = JSON.stringify(buttonMessage);
-  // console.log(buttons_list);
-  // return res.status(200).json(buttonMessage);
-}
 
-  if(req.body.id) {
-    auto_replies =await prisma.autoReply.update({
+  //   if (req.body.phoneId) {
+  //     phones = await prisma.autoReply.update({
+  //       where: {
+  //         id: req.body.phoneId,
+  //       },
+  //       data: {
+  //         name: req.body.name,
+  //       },
+  //     });
+  //   } else {
+  //     phones = await prisma.phone.create({
+  //       data: {
+  //         userId: req.user?.id!,
+  //         name: req.body.name,
+  //       },
+  //     });
+  //   }
+
+  let replies: string | undefined = undefined;
+  if (req.body.type_message == "image") {
+    // return res.status(200).json({"ok": 'test'});
+    if (req.body.image_type === "file") {
+      let image = req.body.image;
+      //
+      const objReply = {
+        image: {
+          url: "uploads/" + image,
+        },
+        caption: req.body.caption,
+      } as ImageReply;
+
+      replies = JSON.stringify(objReply);
+    } else if (req.body.image_type === "text") {
+      const objReply = {
+        image: {
+          url: req.body.image,
+        },
+        caption: req.body.caption,
+      } as ImageReply;
+
+      replies = JSON.stringify(objReply);
+    }
+  } else if (req.body.type_message == "text") {
+    const objReply = {
+      [req.body.type_message]: req.body.reply,
+    };
+
+    replies = JSON.stringify(objReply);
+  } else if (req.body.type_message == "button") {
+    let buttons = req.body.buttons;
+
+    const buttons_list = buttons.map((item: ButtonMessage) => {
+      return {
+        buttonId: item.name,
+        buttonText: {
+          displayText: item.value,
+        },
+        type: 1,
+      };
+    });
+
+    const buttonMessage = {
+      text: req.body.reply,
+      footer: req.body.footer_message,
+      buttons: buttons_list,
+      headerType: 1,
+    };
+
+    replies = JSON.stringify(buttonMessage);
+    //
+    // return res.status(200).json(buttonMessage);
+  }
+
+  if (req.body.id) {
+    auto_replies = await prisma.autoReply.update({
       where: {
-        id: req.body.id
+        id: req.body.id,
       },
       data: {
         type_keyword: req.body.type_keyword,
         keyword: req.body.keyword,
         reply: replies && JSON.parse(replies),
         type: req.body.type_message,
-        is_save_inbox: req.body.is_save_inbox
-      }
-    })
-  } 
-  else {
+        is_save_inbox: req.body.is_save_inbox,
+      },
+    });
+  } else {
     auto_replies = await prisma.autoReply.create({
       data: {
-          userId: req.user?.id!,
-          phoneId: req.body.phoneId,
-          type_keyword: req.body.type_keyword,
-          type: req.body.type_message,
-          keyword: req.body.keyword,
-          is_save_inbox: req.body.is_save_inbox,
-          reply: replies && JSON.parse(replies)
-      }
-    })
+        userId: req.user?.id!,
+        phoneId: req.body.phoneId,
+        type_keyword: req.body.type_keyword,
+        type: req.body.type_message,
+        keyword: req.body.keyword,
+        is_save_inbox: req.body.is_save_inbox,
+        reply: replies && JSON.parse(replies),
+      },
+    });
   }
   return res.status(200).json(auto_replies);
 };
