@@ -57,7 +57,7 @@ const PhonePage = () => {
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
   const [socketOption, setSocketOption] = useState<any>({
     autoConnect: false,
-    transports: ["websocket"],
+    transports: ["polling"],
   });
   const { socket, setEvents } = useSocket(socketOption);
   const { t, i18n } = useTranslation("common");
@@ -68,6 +68,7 @@ const PhonePage = () => {
   const router = useRouter();
 
   useEffect(() => {
+    console.log("SHOULD RUN 1");
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
       return;
