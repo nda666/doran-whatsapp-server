@@ -19,10 +19,6 @@ app.use(compression());
 const nextApp = next({ dev, hostname, port });
 const nextHandler = nextApp.getRequestHandler();
 
-process.on("SIGINT", async function () {
-  await prisma.$disconnect();
-});
-
 const waSocks: WASocket[] = [];
 const io = getSocketIO;
 
@@ -34,11 +30,6 @@ nextApp.prepare().then(async () => {
       res.status(408).end();
     });
     nextHandler(req, res);
-  });
-  // const httpServer = http.createServer(server);
-  const server = app.listen(port, "0.0.0.0", () => {
-    console.info(`> Ready on http://localhost:${port}`);
-    process.send && process.send("ready");
   });
 
   io?.on("connection", async (socket) => {
@@ -136,5 +127,18 @@ nextApp.prepare().then(async () => {
     //   });
     // });
   });
+
+  // const httpServer = http.createServer(server);
+  const server = app.listen(port, "0.0.0.0", () => {
+    console.info(
+      `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
+    );
+  });
+
   io.attach(server);
+});
+
+process.on("SIGINT", async function () {
+  await prisma.$disconnect();
+  process.exit();
 });

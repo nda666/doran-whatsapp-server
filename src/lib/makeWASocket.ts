@@ -74,7 +74,7 @@ const makeWASocket = async (
             options: {
               file: "./whatsapp-logs/whatsapp.log",
               frequency: "daily",
-              colorize: true,
+              colorize: false,
               mkdir: true,
             },
           },
@@ -121,16 +121,16 @@ const makeWASocket = async (
       //   reader.onload = () => resolve(reader.result);
       //   reader.onerror = reject;
       // });
-      if(!messages[0].key.fromMe) {
+      if (!messages[0].key.fromMe) {
         let messageByPhone = messages[0].message!.conversation;
         let messageByWeb = messages[0].message!.extendedTextMessage?.text;
         let messageIn: string | undefined = undefined;
-        
-        if(messageByPhone !== undefined) {
+
+        if (messageByPhone !== undefined) {
           messageIn = messageByPhone?.toString();
         }
 
-        if(messageByWeb !== undefined) {
+        if (messageByWeb !== undefined) {
           messageIn = messageByWeb?.toString();
         }
         // let messageIn = messageByPhone = messageByWeb;
@@ -140,7 +140,8 @@ const makeWASocket = async (
         let quotedMessage: any = null;
         if (messages[0].message?.extendedTextMessage?.contextInfo) {
           quotedMessage =
-            messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            messages[0].message?.extendedTextMessage?.contextInfo
+              ?.quotedMessage;
         }
 
         const getPhone = async () => {
@@ -163,7 +164,9 @@ const makeWASocket = async (
             if (metadata) {
               let konv_date = new Date(metadata.creation! * 1000);
               let year = konv_date.toLocaleString("id-ID", { year: "numeric" });
-              let month = konv_date.toLocaleString("id-ID", { month: "2-digit" });
+              let month = konv_date.toLocaleString("id-ID", {
+                month: "2-digit",
+              });
               let day = konv_date.toLocaleString("id-ID", { day: "2-digit" });
 
               let date =
@@ -490,7 +493,6 @@ const makeWASocket = async (
           }
         }
       }
-      
     });
   }
 
