@@ -125,10 +125,18 @@ const makeWASocket = async (
 
       let messageByPhone = messages[0].message!.conversation;
       let messageByWeb = messages[0].message!.extendedTextMessage?.text;
+      let messageIn: string | undefined = undefined;
+      
+      if(messageByPhone !== undefined) {
+        messageIn = messageByPhone?.toString();
+      }
 
+      if(messageByWeb !== undefined) {
+        messageIn = messageByWeb?.toString();
+      }
       // let messageIn = messageByPhone = messageByWeb;
       // let messageIn = messageByPhone;
-      let messageIn = messageByWeb;
+      // let messageIn = messageByWeb;
       const messageType = Object.keys(messages[0].message!)[0];
       let quotedMessage: any = null;
       if (messages[0].message?.extendedTextMessage?.contextInfo) {
