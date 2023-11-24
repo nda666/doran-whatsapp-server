@@ -107,13 +107,11 @@ const sendGroupMessage = async (
 
   // Handle connection errors
   socketIo.on("connect_error", (err) => {
-    console.error("Socket connection error:", err);
     res.status(400).json({ message: "Gagal koneksi ke IO" });
   });
 
   // Handle connection timeout
   socketIo.on("connect_timeout", () => {
-    console.error("Socket connection timeout");
     res.status(400).json({ message: "Gagal koneksi ke IO" });
   });
 };
