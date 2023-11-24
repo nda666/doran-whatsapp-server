@@ -36,7 +36,7 @@ nextApp.prepare().then(async () => {
     nextHandler(req, res);
   });
   // const httpServer = http.createServer(server);
-  const server = app.listen(port, () => {
+  const server = app.listen(port, "0.0.0.0", () => {
     console.info(`> Ready on http://localhost:${port}`);
     process.send && process.send("ready");
   });
