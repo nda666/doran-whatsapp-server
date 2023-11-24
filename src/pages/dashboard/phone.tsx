@@ -1,7 +1,7 @@
 import Layout from "@/components/Layout";
-import AutoReplyFormModal, {
-  AutoReplyFormModalRef,
+import {
   AutoReplyFormData,
+  AutoReplyFormModalRef,
 } from "@/components/auto-reply/AutoReplyFormModal";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import PhoneFormModal, {
@@ -12,34 +12,26 @@ import PhoneTableButton from "@/components/phone/PhoneTableButton";
 import { copyToClipboard } from "@/lib/copyToClipboard";
 import useAutoReplyData from "@/lib/useAutoReplyData";
 import usePhoneData from "@/lib/usePhoneData";
-import useSocket from "@/lib/useSocket";
-import { SocketEvent } from "@/lib/useSocket";
-import useWhatsappBot from "@/lib/useWhatsappBot";
-import { AutoReply, Phone, User } from "@prisma/client";
-import {
-  Button,
-  Dropdown,
-  Menu,
-  Modal,
-  Space,
-  Table,
-  notification,
-  Switch,
-} from "antd";
+import useSocket, { SocketEvent } from "@/lib/useSocket";
+import { Phone } from "@prisma/client";
+import { Button, Modal, Space, Switch, Table, notification } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSession } from "next-auth/react";
 import { i18n, useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import getConfig from "next/config";
+import { useRouter } from "next/router";
 import {
   ReactElement,
   SetStateAction,
-  useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/router";
+
+const { publicRuntimeConfig } = getConfig();
+const { NODE_ENV } = publicRuntimeConfig;
 
 const PhonePage = () => {
   const [state, setState] = useState<{
@@ -74,6 +66,7 @@ const PhonePage = () => {
   const form = useRef<PhoneFormModalRef>(null);
   const formAutoRep = useRef<AutoReplyFormModalRef>(null);
   const router = useRouter();
+
   useEffect(() => {
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
@@ -86,7 +79,8 @@ const PhonePage = () => {
         phoneId: phoneData.phones?.map((x) => x.id),
       },
       autoConnect: false,
-      transports: ["polling", "websocket"],
+      transports:
+        process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
     });
     return () => {
       setSocketOption(undefined);
@@ -377,6 +371,7 @@ const PhonePage = () => {
         }}
         dataSource={phoneData.phones}
         columns={dataColumn}
+        rowKey="id"
       />
       <ModalQrCode
         userId={session?.user?.id}

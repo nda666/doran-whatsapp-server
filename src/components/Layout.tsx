@@ -174,6 +174,7 @@ export default function Layout({
             style={{ width: 200, display: "flex", justifyContent: "flex-end" }}
           >
             <Menu.Item
+              key="menu-lang"
               onClick={() => {
                 const { pathname, asPath, query } = router;
                 router.push({ pathname, query }, asPath, {
@@ -199,7 +200,7 @@ export default function Layout({
                 {i18n?.language.toUpperCase()}
               </Popover>
             </Menu.Item>
-            <Menu.Item>
+            <Menu.Item key="menu-signout">
               <Link href={"/signout"}>{t("signout")}</Link>
             </Menu.Item>
           </Menu>

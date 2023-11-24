@@ -33,28 +33,28 @@ export default function PhoneTableButton({
   const items: MenuProps["items"] = [
     {
       label: t("edit"),
-      key: "1",
+      key: `${phone.id}-1`,
       icon: <EditOutlined />,
       onClick: (e) => onEditClick && onEditClick(phone, e),
     },
     {
       label: t("scan_qrcode"),
-      key: "2",
+      key: `${phone.id}-2`,
       icon: <QrcodeOutlined />,
       onClick: (e) => onGetQrCodeClick && onGetQrCodeClick(phone, e),
     },
     {
       label: t("delete"),
-      key: "3",
+      key: `${phone.id}-3`,
       icon: <DeleteOutlined />,
       onClick: (e) => onDeleteClick && onDeleteClick(phone, e),
     },
     {
       label: t("list_replies"),
-      key: "4",
-      icon: <WechatFilled/>,
-      onClick: (e) => onListReply && onListReply(phone,e)
-    }
+      key: `${phone.id}-4`,
+      icon: <WechatFilled />,
+      onClick: (e) => onListReply && onListReply(phone, e),
+    },
   ];
 
   // if(phone.number) {
