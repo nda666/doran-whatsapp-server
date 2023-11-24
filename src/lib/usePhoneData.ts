@@ -14,7 +14,10 @@ export type usePhoneDataType = {
   setPhones: Dispatch<SetStateAction<Phone[] | undefined>>;
   save: (data: PhoneFormData) => Promise<ResponseResult>;
   deleteById: (phoneId: string) => Promise<ResponseResult>;
-  isSaveGroup: (phoneId: string, is_save_group: boolean ) => Promise<ResponseResult>;
+  isSaveGroup: (
+    phoneId: string,
+    is_save_group: boolean
+  ) => Promise<ResponseResult>;
   refetchPhone: () => void;
 };
 export default function usePhoneData(token: string): usePhoneDataType {
@@ -31,6 +34,7 @@ export default function usePhoneData(token: string): usePhoneDataType {
   }, []);
 
   useEffect(() => {
+    console.log("runRefetchPhone", runRefetchPhone);
     const fetchPhones = async () => {
       setRunRefetchPhone(false);
       const response = await axios.get(`/api/phones`, {
@@ -43,6 +47,7 @@ export default function usePhoneData(token: string): usePhoneDataType {
     };
 
     runRefetchPhone && token && fetchPhones();
+    return () => {};
   }, [runRefetchPhone, token]);
 
   const deleteById = async (phoneId: string) => {
@@ -111,18 +116,22 @@ export default function usePhoneData(token: string): usePhoneDataType {
     };
 
     try {
-      const resp = await axios.patch(`/api/phones/${phoneId}/toggle-group`, {
-        is_save_group: is_save_group
-      },{
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const resp = await axios.patch(
+        `/api/phones/${phoneId}/toggle-group`,
+        {
+          is_save_group: is_save_group,
         },
-      });
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       result.success = true;
       result.data = resp.data;
       setRunRefetchPhone(true);
-    } catch(e) {
+    } catch (e) {
       if (e instanceof AxiosError) {
         result.error = e;
       } else {
@@ -131,7 +140,7 @@ export default function usePhoneData(token: string): usePhoneDataType {
     }
 
     return result;
-  }
+  };
 
   return {
     phones,

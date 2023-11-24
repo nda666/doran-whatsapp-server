@@ -26,6 +26,7 @@ const useSocket = (
       disconnectSocket();
       return;
     }
+
     const socketInstance = io(
       process.env.NEXT_PUBLIC_APP_URL?.toString() ?? "",
       option
@@ -36,7 +37,6 @@ const useSocket = (
     }
     socketInstance.connect();
     setSocket(socketInstance);
-
     return function () {
       disconnectSocket();
     };

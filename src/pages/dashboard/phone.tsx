@@ -55,10 +55,7 @@ const PhonePage = () => {
   const phoneData = usePhoneData(session?.user?.token!);
   const replyData = useAutoReplyData(session?.user?.token!);
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
-  const [socketOption, setSocketOption] = useState<any>({
-    autoConnect: false,
-    transports: ["polling"],
-  });
+  const [socketOption, setSocketOption] = useState<any>(undefined);
   const { socket, setEvents } = useSocket(socketOption);
   const { t, i18n } = useTranslation("common");
   const [modal, contextHolder] = Modal.useModal();
@@ -68,11 +65,11 @@ const PhonePage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    console.log("SHOULD RUN 1");
     if ((phoneData.phones?.length || 0) <= 0) {
       setSocketOption(undefined);
       return;
     }
+
     setSocketOption({
       path: "/socket.io",
       query: {
@@ -132,7 +129,7 @@ const PhonePage = () => {
       setEvents([]);
       socket?.disconnect();
     };
-  }, [socketOption, state.openForm, state.openQrModal]);
+  }, [state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<Phone> = [
     {
