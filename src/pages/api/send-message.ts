@@ -1,5 +1,6 @@
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 
+import { getAllSession } from "@/lib/makeWASocket";
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
@@ -53,37 +54,23 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     path: "/socket.io",
     autoConnect: true,
     timeout: 10000,
-    transports:
-      process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
+    transports: ["websocket"],
   });
-
-  socketIo.on("connect", () => {
-    // Now that the connection is established, emit the event
-    socketIo.emit("sendTextMessage", {
-      phoneId: phone.id,
-      userId: phone.userId,
-      tos,
-      phoneCountry,
-      message,
-      image,
-    });
-    res.status(200).json({ result: true });
-    socketIo.close();
-  });
-
-  // Handle connection errors
-  socketIo.on("connect_error", (err) => {
-    res
-      .status(400)
-      .json({ result: false, message: "Gagal koneksi ke IO", error: err });
-  });
-
-  // Handle connection timeout
-  socketIo.on("connect_timeout", () => {
-    res
-      .status(400)
-      .json({ result: false, message: "Gagal koneksi ke IO: TIMEOUT" });
-  });
+  try {
+    const resSocket = await socketIo
+      .timeout(10000)
+      .emitWithAck("sendTextMessage", {
+        phoneId: phone.id,
+        userId: phone.userId,
+        tos,
+        phoneCountry,
+        message,
+        image,
+      });
+    res.status(200).json({ result: true, data: resSocket });
+  } catch (err) {
+    res.status(200).json({ result: false, data: err });
+  }
 };
 
 // const handler = async (req: NextApiRequest, res: NextApiResponse) => {

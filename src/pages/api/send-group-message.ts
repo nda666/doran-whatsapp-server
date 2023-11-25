@@ -90,30 +90,47 @@ const sendGroupMessage = async (
     timeout: 10000,
   });
 
-  socketIo.on("connect", () => {
-    // Now that the connection is established, emit the event
-    socketIo.emit("sendGroupMessage", {
-      phoneId: phone.id,
-      userId: phone.userId,
-      // tos,
-      phoneCountry,
-      message,
-      image,
-      id_group,
-    });
-    res.status(200).json({ success: true });
-    socketIo.close();
-  });
+  try {
+    const resSocket = await socketIo
+      .timeout(10000)
+      .emitWithAck("sendGroupMessage", {
+        phoneId: phone.id,
+        userId: phone.userId,
+        // tos,
+        phoneCountry,
+        message,
+        image,
+      });
 
-  // Handle connection errors
-  socketIo.on("connect_error", (err) => {
-    res.status(400).json({ message: "Gagal koneksi ke IO" });
-  });
+    res.status(200).json({ result: true, data: resSocket });
+  } catch (err) {
+    res.status(200).json({ result: false, data: err });
+  }
 
-  // Handle connection timeout
-  socketIo.on("connect_timeout", () => {
-    res.status(400).json({ message: "Gagal koneksi ke IO" });
-  });
+  // socketIo.on("connect", () => {
+  //   // Now that the connection is established, emit the event
+  //   socketIo.emit("sendGroupMessage", {
+  //     phoneId: phone.id,
+  //     userId: phone.userId,
+  //     // tos,
+  //     phoneCountry,
+  //     message,
+  //     image,
+  //     id_group,
+  //   });
+  //   res.status(200).json({ success: true });
+
+  // });
+
+  // // Handle connection errors
+  // socketIo.on("connect_error", (err) => {
+  //   res.status(400).json({ message: "Gagal koneksi ke IO" });
+  // });
+
+  // // Handle connection timeout
+  // socketIo.on("connect_timeout", () => {
+  //   res.status(400).json({ message: "Gagal koneksi ke IO" });
+  // });
 };
 
 // const handler = async (req: NextApiRequest, res: NextApiResponse) => {
