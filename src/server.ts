@@ -1,6 +1,5 @@
 import express from "express";
 import compression from "compression";
-import http from "http";
 import { prisma } from "./lib/prisma";
 import next from "next";
 import { WASocket } from "@whiskeysockets/baileys";
@@ -16,7 +15,7 @@ const dev = process.env.NODE_ENV !== "production";
 const app = express();
 app.use(compression());
 
-const nextApp = next({ dev, hostname, port });
+const nextApp = next({ dev, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
 const waSocks: WASocket[] = [];
@@ -34,70 +33,74 @@ nextApp.prepare().then(async () => {
 
   io?.on("connection", async (socket) => {
     socket.onAny((event, params) => {
-      console.log("EVENT NAME: " + event, params);
+      if (event === "sendTextMessage") {
+        sendMessageFromIo(params);
+      } else if (event === "sendGroupMessage") {
+        sendGroupMessageFromIo(params);
+      }
     });
     socket.on("connect_error", (err) => {
       console.log(`connect_error due to ${err.message}`);
     });
-    socket.on(
-      "sendTextMessage",
-      async ({
-        phoneId,
-        userId,
-        tos,
-        phoneCountry,
-        message,
-        image,
-      }: {
-        phoneId: string;
-        userId: string;
-        tos: string[];
-        phoneCountry: string;
-        message: string;
-        image: any;
-      }) => {
-        console.log("EVENT");
-        await sendMessageFromIo({
-          userId,
-          phoneId,
-          message,
-          phoneCountry,
-          tos,
-          image,
-        });
-      }
-    );
+    // socket.on(
+    //   "sendTextMessage",
+    //   async ({
+    //     phoneId,
+    //     userId,
+    //     tos,
+    //     phoneCountry,
+    //     message,
+    //     image,
+    //   }: {
+    //     phoneId: string;
+    //     userId: string;
+    //     tos: string[];
+    //     phoneCountry: string;
+    //     message: string;
+    //     image: any;
+    //   }) => {
+    //     console.log("EVENT");
+    //     await sendMessageFromIo({
+    //       userId,
+    //       phoneId,
+    //       message,
+    //       phoneCountry,
+    //       tos,
+    //       image,
+    //     });
+    //   }
+    // );
 
-    socket.on(
-      "sendGroupMessage",
-      async ({
-        phoneId,
-        userId,
-        // tos,
-        phoneCountry,
-        message,
-        image,
-        id_group,
-      }: {
-        phoneId: string;
-        userId: string;
-        // tos: string[];
-        phoneCountry: string;
-        message: string;
-        image: any;
-        id_group: string;
-      }) => {
-        await sendGroupMessageFromIo({
-          userId,
-          phoneId,
-          // tos,
-          phoneCountry,
-          message,
-          image,
-          id_group,
-        });
-      }
-    );
+    // socket.on(
+    //   "sendGroupMessage",
+    //   async ({
+    //     phoneId,
+    //     userId,
+    //     // tos,
+    //     phoneCountry,
+    //     message,
+    //     image,
+    //     id_group,
+    //   }: {
+    //     phoneId: string;
+    //     userId: string;
+    //     // tos: string[];
+    //     phoneCountry: string;
+    //     message: string;
+    //     image: any;
+    //     id_group: string;
+    //   }) => {
+    //     await sendGroupMessageFromIo({
+    //       userId,
+    //       phoneId,
+    //       // tos,
+    //       phoneCountry,
+    //       message,
+    //       image,
+    //       id_group,
+    //     });
+    //   }
+    // );
 
     if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
       const query = socket.handshake.query;
@@ -133,11 +136,11 @@ nextApp.prepare().then(async () => {
 
   // const httpServer = http.createServer(server);
   const server = app.listen(port, "0.0.0.0", () => {
-    console.info(
-      `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
-    );
+    if (process.env.NODE_ENV !== "production")
+      console.info(
+        `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
+      );
   });
-
   io.attach(server);
 });
 
