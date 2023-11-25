@@ -88,6 +88,8 @@ const sendGroupMessage = async (
     path: "/socket.io",
     autoConnect: true,
     timeout: 10000,
+    transports:
+      process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
   });
 
   try {

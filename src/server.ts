@@ -156,7 +156,9 @@ nextApp.prepare().then(async () => {
 
   const server: Server = createServer(app);
   io.attach(server);
-  server.listen(port, "0.0.0.0", () => {
+  const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
+  const host = isDevelopment ? "localhost" : "0.0.0.0";
+  server.listen(port, host, () => {
     if (process.env.NODE_ENV !== "production")
       console.info(
         `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
