@@ -88,8 +88,7 @@ const sendGroupMessage = async (
     path: "/socket.io",
     autoConnect: true,
     timeout: 10000,
-    transports:
-      process.env.NODE_ENV == "development" ? ["polling"] : ["websocket"],
+    transports: ["websocket"],
   });
 
   try {
@@ -102,6 +101,7 @@ const sendGroupMessage = async (
         phoneCountry,
         message,
         image,
+        id_group
       });
 
     res.status(200).json({ result: true, data: resSocket });
