@@ -16,7 +16,7 @@ const dev = process.env.NODE_ENV !== "production";
 const app = express();
 app.use(compression());
 
-const nextApp = next({ dev, customServer: true });
+const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
 const waSocks: WASocket[] = [];
