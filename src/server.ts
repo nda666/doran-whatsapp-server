@@ -32,14 +32,6 @@ nextApp.prepare().then(async () => {
     nextHandler(req, res);
   });
   io?.on("connection", async (socket) => {
-    // Sementara pakai onAny sampai Bug nya ketemu
-    // socket.onAny((event, params) => {
-    //   if (event === "sendTextMessage") {
-    //     sendMessageFromIo(params);
-    //   } else if (event === "sendGroupMessage") {
-    //     sendGroupMessageFromIo(params);
-    //   }
-    // });
     socket.on(
       "sendTextMessage",
       async (
@@ -125,23 +117,7 @@ nextApp.prepare().then(async () => {
 
       socket.join(`${userId}`);
     }
-
-    // socket.on("disconnecting", () => {
-    //   //
-    //   waSocks.forEach((waSock) => {
-    //     // waSock.ev.flush(true);
-    //   });
-    // });
-
-    // socket?.on("disconnect", async (reason) => {
-    //
-    //   waSocks.forEach((waSock) => {
-    //     waSock.ev.flush(true);
-    //   });
-    // });
   });
-
-  // const httpServer = http.createServer(server);
 
   const server: Server = createServer(app);
   io.attach(server);
