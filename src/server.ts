@@ -33,10 +33,12 @@ nextApp.prepare().then(async () => {
   });
 
   io?.on("connection", async (socket) => {
-    // socket.onAny(async (event) => {
-    //
-    // });
-
+    socket.onAny((event, params) => {
+      console.log("EVENT NAME: " + event, params);
+    });
+    socket.on("connect_error", (err) => {
+      console.log(`connect_error due to ${err.message}`);
+    });
     socket.on(
       "sendTextMessage",
       async ({
@@ -54,6 +56,7 @@ nextApp.prepare().then(async () => {
         message: string;
         image: any;
       }) => {
+        console.log("EVENT");
         await sendMessageFromIo({
           userId,
           phoneId,
