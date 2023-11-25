@@ -7,6 +7,7 @@ import { getSocketIO } from "./lib/socket";
 import makeWASocket from "./lib/makeWASocket";
 import sendMessageFromIo from "./lib/sendMessageFromIo";
 import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
+import { Server, createServer } from "http";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -32,6 +33,7 @@ nextApp.prepare().then(async () => {
   });
 
   io?.on("connection", async (socket) => {
+    // Sementara pakai onAny sampai Bug nya ketemu
     socket.onAny((event, params) => {
       if (event === "sendTextMessage") {
         sendMessageFromIo(params);
@@ -135,13 +137,15 @@ nextApp.prepare().then(async () => {
   });
 
   // const httpServer = http.createServer(server);
-  const server = app.listen(port, "0.0.0.0", () => {
+
+  const server: Server = createServer(app);
+  io.attach(server);
+  server.listen(port, "0.0.0.0", () => {
     if (process.env.NODE_ENV !== "production")
       console.info(
         `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
       );
   });
-  io.attach(server);
 });
 
 process.on("SIGINT", async function () {
