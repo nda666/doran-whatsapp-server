@@ -88,7 +88,7 @@ const makeWASocket = async (
       qrTimeout: WaSockQrTimeout,
     });
 
-    console.info("CREATE new session: " + phoneId);
+    // console.info("CREATE new session: " + phoneId);
     _waSocket.ev.on("creds.update", (authState) => {
       saveCreds();
     });
