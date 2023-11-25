@@ -31,6 +31,16 @@ nextApp.prepare().then(async () => {
     });
     nextHandler(req, res);
   });
+  // const httpServer = http.createServer(server);
+  // const server = app.listen(port, "0.0.0.0", () => {
+  //   console.info(`> Ready on http://localhost:${port}`);
+  //   process.send && process.send("ready");
+  // });
+
+  // const server = app.listen(port, () => {
+  //   console.info(`> Ready on http://localhost:${port}`);
+  //   process.send && process.send("ready");
+  // });
 
   io?.on("connection", async (socket) => {
     // Sementara pakai onAny sampai Bug nya ketemu
