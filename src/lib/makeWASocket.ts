@@ -52,7 +52,7 @@ const makeWASocket = async (
   let _waSocket = {} as WASocket;
   if (session.get(phoneId)) {
     _waSocket = session.get(phoneId);
-    console.info("GET from session: " + _waSocket.user);
+    // console.info("GET from session: " + _waSocket.user);
   } else {
     const waSocketLogOption = pino({
       enabled: true,

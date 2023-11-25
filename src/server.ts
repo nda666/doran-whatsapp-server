@@ -16,7 +16,7 @@ const dev = process.env.NODE_ENV !== "production";
 const app = express();
 app.use(compression());
 
-const nextApp = next({ dev, customServer: true });
+const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
 const waSocks: WASocket[] = [];
@@ -44,75 +44,81 @@ nextApp.prepare().then(async () => {
 
   io?.on("connection", async (socket) => {
     // Sementara pakai onAny sampai Bug nya ketemu
-    socket.onAny((event, params) => {
-      if (event === "sendTextMessage") {
-        sendMessageFromIo(params);
-      } else if (event === "sendGroupMessage") {
-        sendGroupMessageFromIo(params);
+    // socket.onAny((event, params) => {
+    //   if (event === "sendTextMessage") {
+    //     sendMessageFromIo(params);
+    //   } else if (event === "sendGroupMessage") {
+    //     sendGroupMessageFromIo(params);
+    //   }
+    // });
+    socket.on(
+      "sendTextMessage",
+      async (
+        {
+          phoneId,
+          userId,
+          tos,
+          phoneCountry,
+          message,
+          image,
+        }: {
+          phoneId: string;
+          userId: string;
+          tos: string[];
+          phoneCountry: string;
+          message: string;
+          image: any;
+        },
+        callback
+      ) => {
+        const sendResp = await sendMessageFromIo({
+          userId,
+          phoneId,
+          message,
+          phoneCountry,
+          tos,
+          image,
+        });
+        // Kirim balik ke client
+        callback(sendResp);
       }
-    });
-    socket.on("connect_error", (err) => {
-      console.log(`connect_error due to ${err.message}`);
-    });
-    // socket.on(
-    //   "sendTextMessage",
-    //   async ({
-    //     phoneId,
-    //     userId,
-    //     tos,
-    //     phoneCountry,
-    //     message,
-    //     image,
-    //   }: {
-    //     phoneId: string;
-    //     userId: string;
-    //     tos: string[];
-    //     phoneCountry: string;
-    //     message: string;
-    //     image: any;
-    //   }) => {
-    //     console.log("EVENT");
-    //     await sendMessageFromIo({
-    //       userId,
-    //       phoneId,
-    //       message,
-    //       phoneCountry,
-    //       tos,
-    //       image,
-    //     });
-    //   }
-    // );
+    );
 
-    // socket.on(
-    //   "sendGroupMessage",
-    //   async ({
-    //     phoneId,
-    //     userId,
-    //     // tos,
-    //     phoneCountry,
-    //     message,
-    //     image,
-    //     id_group,
-    //   }: {
-    //     phoneId: string;
-    //     userId: string;
-    //     // tos: string[];
-    //     phoneCountry: string;
-    //     message: string;
-    //     image: any;
-    //     id_group: string;
-    //   }) => {
-    //     await sendGroupMessageFromIo({
-    //       userId,
-    //       phoneId,
-    //       // tos,
-    //       phoneCountry,
-    //       message,
-    //       image,
-    //       id_group,
-    //     });
-    //   }
-    // );
+    socket.on(
+      "sendGroupMessage",
+      async (
+        {
+          phoneId,
+          userId,
+          // tos,
+          phoneCountry,
+          message,
+          image,
+          id_group,
+        }: {
+          phoneId: string;
+          userId: string;
+          // tos: string[];
+          phoneCountry: string;
+          message: string;
+          image: any;
+          id_group: string;
+        },
+        callback
+      ) => {
+        const sendResp = await sendGroupMessageFromIo({
+          userId,
+          phoneId,
+          // tos,
+          phoneCountry,
+          message,
+          image,
+          id_group,
+        });
+        // Kirim balik ke client
+        callback(sendResp);
+      }
+    );
 
     if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
       const query = socket.handshake.query;
