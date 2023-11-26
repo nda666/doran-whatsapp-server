@@ -141,6 +141,7 @@ model AutoReply {
 model InboxMessage {
   id          Int       @id @default(autoincrement())
   message     String?   @db.Text
+  image_in    String?
   quote       String?   @db.Text
   status      Int?      @db.TinyInt @map(name: "status")
   sender      String

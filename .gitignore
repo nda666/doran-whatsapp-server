@@ -16,6 +16,7 @@
 /out/
 dist
 /public/uploads
+/public/downloads
 
 # production
 /build
