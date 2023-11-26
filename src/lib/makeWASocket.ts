@@ -6,6 +6,7 @@ import _makeWASocket, {
   delay,
   GroupMetadata,
   MessageType,
+  downloadMediaMessage
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
 import { prisma } from "./prisma";
@@ -13,6 +14,8 @@ import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
 import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import toBase64 from "./toBase64";
+import { writeFile } from "fs/promises";
+import moment from "moment";
 
 const session = new Map();
 
@@ -123,6 +126,7 @@ const makeWASocket = async (
       if (!messages[0].key.fromMe) {
         let messageByPhone = messages[0].message!.conversation;
         let messageByWeb = messages[0].message!.extendedTextMessage?.text;
+
         let messageIn: string | undefined = undefined;
 
         if (messageByPhone !== undefined) {
@@ -143,19 +147,25 @@ const makeWASocket = async (
               ?.quotedMessage;
         }
 
-        const getPhone = async () => {
-          const findPhone = await prisma.phone.findUnique({
-            where: {
-              id: phoneId,
-            },
-          });
-          return findPhone;
-        };
+        // const getPhone = async () => {
+        //   const findPhone = await prisma.phone.findUnique({
+        //     where: {
+        //       id: phoneId,
+        //     },
+        //   });
+        //   return findPhone;
+        // };
 
-        // return;
+        const getPhone = await prisma.phone.findUnique({
+          where: {
+            id: phoneId
+          }
+        });
+
         if (messageIn) {
           //
           const checkIdGroupFormat = /^[0-9]+@g\.us$/;
+          const messageType = Object.keys(messages[0].message!)[0];
           if (checkIdGroupFormat.test(messages[0].key.remoteJid!)) {
             const metadata = await _waSocket.groupMetadata(
               messages[0].key!.remoteJid!
@@ -181,53 +191,45 @@ const makeWASocket = async (
                 ":" +
                 konv_date.getSeconds();
               const datetime = new Date(date);
-
-              getPhone().then(async (dataphone) => {
-                if (dataphone?.is_save_group) {
-                  // try implicit
-
+              if(getPhone !== null) {
+                if(getPhone.is_save_group) {
                   const groups = await prisma.group.count({
                     where: {
-                      group_id: metadata.id,
+                      group_id: metadata.id
                     },
                     select: {
                       group_id: true,
-                    },
+                    }
                   });
 
-                  if (!Number(groups.group_id)) {
-                    const insertGroup = async (metadata: GroupMetadata) => {
-                      const participant_list = metadata.participants.map(
-                        (participant) => ({
-                          whatsapp_id: participant.id,
-                          admin: participant.admin,
-                        })
-                      );
-                      try {
-                        const savegroup = await prisma.group.create({
-                          data: {
-                            group_id: metadata.id,
-                            subject: metadata.subject,
-                            owner: String(metadata.subjectOwner),
-                            creation: datetime,
-                            size: metadata.size,
-                            desc: metadata.desc,
-                            restrict: metadata.restrict,
-                            announce: metadata.announce,
-                            participants: {
-                              create: participant_list,
-                            },
-                          },
-                        });
+                  if(!Number(groups.group_id)) {
+                    const participant_list = metadata.participants.map(
+                      (participant) => ({
+                        whatsapp_id: participant.id,
+                        admin: participant.admin
+                      })
+                    );
 
-                        savegroup && "Group saved succesfully";
-                      } catch (err) {}
-                    };
-                    insertGroup(metadata);
+                    const insertGroup = await prisma.group.create({
+                      data: {
+                        group_id: metadata.id,
+                        subject: metadata.subject,
+                        owner: String(metadata.subjectOwner),
+                        creation: datetime,
+                        size: metadata.size,
+                        desc: metadata.desc,
+                        restrict: metadata.restrict,
+                        announce: metadata.announce,
+                        participants: {
+                          create: participant_list,
+                        },
+                      }
+                    });
+
+                    insertGroup && "Group saved succesfully"
                   }
-                  // return;
                 }
-              });
+              }
             }
           }
 
@@ -265,23 +267,20 @@ const makeWASocket = async (
             };
 
             const dataInbox: InboxMessage[] = [];
-            getPhone().then((phonedata) => {
-              if (Object.keys(phonedata as Phone).length !== 0) {
-                dataInbox.push({
-                  message: messageIn,
-                  recipient: messages[0].key.remoteJid!.split("@")[0]!,
-                  sender: phonedata!.number!,
-                  // isRead: true,
-                } as InboxMessage);
 
-                // delay(2000);
-                insertInbox(dataInbox[0]);
-                _waSocket.sendMessage(messages[0].key.remoteJid!, {
-                  text: "Balasan laporan dalam proses pengiriman",
-                });
-                return;
-              }
-            });
+            if(getPhone !== null) {
+              dataInbox.push({
+                message: messageIn,
+                recipient: getPhone.number,
+                sender: messages[0].key.remoteJid!.split("@")[0]!,
+              } as InboxMessage)
+
+              insertInbox(dataInbox[0]);
+              _waSocket.sendMessage(messages[0].key.remoteJid!, {
+                text: "Balasan laporan dalam proses pengiriman",
+              });
+              return;
+            }
           }
 
           phoneReplies
@@ -302,8 +301,8 @@ const makeWASocket = async (
                   }
                 };
 
-                let phones = await getPhone();
-                let phone_number = await phones?.number;
+                // let phones = await getPhone();
+                let phone_number = getPhone && getPhone.number;
                 result.forEach(async (item) => {
                   const replyText = JSON.parse(JSON.stringify(item.reply));
                   if (item.type == "text") {
@@ -487,6 +486,41 @@ const makeWASocket = async (
               text: "Balasan laporan dalam proses pengiriman",
             });
             return;
+          }
+        }
+
+        if(messageType == 'imageMessage') {
+          const getImageMessage = messages[0].message?.imageMessage;
+          const hasLapWord = isLapWord(String(getImageMessage?.caption));
+          if(hasLapWord) {
+            const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
+
+            const typeFile = getImageMessage!.mimetype?.split('/')[1];
+            const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
+            const filePathName = `public/downloads/${formatName}`;
+            const buffer = await downloadMediaMessage(
+              messages[0],
+              'buffer',
+              {},
+              {
+                logger: waSocketLogOption,
+                reuploadRequest: _waSocket.updateMediaMessage
+              }
+            );
+
+            await writeFile(`./public/downloads/${formatName}`,buffer);
+
+            let sender = messages[0].key.remoteJid?.split("@")[0];
+            if(getPhone !== null) {
+              await prisma.inboxMessage.create({
+                data: {
+                  sender: sender,
+                  recipient: getPhone.number,
+                  message: getImageMessage?.caption,
+                  image_in: filePathName,
+                } as InboxMessage
+              });
+            }
           }
         }
       }
