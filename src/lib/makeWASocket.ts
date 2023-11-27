@@ -16,6 +16,7 @@ import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import toBase64 from "./toBase64";
 import { writeFile } from "fs/promises";
 import moment from "moment";
+import path from 'path';
 
 const session = new Map();
 
@@ -497,7 +498,24 @@ const makeWASocket = async (
 
             const typeFile = getImageMessage!.mimetype?.split('/')[1];
             const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
-            const filePathName = `public/downloads/${formatName}`;
+            // const filePathName = `public/downloads/${formatName}`;
+            // const filePathName = `./public/downloads/${formatName}`;
+            const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
+            let finalFilePath : string = '';
+            const currentPath = __dirname;
+            if(isDevelopment) {
+              const previousePath = path.join(currentPath, '../../..');
+              const destinationPath = path.join(previousePath,'the_public_html/public');
+              const changeSeparatorPath = destinationPath.split('\\').join('/');
+              finalFilePath = `${changeSeparatorPath}/${formatName}`;
+            } else {
+              const previousePath = path.join(currentPath,'../..');
+              const destinationPath = path.join(previousePath,'public_html/public/download-wa-image');
+              const changeSeparatorPath = destinationPath.split('\\').join('/');
+              finalFilePath = `${changeSeparatorPath}/${formatName}`;
+            }
+            // console.log(finalFilePath);
+
             const buffer = await downloadMediaMessage(
               messages[0],
               'buffer',
@@ -508,19 +526,27 @@ const makeWASocket = async (
               }
             );
 
-            await writeFile(`./public/downloads/${formatName}`,buffer);
+            // await writeFile(`./public/downloads/${formatName}`,buffer);
+            if(finalFilePath !== '') {
+              await writeFile(finalFilePath,buffer);
+              let sender = messages[0].key.remoteJid?.split("@")[0];
+              if(getPhone !== null) {
+                await prisma.inboxMessage.create({
+                  data: {
+                    sender: sender,
+                    recipient: getPhone.number,
+                    message: getImageMessage?.caption,
+                    image_in: finalFilePath,
+                  } as InboxMessage
+                });
 
-            let sender = messages[0].key.remoteJid?.split("@")[0];
-            if(getPhone !== null) {
-              await prisma.inboxMessage.create({
-                data: {
-                  sender: sender,
-                  recipient: getPhone.number,
-                  message: getImageMessage?.caption,
-                  image_in: filePathName,
-                } as InboxMessage
-              });
+                _waSocket.sendMessage(messages[0].key.remoteJid!, {
+                  text: "Balasan laporan dalam proses pengiriman",
+                });
+                return;
+              }
             }
+
           }
         }
       }
