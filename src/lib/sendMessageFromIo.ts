@@ -7,7 +7,6 @@ import {
   delay,
   proto,
 } from "@whiskeysockets/baileys";
-import toBase64 from "./toBase64";
 
 const sendMessageFromIo = async ({
   phoneId,
@@ -78,18 +77,22 @@ const sendMessage = async (
       );
     } else {
       const imgExt = ["jpg", "jpeg", "png", "gif"];
-      if ((image !== undefined) && (typeof(image) == 'object')) {
+      if (isBase64(image)) {
+        // return res.status(200).json('ok file');
+        // let fileName = new Date().getTime() + '_' + phone.id + '.'+'png';
+        const binaryString = Buffer.from(image);
+        // const blob = new Blob([binaryString], {type: 'image/png' || 'image/png'});
 
-        const image64 = await toBase64(image.filepath);
-
+        // const file = new File([blob], fileName || 'image', {type: 'image/png' || 'image/png'});
+        // return res.status(200).json({'binary': binaryString});
         return await createdWaSock.sendMessage(
           `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
           {
-            image: Buffer.from(image64),
+            image: binaryString,
             caption: message,
           }
         );
-      } else if ((image !== undefined) && (typeof(image) == 'string')) {
+      } else if (image !== null && !isBase64(image)) {
         // return res.status(200).json('ok');
         return await createdWaSock.sendMessage(
           `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
