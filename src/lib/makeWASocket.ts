@@ -140,14 +140,17 @@ const makeWASocket = async (
         // let messageIn = messageByPhone = messageByWeb;
         // let messageIn = messageByPhone;
         // let messageIn = messageByWeb;
-        const messageType = Object.keys(messages[0].message!)[0];
+        let messageType = Object.keys(messages[0].message!)[0];
         let quotedMessage: any = null;
         if (messages[0].message?.extendedTextMessage?.contextInfo) {
           quotedMessage =
             messages[0].message?.extendedTextMessage?.contextInfo
               ?.quotedMessage;
+        } else if (messages[0].message?.imageMessage?.contextInfo?.quotedMessage) {
+          quotedMessage = 
+            messages[0].message?.imageMessage?.contextInfo?.quotedMessage;
         }
-
+        // console.log(quotedMessage);
         // const getPhone = async () => {
         //   const findPhone = await prisma.phone.findUnique({
         //     where: {
@@ -156,7 +159,7 @@ const makeWASocket = async (
         //   });
         //   return findPhone;
         // };
-
+        // return;
         const getPhone = await prisma.phone.findUnique({
           where: {
             id: phoneId
@@ -417,80 +420,115 @@ const makeWASocket = async (
         }
 
         if (quotedMessage) {
-          type quoteMessage = {
-            conversation: any;
-          };
+          // console.log(Object.keys(quotedMessage));
+          // return;
 
-          let clientMessage = messages[0].message!.extendedTextMessage!.text;
-          const hasLapWord = isLapWord(String(quotedMessage.conversation));
+          messageType = Object.keys(quotedMessage)[0];
+          let clientMessage : string = '';
+          let hasLapWord : boolean | undefined = false;
 
-          if (hasLapWord) {
-            const getPhone = async () => {
-              const findPhone = await prisma.phone.findUnique({
-                where: {
-                  id: phoneId,
+          if(messages[0].message!.extendedTextMessage!.text) {
+            clientMessage = messages[0].message!.extendedTextMessage!.text
+          } else if (messages[0].message!.imageMessage?.caption) {
+            clientMessage = messages[0].message!.imageMessage?.caption;
+          }
+
+          if(quotedMessage.conversation) {
+            hasLapWord = isLapWord(String(quotedMessage.conversation))
+          } else if(quotedMessage.caption) {
+            hasLapWord = isLapWord(String(quotedMessage.caption));
+          }
+
+          const insertQuote = async (
+            quote: string,
+            clientMessage: string,
+            sender_num: string,
+            recipient_num: string
+          ) => {
+            const result: {
+              success: boolean;
+              error: any;
+              data: any;
+            } = {
+              success: false,
+              error: undefined,
+              data: undefined,
+            };
+
+            try {
+              const response = await prisma.inboxMessage.create({
+                data: {
+                  message: clientMessage,
+                  quote: quote,
+                  sender: sender_num,
+                  recipient: recipient_num,
                 },
               });
-              return findPhone;
+              result.success = true;
+
+              if (result.success) {
+                result.data = response;
+                return result.data;
+              }
+            } catch (e) {
+              result.error = e;
+              return result.error;
+            }
+          };
+
+          if(messageType == 'imageMessage') {
+            return 'ok';
+            // console.log(messageType);
+            // return;
+            // if(hasLapWord) {
+            //   // return hasLapWord;
+            //   const senderNum = messages[0].key.remoteJid?.split('@')[0];
+            //   const recipient_num = (getPhone !== null) && getPhone.number;
+              
+            //   const objclientMessage = {
+            //     caption: clientMessage,
+            //     image: {
+            //       url: 'ok'
+            //     }
+            //   }
+            // }
+          } else {
+            type quoteMessage = {
+              conversation: any;
             };
-
-            const insertQuote = async (
-              quote: string,
-              clientMessage: string,
-              sender_num: string,
-              recipient_num: string
-            ) => {
-              const result: {
-                success: boolean;
-                error: any;
-                data: any;
-              } = {
-                success: false,
-                error: undefined,
-                data: undefined,
-              };
-
-              try {
-                const response = await prisma.inboxMessage.create({
-                  data: {
-                    message: clientMessage,
-                    quote: quote,
-                    sender: sender_num,
-                    recipient: recipient_num,
+  
+            if (hasLapWord) {
+              const getPhone = async () => {
+                const findPhone = await prisma.phone.findUnique({
+                  where: {
+                    id: phoneId,
                   },
                 });
-                result.success = true;
-
-                if (result.success) {
-                  result.data = response;
-                  return result.data;
-                }
-              } catch (e) {
-                result.error = e;
-                return result.error;
-              }
-            };
-
-            const participantNum = String(
-              messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
-                "@"
-              )[0]
-            );
-            const senderNum = messages[0].key.remoteJid?.split("@")[0];
-            insertQuote(
-              quotedMessage.conversation,
-              String(clientMessage),
-              String(senderNum),
-              String(participantNum)
-            );
-            _waSocket.sendMessage(messages[0].key.remoteJid!, {
-              text: "Balasan laporan dalam proses pengiriman",
-            });
-            return;
+                return findPhone;
+              };
+  
+              const participantNum = String(
+                messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
+                  "@"
+                )[0]
+              );
+              const senderNum = messages[0].key.remoteJid?.split("@")[0];
+              insertQuote(
+                quotedMessage.conversation,
+                String(clientMessage),
+                String(senderNum),
+                String(participantNum)
+              );
+              _waSocket.sendMessage(messages[0].key.remoteJid!, {
+                text: "Balasan laporan dalam proses pengiriman",
+              });
+              return;
+            }
           }
+          
         }
 
-        if(messageType == 'imageMessage') {
+        if((messageType == 'imageMessage') && (quotedMessage == null)) {
           const getImageMessage = messages[0].message?.imageMessage;
           const hasLapWord = isLapWord(String(getImageMessage?.caption));
           if(hasLapWord) {
@@ -498,11 +536,10 @@ const makeWASocket = async (
 
             const typeFile = getImageMessage!.mimetype?.split('/')[1];
             const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
-            // const filePathName = `public/downloads/${formatName}`;
-            // const filePathName = `./public/downloads/${formatName}`;
             const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
             let finalFilePath : string = '';
             const currentPath = __dirname;
+
             if(isDevelopment) {
               const previousePath = path.join(currentPath, '../../..');
               const destinationPath = path.join(previousePath,'the_public_html/public');

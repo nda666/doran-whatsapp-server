@@ -8,6 +8,7 @@ import makeWASocket from "./lib/makeWASocket";
 import sendMessageFromIo from "./lib/sendMessageFromIo";
 import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
 import { Server, createServer } from "http";
+import sendAttachmentMessageIo from "./lib/sendAttachmentMessageIo";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -100,6 +101,39 @@ nextApp.prepare().then(async () => {
         callback(sendResp);
       }
     );
+
+    socket.on(
+      "sendAttachment",
+      async (
+        {
+          phoneId,
+          userId,
+          tos,
+          phoneCountry,
+          caption,
+          image,
+        }: {
+          phoneId: string;
+          userId: string;
+          tos: string[];
+          phoneCountry: string;
+          caption: string;
+          image: any;
+        },
+        callback
+      ) => {
+        const sendResp = await sendAttachmentMessageIo({
+          userId,
+          phoneId,
+          tos,
+          phoneCountry,
+          caption,
+          image,
+        });
+        // Kirim balik ke client
+        callback(sendResp);
+      }
+    )
 
     if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
       const query = socket.handshake.query;
