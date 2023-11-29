@@ -545,10 +545,12 @@ const makeWASocket = async (
               const changeSeparatorPath = destinationPath.split('\\').join('/');
               finalFilePath = `${changeSeparatorPath}/${formatName}`;
             } else {
-              const previousePath = path.join(currentPath,'../..');
-              const destinationPath = path.join(previousePath,'public_html/public/download-wa-image');
+              // const previousePath = path.join(currentPath,'../..');
+              // console.log(previousePath)
+              // const destinationPath = path.join(previousePath,'public_html/public/download-wa-image');
               // const changeSeparatorPath = destinationPath.split('\\').join('/');
-              finalFilePath = `${destinationPath}/${formatName}`;
+              // finalFilePath = `${destinationPath}/${formatName}`;
+              finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
             }
             // console.log(finalFilePath);
 
@@ -566,6 +568,7 @@ const makeWASocket = async (
             if(finalFilePath !== '') {
               await writeFile(finalFilePath,buffer);
               let sender = messages[0].key.remoteJid?.split("@")[0];
+              finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/$${finalFilePath.split('/')[6]}`;
               if(getPhone !== null) {
                 await prisma.inboxMessage.create({
                   data: {
