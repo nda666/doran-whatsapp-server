@@ -539,7 +539,6 @@ const makeWASocket = async (
             const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
             let finalFilePath : string = '';
             const currentPath = __dirname;
-
             if(isDevelopment) {
               const previousePath = path.join(currentPath, '../../..');
               const destinationPath = path.join(previousePath,'the_public_html/public');
@@ -548,8 +547,8 @@ const makeWASocket = async (
             } else {
               const previousePath = path.join(currentPath,'../..');
               const destinationPath = path.join(previousePath,'public_html/public/download-wa-image');
-              const changeSeparatorPath = destinationPath.split('\\').join('/');
-              finalFilePath = `${changeSeparatorPath}/${formatName}`;
+              // const changeSeparatorPath = destinationPath.split('\\').join('/');
+              finalFilePath = `${destinationPath}/${formatName}`;
             }
             // console.log(finalFilePath);
 
