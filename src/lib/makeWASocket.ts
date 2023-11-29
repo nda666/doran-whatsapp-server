@@ -568,7 +568,7 @@ const makeWASocket = async (
             if(finalFilePath !== '') {
               await writeFile(finalFilePath,buffer);
               let sender = messages[0].key.remoteJid?.split("@")[0];
-              finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/$${finalFilePath.split('/')[6]}`;
+              finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/${finalFilePath.split('/')[6]}`;
               if(getPhone !== null) {
                 await prisma.inboxMessage.create({
                   data: {
