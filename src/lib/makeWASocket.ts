@@ -420,14 +420,11 @@ const makeWASocket = async (
         }
 
         if (quotedMessage) {
-          // console.log(Object.keys(quotedMessage));
-          // return;
-
           messageType = Object.keys(quotedMessage)[0];
           let clientMessage : string = '';
           let hasLapWord : boolean | undefined = false;
 
-          if(messages[0].message!.extendedTextMessage!.text) {
+          if(messages[0].message!.extendedTextMessage?.text) {
             clientMessage = messages[0].message!.extendedTextMessage!.text
           } else if (messages[0].message!.imageMessage?.caption) {
             clientMessage = messages[0].message!.imageMessage?.caption;
@@ -437,13 +434,23 @@ const makeWASocket = async (
             hasLapWord = isLapWord(String(quotedMessage.conversation))
           } else if(quotedMessage.caption) {
             hasLapWord = isLapWord(String(quotedMessage.caption));
+          } else {
+            hasLapWord = isLapWord(String(quotedMessage.extendedTextMessage.text));
+          }
+
+          type ImageReply = {
+            image: {
+              url: string;
+            };
+            caption: string;
           }
 
           const insertQuote = async (
             quote: string,
-            clientMessage: string,
+            clientMessage: string | ImageReply,
             sender_num: string,
-            recipient_num: string
+            recipient_num: string,
+            image_in?: string
           ) => {
             const result: {
               success: boolean;
@@ -458,10 +465,11 @@ const makeWASocket = async (
             try {
               const response = await prisma.inboxMessage.create({
                 data: {
-                  message: clientMessage,
+                  message: (typeof(clientMessage) == 'string') ? clientMessage : JSON.stringify(clientMessage),
                   quote: quote,
                   sender: sender_num,
                   recipient: recipient_num,
+                  image_in: image_in
                 },
               });
               result.success = true;
@@ -496,17 +504,87 @@ const makeWASocket = async (
             type quoteMessage = {
               conversation: any;
             };
-  
+
             if (hasLapWord) {
-              const getPhone = async () => {
-                const findPhone = await prisma.phone.findUnique({
-                  where: {
-                    id: phoneId,
-                  },
-                });
-                return findPhone;
-              };
-  
+
+              const isImageMessage = Object.keys(messages[0].message!)[0];
+
+              if(isImageMessage == 'imageMessage') {
+                // return 'ok';
+                const participantNum = getPhone && String(getPhone.number);
+                const senderNum = messages[0].key.remoteJid!.split('@')[0];
+                const getImageMessage = messages[0].message?.imageMessage;
+                let urlWaImg = getImageMessage?.url;
+                const conditionRegexUrl = /\/([^\/]+)\?/;
+                const match = urlWaImg?.match(conditionRegexUrl);
+                const extractUrl = match ? match[1] : null;
+
+                let imgIdUrl : string = ''
+                if(extractUrl) {
+                  imgIdUrl = extractUrl
+                  .substring(12,extractUrl.length)
+                  .replace(/-/g,"");
+                }
+
+                const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
+                const typeFile = getImageMessage!.mimetype?.split('/')[1];
+                const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
+
+                const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
+                let finalFilePath : string = '';
+                const currentPath = __dirname;
+
+                if(isDevelopment) {
+                  const previousePath = path.join(currentPath, '../../..');
+                  const destinationPath = path.join(previousePath,'the_public_html/public');
+                  const changeSeparatorPath = destinationPath.split('\\').join('/');
+                  finalFilePath = `${changeSeparatorPath}/${formatName}`;
+                } else {
+                  finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
+                }
+
+                const buffer = await downloadMediaMessage(
+                  messages[0],
+                  'buffer',
+                  {},
+                  {
+                    logger: waSocketLogOption,
+                    reuploadRequest: _waSocket.updateMediaMessage
+                  }
+                );
+
+                if(buffer) {
+                  await writeFile(finalFilePath,buffer);
+                  let senderNum = messages[0].key.remoteJid?.split("@")[0];
+                  finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/${finalFilePath.split('/')[6]}`;
+
+                  const objClientMessage = {
+                    image: {
+                      url: finalFilePath
+                    },
+                    caption: clientMessage
+                  }
+
+                  const recipient = getPhone && getPhone.number;
+                  
+                  insertQuote(
+                    String(messages[0].message?.imageMessage?.contextInfo?.quotedMessage?.conversation),
+                    // objClientMessage,
+                    String(clientMessage),
+                    String(senderNum),
+                    String(recipient),
+                    String(finalFilePath)
+                  );
+                  
+
+                  _waSocket.sendMessage(messages[0].key.remoteJid!, {
+                    text: "Balasan laporan dalam proses pengiriman",
+                  });
+                  return;
+                }
+              
+              }
+
               const participantNum = String(
                 messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
                   "@"
@@ -534,25 +612,35 @@ const makeWASocket = async (
           if(hasLapWord) {
             const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
 
+            let urlWaImg = getImageMessage?.url;
+            const conditionRegexUrl = /\/([^\/]+)\?/;
+            const match = urlWaImg?.match(conditionRegexUrl);
+            const extractUrl = match ? match[1] : null;
+
+            let imgIdUrl : string = ''
+            if(extractUrl) {
+              imgIdUrl = extractUrl
+              .substring(12,extractUrl.length)
+              .replace(/-/g,"");
+            }
+
             const typeFile = getImageMessage!.mimetype?.split('/')[1];
-            const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
+            const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
+            // const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
+            // console.log(formatName);
+            // return;
             const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
             let finalFilePath : string = '';
             const currentPath = __dirname;
+
             if(isDevelopment) {
               const previousePath = path.join(currentPath, '../../..');
               const destinationPath = path.join(previousePath,'the_public_html/public');
               const changeSeparatorPath = destinationPath.split('\\').join('/');
               finalFilePath = `${changeSeparatorPath}/${formatName}`;
             } else {
-              // const previousePath = path.join(currentPath,'../..');
-              // console.log(previousePath)
-              // const destinationPath = path.join(previousePath,'public_html/public/download-wa-image');
-              // const changeSeparatorPath = destinationPath.split('\\').join('/');
-              // finalFilePath = `${destinationPath}/${formatName}`;
               finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
             }
-            // console.log(finalFilePath);
 
             const buffer = await downloadMediaMessage(
               messages[0],
@@ -564,7 +652,6 @@ const makeWASocket = async (
               }
             );
 
-            // await writeFile(`./public/downloads/${formatName}`,buffer);
             if(finalFilePath !== '') {
               await writeFile(finalFilePath,buffer);
               let sender = messages[0].key.remoteJid?.split("@")[0];
