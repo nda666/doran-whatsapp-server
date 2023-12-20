@@ -253,39 +253,39 @@ const makeWASocket = async (
             },
           });
 
-          const hasLapWord = isLapWord(String(messageIn));
-          if (hasLapWord) {
-            const insertInbox = async (data: InboxMessage) => {
-              if (Object.keys(data)) {
-                const response = await prisma.inboxMessage.create({
-                  data: {
-                    message: data.message,
-                    recipient: data.recipient,
-                    sender: data.sender,
-                  },
-                });
-                if (response) {
-                  return response;
-                }
-              }
-            };
+          // const hasLapWord = isLapWord(String(messageIn));
+          // if (hasLapWord) {
+          //   const insertInbox = async (data: InboxMessage) => {
+          //     if (Object.keys(data)) {
+          //       const response = await prisma.inboxMessage.create({
+          //         data: {
+          //           message: data.message,
+          //           recipient: data.recipient,
+          //           sender: data.sender,
+          //         },
+          //       });
+          //       if (response) {
+          //         return response;
+          //       }
+          //     }
+          //   };
 
-            const dataInbox: InboxMessage[] = [];
+          //   const dataInbox: InboxMessage[] = [];
 
-            if(getPhone !== null) {
-              dataInbox.push({
-                message: messageIn,
-                recipient: getPhone.number,
-                sender: messages[0].key.remoteJid!.split("@")[0]!,
-              } as InboxMessage)
+          //   if(getPhone !== null) {
+          //     dataInbox.push({
+          //       message: messageIn,
+          //       recipient: getPhone.number,
+          //       sender: messages[0].key.remoteJid!.split("@")[0]!,
+          //     } as InboxMessage)
 
-              insertInbox(dataInbox[0]);
-              _waSocket.sendMessage(messages[0].key.remoteJid!, {
-                text: "Balasan laporan dalam proses pengiriman",
-              });
-              return;
-            }
-          }
+          //     insertInbox(dataInbox[0]);
+          //     _waSocket.sendMessage(messages[0].key.remoteJid!, {
+          //       text: "Balasan laporan dalam proses pengiriman",
+          //     });
+          //     return;
+          //   }
+          // }
 
           phoneReplies
             .then(async (result: AutoReply[]) => {
