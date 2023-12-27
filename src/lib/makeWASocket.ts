@@ -611,7 +611,7 @@ const makeWASocket = async (
               const replies_list = await phoneReplies;
               // console.log(replies_list);
               let client_message = messages[0].message?.extendedTextMessage?.text;
-              let conversation_quote = quotedMessage.conversation.toLowerCase();
+              let conversation_quote = quotedMessage.conversation;
               const participantNum = String(
                 messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
                     "@"
