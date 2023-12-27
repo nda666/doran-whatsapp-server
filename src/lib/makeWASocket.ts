@@ -420,6 +420,12 @@ const makeWASocket = async (
         }
 
         if (quotedMessage) {
+          const phoneReplies = prisma.autoReply.findMany({
+            where: {
+              phoneId: phoneId,
+            },
+          });
+
           messageType = Object.keys(quotedMessage)[0];
           let clientMessage : string = '';
           let hasLapWord : boolean | undefined = false;
@@ -601,6 +607,58 @@ const makeWASocket = async (
                 text: "Balasan laporan dalam proses pengiriman",
               });
               return;
+            } else {
+              const replies_list = await phoneReplies;
+              // console.log(replies_list);
+              let client_message = messages[0].message?.extendedTextMessage?.text;
+              let conversation_quote = quotedMessage.conversation.toLowerCase();
+              const participantNum = String(
+                messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
+                    "@"
+                  )[0]
+              );
+
+              const senderNum = messages[0].key.remoteJid?.split("@")[0];
+              
+              replies_list.forEach((val,index) => {
+                const replyText = JSON.parse(JSON.stringify(val.reply));
+                if(val.type == 'text') {
+                  if(val.type_keyword == 'Equal') {
+                    if(conversation_quote.toLowerCase() == val.keyword.toLowerCase) {
+                        if(val.is_save_inbox) {
+                          insertQuote(
+                            conversation_quote,
+                            String(client_message),
+                            String(senderNum),
+                            String(participantNum)
+                          );
+                        }
+                        _waSocket.sendMessage(
+                          messages[0].key.remoteJid!,
+                          replyText
+                        );
+                        return;
+                    }
+                  }
+                  else if(val.type_keyword == 'Contain') {
+                    if(conversation_quote.toLowerCase().includes(val.keyword.toLowerCase())) {
+                      if(val.is_save_inbox) {
+                        insertQuote(
+                          conversation_quote,
+                          String(client_message),
+                          String(senderNum),
+                          String(participantNum)
+                        );
+                      }
+                      _waSocket.sendMessage(
+                        messages[0].key.remoteJid!,
+                        replyText
+                      );
+                      return;
+                    }
+                  }
+                }
+              });
             }
           }
           
