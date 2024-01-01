@@ -166,7 +166,7 @@ const makeWASocket = async (
           }
         });
 
-        if (messageIn) {
+        if (messageIn && quotedMessage == null) {
           //
           const checkIdGroupFormat = /^[0-9]+@g\.us$/;
           const messageType = Object.keys(messages[0].message!)[0];
@@ -621,7 +621,7 @@ const makeWASocket = async (
 
               const senderNum = messages[0].key.remoteJid?.split("@")[0];
               
-              replies_list.forEach((val,index) => {
+              for(const val of replies_list) {
                 const replyText = JSON.parse(JSON.stringify(val.reply));
                 if(val.type == 'text') {
                   if(val.type_keyword == 'Equal') {
@@ -659,7 +659,7 @@ const makeWASocket = async (
                     }
                   }
                 }
-              });
+              };
           }
           
         }
