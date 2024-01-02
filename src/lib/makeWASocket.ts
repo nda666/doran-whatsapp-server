@@ -150,6 +150,12 @@ const makeWASocket = async (
           quotedMessage = 
             messages[0].message?.imageMessage?.contextInfo?.quotedMessage;
         }
+
+        // if(quotedMessage) {
+        //   console.log(Object.keys(messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage!)[0]);
+        //   console.log('ok');
+        //   return 'ok';
+        // }
         // console.log(quotedMessage);
         // const getPhone = async () => {
         //   const findPhone = await prisma.phone.findUnique({
@@ -420,6 +426,7 @@ const makeWASocket = async (
         }
 
         if (quotedMessage) {
+          // console.log('quote cek layer 1');1
           const phoneReplies = prisma.autoReply.findMany({
             where: {
               phoneId: phoneId,
@@ -436,14 +443,14 @@ const makeWASocket = async (
             clientMessage = messages[0].message!.imageMessage?.caption;
           }
 
-          if(quotedMessage.conversation) {
-            hasLapWord = isLapWord(String(quotedMessage.conversation))
-          } else if(quotedMessage.caption) {
-            hasLapWord = isLapWord(String(quotedMessage.caption));
-          } else {
-            hasLapWord = isLapWord(String(quotedMessage.extendedTextMessage.text));
-          }
-
+          // if(quotedMessage.conversation) {
+          //   hasLapWord = isLapWord(String(quotedMessage.conversation))
+          // } else if(quotedMessage.caption) {
+          //   hasLapWord = isLapWord(String(quotedMessage.caption));
+          // } else {
+          //   hasLapWord = isLapWord(String(quotedMessage.extendedTextMessage.text));
+          // }
+          // console.log(messageType);
           type ImageReply = {
             image: {
               url: string;
@@ -491,7 +498,93 @@ const makeWASocket = async (
           };
 
           if(messageType == 'imageMessage') {
-            return 'ok';
+            // const getImageMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const getImageMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+
+            const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD");
+            let urlWaImg = getImageMessage?.url;
+            const conditionRegexUrl = /\/([^\/]+)\?/;
+            const match = urlWaImg?.match(conditionRegexUrl);
+            const extractUrl = match ? match[1] : null;
+
+            let imgIdUrl : string = ''
+            if(extractUrl) {
+              imgIdUrl = extractUrl
+              .substring(12,extractUrl.length)
+              .replace(/-/g,"");
+            }
+
+            const typeFile = getImageMessage!.mimetype?.split('/')[1];
+            const formatName = "IMG-WA-"+ imgIdUrl + "." + typeFile;
+
+            const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
+            let finalFilePath : string = '';
+            const currentPath = __dirname;
+
+            if(isDevelopment) {
+              const previousePath = path.join(currentPath, '../../..');
+              const destinationPath = path.join(previousePath,'the_public_html/public');
+              const changeSeparatorPath = destinationPath.split('\\').join('/');
+              finalFilePath = `${changeSeparatorPath}/${formatName}`;
+            } else {
+              finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
+            }
+
+            let client_message = messages[0].message?.extendedTextMessage?.text;
+            let conversation_quote = getImageMessage?.caption;
+            const senderNum = messages[0].key.remoteJid?.split('@')[0];
+            const participantNum = getPhone && getPhone.number;
+
+            const replies_list = await phoneReplies;
+
+            for (const val of replies_list) {
+              const replyText = JSON.parse(JSON.stringify(val.reply));
+              if(val.type == 'text') {
+                if(val.type_keyword == 'Equal') {
+                  if(conversation_quote?.toLowerCase() == val.keyword.toLowerCase()) {
+                    // console.log('contain');
+                    // return;
+                    if(val.is_save_inbox) {
+                      insertQuote(
+                        conversation_quote,
+                        String(client_message),
+                        String(senderNum),
+                        String(participantNum),
+                        String(finalFilePath)
+                      );
+                    }
+                    _waSocket.sendMessage(
+                      messages[0].key.remoteJid!,
+                      replyText
+                    );
+                    return;
+                  }
+                }
+                else if(val.type_keyword == 'Contain') {
+                  if(conversation_quote?.toLowerCase().includes(val.keyword.toLowerCase())) {
+                    // console.log('include');
+                    // return;
+                    if(val.is_save_inbox) {
+                      insertQuote(
+                        conversation_quote,
+                        String(client_message),
+                        String(senderNum),
+                        String(participantNum),
+                        String(finalFilePath)
+                      );
+                    }
+                    _waSocket.sendMessage(
+                      messages[0].key.remoteJid!,
+                      replyText
+                    );
+                    return;
+                  }
+                }
+              }
+            }
+
+            
+            // return 'ok';
             // console.log(messageType);
             // return;
             // if(hasLapWord) {
@@ -683,10 +776,8 @@ const makeWASocket = async (
             }
 
             const typeFile = getImageMessage!.mimetype?.split('/')[1];
-            const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
-            // const formatName = "IMG-"+ messageTimestamp + "-WA"+ (Math.floor(Math.random() * 9000) + 1000) + "." + typeFile;
-            // console.log(formatName);
-            // return;
+            // const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
+            const formatName = "IMG-WA-"+ imgIdUrl + "." + typeFile;
             const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
             let finalFilePath : string = '';
             const currentPath = __dirname;
