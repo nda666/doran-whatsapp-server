@@ -118,12 +118,6 @@ const makeWASocket = async (
         }
       }
 
-      // const toBase64 = (file:any) => new Promise((resolve, reject) => {
-      //   const reader = new FileReader();
-      //   reader.readAsDataURL(file);
-      //   reader.onload = () => resolve(reader.result);
-      //   reader.onerror = reject;
-      // });
       if (!messages[0].key.fromMe) {
         let messageByPhone = messages[0].message!.conversation;
         let messageByWeb = messages[0].message!.extendedTextMessage?.text;
@@ -137,9 +131,7 @@ const makeWASocket = async (
         if (messageByWeb !== undefined) {
           messageIn = messageByWeb?.toString();
         }
-        // let messageIn = messageByPhone = messageByWeb;
-        // let messageIn = messageByPhone;
-        // let messageIn = messageByWeb;
+
         let messageType = Object.keys(messages[0].message!)[0];
         let quotedMessage: any = null;
         if (messages[0].message?.extendedTextMessage?.contextInfo) {
@@ -582,23 +574,6 @@ const makeWASocket = async (
                 }
               }
             }
-
-            
-            // return 'ok';
-            // console.log(messageType);
-            // return;
-            // if(hasLapWord) {
-            //   // return hasLapWord;
-            //   const senderNum = messages[0].key.remoteJid?.split('@')[0];
-            //   const recipient_num = (getPhone !== null) && getPhone.number;
-              
-            //   const objclientMessage = {
-            //     caption: clientMessage,
-            //     image: {
-            //       url: 'ok'
-            //     }
-            //   }
-            // }
           } else {
             type quoteMessage = {
               conversation: any;
@@ -758,10 +733,14 @@ const makeWASocket = async (
         }
 
         if((messageType == 'imageMessage') && (quotedMessage == null)) {
+          const phoneReplies = prisma.autoReply.findMany({
+            where: {
+              phoneId: phoneId,
+            }
+          });
           const getImageMessage = messages[0].message?.imageMessage;
           const hasLapWord = isLapWord(String(getImageMessage?.caption));
-          if(hasLapWord) {
-            const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
+          const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
 
             let urlWaImg = getImageMessage?.url;
             const conditionRegexUrl = /\/([^\/]+)\?/;
@@ -804,25 +783,50 @@ const makeWASocket = async (
             if(finalFilePath !== '') {
               await writeFile(finalFilePath,buffer);
               let sender = messages[0].key.remoteJid?.split("@")[0];
+              let caption = getImageMessage?.caption;
               finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/${finalFilePath.split('/')[6]}`;
               if(getPhone !== null) {
-                await prisma.inboxMessage.create({
-                  data: {
-                    sender: sender,
-                    recipient: getPhone.number,
-                    message: getImageMessage?.caption,
-                    image_in: finalFilePath,
-                  } as InboxMessage
-                });
+                const replies = await phoneReplies;
+                for(const reply of replies) {
+                  const replyText = JSON.parse(JSON.stringify(reply.reply));
+                  if(reply.type == 'text') {
+                    if(reply.type_keyword == 'Equal') {
+                      // console.log('ok');
+                      if(caption?.toLowerCase() == reply.keyword.toLowerCase()) {
+                        if(reply.is_save_inbox) {
+                          await prisma.inboxMessage.create({
+                            data: {
+                              sender: sender,
+                              recipient: getPhone.number,
+                              message: getImageMessage?.caption,
+                              image_in: finalFilePath,
+                            } as InboxMessage
+                          });
+                        }
+                        _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+                      }
+                    }
+                    else if(reply.type_keyword == 'Contain') {
 
-                _waSocket.sendMessage(messages[0].key.remoteJid!, {
-                  text: "Balasan laporan dalam proses pengiriman",
-                });
-                return;
+                      if(caption?.toLowerCase().includes(reply.keyword.toLowerCase())) {
+                        if(reply.is_save_inbox) {
+                          await prisma.inboxMessage.create({
+                            data: {
+                              sender: sender,
+                              recipient: getPhone.number,
+                              message: getImageMessage?.caption,
+                              image_in: finalFilePath,
+                            } as InboxMessage
+                          });
+                        }
+                        _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+                      }
+                    }
+                  }
+                  
+                }
               }
             }
-
-          }
         }
       }
     });
