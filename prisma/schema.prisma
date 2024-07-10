@@ -100,6 +100,7 @@ enum ReplyType {
   button
   template
   list
+  webhook
 }
 
 enum KeywordType {
@@ -118,39 +119,74 @@ enum AutoReplyStatus {
   inactive
 }
 
+enum TypeRequest {
+  GET
+  POST
+}
+
+enum ParamType {
+  Sender
+  Recipient
+  Message
+  Custom
+}
+
 model AutoReply {
-  id            Int             @id @default(autoincrement())
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId        String
-  phone         Phone           @relation(fields: [phoneId], references: [id], onDelete: Cascade)
-  phoneId       String
-  keyword       String
-  type_keyword  KeywordType     @default(value: Equal)
-  type          ReplyType       @default(value: text) 
-  reply         Json?
-  reply_status  AutoReplyStatus @default(value: active)
-  reply_when    ReplyWhen       @default(value: All)
-  is_quoted     Boolean         @default(value: false)
-  is_save_inbox Boolean         @default(value: false)
-  createdAt     DateTime        @default(now()) @map(name: "created_at")
-  updatedAt     DateTime        @updatedAt @map(name: "updated_at")
+  id              Int             @id @default(autoincrement())
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  phone           Phone           @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+  phoneId         String
+  keyword         String
+  type_keyword    KeywordType     @default(value: Equal)
+  type            ReplyType       @default(value: text) 
+  reply           Json?
+  reply_status    AutoReplyStatus @default(value: active)
+  reply_when      ReplyWhen       @default(value: All)
+  is_quoted       Boolean         @default(value: false)
+  is_save_inbox   Boolean         @default(value: false)
+  url             String?         @db.Text
+  type_request    TypeRequest?    
+  param_1         String?
+  isi_param_1     ParamType?      
+  param_2         String?
+  isi_param_2     ParamType?      
+  param_3         String?
+  isi_param_3     ParamType? 
+  custom_value_1  String?     
+  custom_value_2  String?     
+  custom_value_3  String?     
+  createdAt       DateTime        @default(now()) @map(name: "created_at")
+  updatedAt       DateTime        @updatedAt @map(name: "updated_at")
 
   @@map(name: "auto_replies")
 }
 
 model InboxMessage {
-  id          Int       @id @default(autoincrement())
-  message     String?   @db.Text
-  image_in    String?
-  quote       String?   @db.Text
-  status      Int?      @db.TinyInt @map(name: "status")
-  sender      String
-  recipient   String
-  sentAt      DateTime  @default(now()) @map(name: "sentAt")
-  receivedAt  DateTime  @default(now()) @map(name: "receivedAt")
-  isSent      Boolean   @default(value: false) @map("is_sent")
-  isRead      Boolean   @default(value: true) @map("is_read")
-  keterangan  String?   @db.VarChar(255) @map("keterangan")
+  id              Int           @id @default(autoincrement())
+  message         String?       @db.Text
+  image_in        String?
+  quote           String?       @db.Text
+  status          Int?          @db.TinyInt @map(name: "status")
+  sender          String
+  recipient       String
+  sentAt          DateTime      @default(now()) @map(name: "sentAt")
+  receivedAt      DateTime      @default(now()) @map(name: "receivedAt")
+  isSent          Boolean       @default(value: false) @map("is_sent")
+  isRead          Boolean       @default(value: true) @map("is_read")
+  url             String?       @db.Text
+  type_request    TypeRequest?
+  param_1         String?       @db.Text
+  isi_param_1     ParamType?    @map(name: "isi_param_1")
+  param_2         String?       @db.Text
+  isi_param_2     ParamType?    @map(name: "isi_param_2")
+  param_3         String?       @db.Text
+  isi_param_3     ParamType?    @map(name: "isi_param_3")
+  custom_value_1  String?       
+  custom_value_2  String?
+  custom_value_3  String?
+  respons         String?       @db.Text
+  keterangan      String?       @db.VarChar(255) @map("keterangan")
 
   @@map(name: "inbox_messages")
 }

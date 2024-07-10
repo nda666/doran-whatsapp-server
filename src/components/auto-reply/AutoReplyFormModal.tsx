@@ -19,6 +19,7 @@ import {
   Select,
   Checkbox,
   Space,
+  Typography
 } from "antd";
 import {
   UploadOutlined,
@@ -57,6 +58,14 @@ export type AutoReplyFormData = {
   reply: string;
   image?: any;
   image_type: string;
+  url?: string;
+  type_request?: string;
+  param_1?: string;
+  isi_param_1?: string;
+  param_2?: string;
+  isi_param_2?: string;
+  param_3?: string;
+  isi_param_3?: string;
   is_save_inbox?: boolean;
   buttons: ButtonMessage[];
 };
@@ -71,6 +80,8 @@ interface CollectionCreateFormProps {
   phoneId?: Phone | undefined;
   editReply?: AutoReply | undefined;
 }
+
+const {Text} = Typography;
 
 const AutoReplyFormModal = forwardRef<
   AutoReplyFormModalRef,
@@ -98,6 +109,9 @@ const AutoReplyFormModal = forwardRef<
     const [typeMessage, setTypeMessage] = useState<String | undefined>(
       undefined
     );
+    const [typeParam1, setTypeParam1] = useState<String | undefined>(undefined);
+    const [typeParam2, setTypeParam2] = useState<String | undefined>(undefined);
+    const [typeParam3, setTypeParam3] = useState<String | undefined>(undefined);
     const [isSaveInbox, setIsSaveInbox] = useState(false);
     const [numIndex, setNumIndex] = useState(0);
     // const [buttonList, setButtonList] = useState([{name: '', value: ''}]);
@@ -143,6 +157,14 @@ const AutoReplyFormModal = forwardRef<
         setTypeMessage(editReply.type);
         form.setFieldValue("type_message", editReply.type);
         setIsSaveInbox(editReply.is_save_inbox);
+        form.setFieldValue("url",editReply.url);
+        form.setFieldValue("type_request",editReply.type_request);
+        form.setFieldValue("param_1",editReply.param_1);
+        form.setFieldValue("isi_param_1",editReply.isi_param_1);
+        form.setFieldValue("param_2",editReply.param_2);
+        form.setFieldValue("isi_param_2",editReply.isi_param_2);
+        form.setFieldValue("param_3",editReply.param_3);
+        form.setFieldValue("isi_param_3",editReply.isi_param_3);
       }
 
       return () => {
@@ -410,11 +432,16 @@ const AutoReplyFormModal = forwardRef<
                   value: "button",
                   label: "Button Message",
                 },
+                {
+                  value: "webhook",
+                  label: "Webhook",
+                }
               ]}
             />
           </Form.Item>
 
           {typeMessage == "text" && (
+            <>
             <Form.Item
               name={"reply"}
               label={t("text_message")}
@@ -429,6 +456,40 @@ const AutoReplyFormModal = forwardRef<
             >
               <TextArea rows={10} />
             </Form.Item>
+            
+            {/* <Space>
+              <Text>Parameter</Text>
+            </Space>
+            <Flex gap={"2em"} justify="flex-start" align="center">
+              <Form.Item
+              name={"param"}
+              >
+                <Select
+                placeholder="Choose Parameter"
+                options={[
+                  {
+                    value: "sender",
+                    label: "Sender"
+                  },
+                  {
+                    value: "message",
+                    label: "Message"
+                  },
+                  {
+                    value: "manual_input",
+                    label: "Manual Input"
+                  },
+                ]}
+                />
+              </Form.Item>
+              <Form.Item
+              name={"value_param"}
+              style={{width: "100%"}}
+              >
+                <Input style={{width: "100%"}}/>
+              </Form.Item>
+            </Flex> */}
+            </>
           )}
           {typeMessage == "image" && (
             <>
@@ -624,6 +685,170 @@ const AutoReplyFormModal = forwardRef<
                     </Form.Item>
                   );
                 })}
+            </>
+          )}
+          {typeMessage == "webhook" && (
+            <>
+              <Form.Item
+              name="url"
+              label="URL"
+              rules={[
+                {
+                  required: true,
+                  message: t("validation.required",{
+                    field: t("url"),
+                  }).toString(),
+                }
+              ]}
+              >
+                <Input/>
+              </Form.Item>
+              <Form.Item
+              label="Tipe Request"
+              name={"type_request"}
+              rules={[
+                {
+                  required: true,
+                  message: t("validation.required",{
+                    field: t("type_request"),
+                  }).toString(),
+                }
+              ]}
+              >
+                <Select
+                placeholder="Choose Request Type"
+                options={[
+                  {value: "GET", label: "GET"},
+                  {value: "POST", label: "POST"},
+                ]}
+                />
+              </Form.Item>
+              <Form.Item
+              label={"Param #1"}
+              name={"param_1"}
+              >
+                <Input style={{width: "100%"}}/>
+              </Form.Item>
+              <Form.Item
+              label={"Isi Param #1"}
+              name={"isi_param_1"}
+              >
+                <Select
+                placeholder="Choose Type Param"
+                onChange={(value:string) => {
+                  setTypeParam1(value);
+                }}
+                options={[
+                  {
+                    value: "Sender",
+                    label: "Sender"
+                  },
+                  {
+                    value: "Recipient",
+                    label: "Recipient"
+                  },
+                  {
+                    value: "Message",
+                    label: "Message"
+                  },
+                  {
+                    value: "Custom",
+                    label: "Manual Input"
+                  },
+                ]}
+                />
+              </Form.Item>
+              {typeParam1 == 'Custom' && (
+                <Form.Item
+                name={"custom_input"}
+                >
+                  <Input style={{width: "100%"}} placeholder="Input value"/>
+                </Form.Item>
+              )}
+              <Form.Item
+              label={"Param #2"}
+              name={"param_2"}
+              >
+                <Input style={{width: "100%"}}/>
+              </Form.Item>
+              <Form.Item
+              label={"Isi Param #2"}
+              name={"isi_param_2"}
+              >
+                <Select
+                placeholder="Choose Type Param"
+                onChange={(value: string) => {
+                  setTypeParam2(value);
+                }}
+                options={[
+                  {
+                    value: "Sender",
+                    label: "Sender"
+                  },
+                  {
+                    value: "Recipient",
+                    label: "Recipient"
+                  },
+                  {
+                    value: "Message",
+                    label: "Message"
+                  },
+                  {
+                    value: "Custom",
+                    label: "Manual Input"
+                  },
+                ]}
+                />
+              </Form.Item>
+              {(typeParam2 == "Custom") && (
+                <Form.Item
+                name="custom_input"
+                >
+                  <Input style={{width: "100%"}} placeholder="Input value"/>
+                </Form.Item>
+              )}
+              <Form.Item
+              label={"Param #3"}
+              name={"param_3"}
+              >
+                <Input style={{width: "100%"}}/>
+              </Form.Item>
+              <Form.Item
+              label={"Isi Param #3"}
+              name={"isi_param_3"}
+              >
+                <Select
+                placeholder="Choose Type Param"
+                onChange={(value:string) => {
+                  setTypeParam3(value);
+                }}
+                options={[
+                  {
+                    value: "Sender",
+                    label: "Sender"
+                  },
+                  {
+                    value: "Recipient",
+                    label: "Recipient"
+                  },
+                  {
+                    value: "Message",
+                    label: "Message"
+                  },
+                  {
+                    value: "Custom",
+                    label: "Manual Input"
+                  },
+                ]}
+                />
+              </Form.Item>
+              {(typeParam3 == "Custom") && (
+                <Form.Item
+                name="custom_input"
+                >
+                  <Input style={{width: "100%"}} placeholder="Input value"/>
+                </Form.Item>
+              )}
             </>
           )}
           {/* <Upload 

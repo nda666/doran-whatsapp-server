@@ -168,6 +168,14 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
         keyword: req.body.keyword,
         is_save_inbox: req.body.is_save_inbox,
         reply: replies && JSON.parse(replies),
+        url: req.body.url,
+        type_request: req.body.type_request,
+        param_1: (req.body.param_1 != undefined) ? req.body.param_1 : null,
+        isi_param_1: (req.body.isi_param_1 != undefined) ? req.body.isi_param_1 : null,
+        param_2: (req.body.param_2 != undefined) ? req.body.param_2 : null,
+        isi_param_2: (req.body.isi_param_2 != undefined) ? req.body.isi_param_2 : null,
+        param_3: (req.body.param_3 != undefined) ? req.body.param_3 : null,
+        isi_param_3: (req.body.isi_param_3 != undefined) ? req.body.isi_param_3 : null,
       },
     });
   }
