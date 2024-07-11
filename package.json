@@ -10,7 +10,7 @@
     "build": "next build && tsc --project tsconfig.server.json",
     "build:next": "next build",
     "start": "NODE_ENV=production node dist/src/server.js",
-    "start:next": "next start",
+    "start:next": "next --max-old-space-size=4096 start",
     "lint": "next lint",
     "prisma": "prisma",
     "migration:create": "prisma migrate dev --create-only",
