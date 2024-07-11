@@ -30,9 +30,6 @@ import {
   useState,
 } from "react";
 
-const { publicRuntimeConfig } = getConfig();
-const { NODE_ENV } = publicRuntimeConfig;
-
 const PhonePage = () => {
   const [state, setState] = useState<{
     openForm: boolean;
