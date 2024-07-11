@@ -418,8 +418,8 @@ const makeWASocket = async (
                     } as InboxMessage;
 
                     if(item.url) {
-                      let objParamProp = [];
-                      let objParamValue = [];
+                      let objParamProp: string[] = [];
+                      let objParamValue: string[] = [];
                       let params: {[key:string] : string} = {};
 
                       data.url = item.url;
