@@ -145,7 +145,7 @@ export default function useAutoReplyData(
       }
     }
 
-    if (data.type_message == "text" || data.type_message == "button")
+    if (data.type_message == "text" || data.type_message == "button" || data.type_message == "webhook")
       uploadStatus = true;
     try {
       if (uploadStatus) {

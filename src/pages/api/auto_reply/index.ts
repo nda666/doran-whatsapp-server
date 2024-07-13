@@ -156,6 +156,17 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
         reply: replies && JSON.parse(replies),
         type: req.body.type_message,
         is_save_inbox: req.body.is_save_inbox,
+        url: req.body.url,
+        type_request: req.body.type_request,
+        param_1: (req.body.param_1 != undefined) ? req.body.param_1 : null,
+        isi_param_1: (req.body.isi_param_1 != undefined) ? req.body.isi_param_1 : null,
+        param_2: (req.body.param_2 != undefined) ? req.body.param_2 : null,
+        isi_param_2: (req.body.isi_param_2 != undefined) ? req.body.isi_param_2 : null,
+        param_3: (req.body.param_3 != undefined) ? req.body.param_3 : null,
+        isi_param_3: (req.body.isi_param_3 != undefined) ? req.body.isi_param_3 : null,
+        custom_value_1: (req.body.custom_input_1 != undefined) ? req.body.custom_input_1 : null,
+        custom_value_2: (req.body.custom_input_2 != undefined) ? req.body.custom_input_2 : null,
+        custom_value_3: (req.body.custom_input_3 != undefined) ? req.body.custom_input_3 : null
       },
     });
   } else {
@@ -176,6 +187,9 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
         isi_param_2: (req.body.isi_param_2 != undefined) ? req.body.isi_param_2 : null,
         param_3: (req.body.param_3 != undefined) ? req.body.param_3 : null,
         isi_param_3: (req.body.isi_param_3 != undefined) ? req.body.isi_param_3 : null,
+        custom_value_1: (req.body.custom_input_1 != undefined) ? req.body.custom_input_1 : null,
+        custom_value_2: (req.body.custom_input_2 != undefined) ? req.body.custom_input_2 : null,
+        custom_value_3: (req.body.custom_input_3 != undefined) ? req.body.custom_input_3 : null
       },
     });
   }

@@ -66,6 +66,9 @@ export type AutoReplyFormData = {
   isi_param_2?: string;
   param_3?: string;
   isi_param_3?: string;
+  custom_input_1?: string;
+  custom_input_2?: string;
+  custom_input_3?: string;
   is_save_inbox?: boolean;
   buttons: ButtonMessage[];
 };
@@ -151,7 +154,9 @@ const AutoReplyFormModal = forwardRef<
         form.setFieldValue("phoneId", phoneId!.id);
         form.setFieldValue("whatsapp_account", phoneId!.number);
         form.setFieldValue("keyword", editReply.keyword);
-        form.setFieldValue("reply", reply.text);
+        if(reply) {
+          form.setFieldValue("reply", reply.text);
+        }
         setKeywordType(editReply.type_keyword);
         form.setFieldValue("type_keyword", editReply.type_keyword);
         setTypeMessage(editReply.type);
@@ -165,6 +170,9 @@ const AutoReplyFormModal = forwardRef<
         form.setFieldValue("isi_param_2",editReply.isi_param_2);
         form.setFieldValue("param_3",editReply.param_3);
         form.setFieldValue("isi_param_3",editReply.isi_param_3);
+        form.setFieldValue("custom_input_1",editReply.custom_value_1);
+        form.setFieldValue("custom_input_2",editReply.custom_value_2);
+        form.setFieldValue("custom_input_3",editReply.custom_value_3);
       }
 
       return () => {
@@ -735,6 +743,9 @@ const AutoReplyFormModal = forwardRef<
               >
                 <Select
                 placeholder="Choose Type Param"
+                defaultValue={
+                  typeParam1 !== undefined ? String(typeParam1) : ""
+                }
                 onChange={(value:string) => {
                   setTypeParam1(value);
                 }}
@@ -760,7 +771,7 @@ const AutoReplyFormModal = forwardRef<
               </Form.Item>
               {typeParam1 == 'Custom' && (
                 <Form.Item
-                name={"custom_input"}
+                name={"custom_input_1"}
                 >
                   <Input style={{width: "100%"}} placeholder="Input value"/>
                 </Form.Item>
@@ -777,6 +788,9 @@ const AutoReplyFormModal = forwardRef<
               >
                 <Select
                 placeholder="Choose Type Param"
+                defaultValue={
+                  typeParam2 !== undefined ? String(typeParam2) : ""
+                }
                 onChange={(value: string) => {
                   setTypeParam2(value);
                 }}
@@ -802,7 +816,7 @@ const AutoReplyFormModal = forwardRef<
               </Form.Item>
               {(typeParam2 == "Custom") && (
                 <Form.Item
-                name="custom_input"
+                name="custom_input_2"
                 >
                   <Input style={{width: "100%"}} placeholder="Input value"/>
                 </Form.Item>
@@ -819,6 +833,9 @@ const AutoReplyFormModal = forwardRef<
               >
                 <Select
                 placeholder="Choose Type Param"
+                defaultValue={
+                  typeParam3 !== undefined ? String(typeParam3) : ""
+                }
                 onChange={(value:string) => {
                   setTypeParam3(value);
                 }}
@@ -844,7 +861,7 @@ const AutoReplyFormModal = forwardRef<
               </Form.Item>
               {(typeParam3 == "Custom") && (
                 <Form.Item
-                name="custom_input"
+                name="custom_input_3"
                 >
                   <Input style={{width: "100%"}} placeholder="Input value"/>
                 </Form.Item>
