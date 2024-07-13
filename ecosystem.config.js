@@ -4,7 +4,6 @@ module.exports = {
       name: "doran-whatsapp",
       script: "./dist/src/server.js",
       env: { NODE_ENV: "production" },
-      node_args: ["--max-old-space-size=600M"],
     },
   ],
 };
