@@ -4,8 +4,7 @@ module.exports = {
       name: "doran-whatsapp",
       script: "./dist/src/server.js",
       env: { NODE_ENV: "production" },
-      max_memory_restart: "4G",
-      node_args: ["--max-old-space-size=4096"],
+      node_args: ["--max-old-space-size=600M"],
     },
   ],
 };
