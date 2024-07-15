@@ -6,7 +6,7 @@ import _makeWASocket, {
   delay,
   GroupMetadata,
   MessageType,
-  downloadMediaMessage
+  downloadMediaMessage,
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
 import { prisma } from "./prisma";
@@ -16,7 +16,7 @@ import { AutoReply, InboxMessage, Phone, Prisma } from "@prisma/client";
 import toBase64 from "./toBase64";
 import { writeFile } from "fs/promises";
 import moment from "moment";
-import path from 'path';
+import path from "path";
 import { BaseRequest } from "./baseRequest";
 import { CekValueParam } from "./cekValueParam";
 
@@ -89,7 +89,7 @@ const makeWASocket = async (
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
-      logger: waSocketLogOption,
+      logger: undefined,
       syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
     });
@@ -140,8 +140,10 @@ const makeWASocket = async (
           quotedMessage =
             messages[0].message?.extendedTextMessage?.contextInfo
               ?.quotedMessage;
-        } else if (messages[0].message?.imageMessage?.contextInfo?.quotedMessage) {
-          quotedMessage = 
+        } else if (
+          messages[0].message?.imageMessage?.contextInfo?.quotedMessage
+        ) {
+          quotedMessage =
             messages[0].message?.imageMessage?.contextInfo?.quotedMessage;
         }
 
@@ -162,8 +164,8 @@ const makeWASocket = async (
         // return;
         const getPhone = await prisma.phone.findUnique({
           where: {
-            id: phoneId
-          }
+            id: phoneId,
+          },
         });
 
         if (messageIn && quotedMessage == null) {
@@ -195,22 +197,22 @@ const makeWASocket = async (
                 ":" +
                 konv_date.getSeconds();
               const datetime = new Date(date);
-              if(getPhone !== null) {
-                if(getPhone.is_save_group) {
+              if (getPhone !== null) {
+                if (getPhone.is_save_group) {
                   const groups = await prisma.group.count({
                     where: {
-                      group_id: metadata.id
+                      group_id: metadata.id,
                     },
                     select: {
                       group_id: true,
-                    }
+                    },
                   });
 
-                  if(!Number(groups.group_id)) {
+                  if (!Number(groups.group_id)) {
                     const participant_list = metadata.participants.map(
                       (participant) => ({
                         whatsapp_id: participant.id,
-                        admin: participant.admin
+                        admin: participant.admin,
                       })
                     );
 
@@ -227,10 +229,10 @@ const makeWASocket = async (
                         participants: {
                           create: participant_list,
                         },
-                      }
+                      },
                     });
 
-                    insertGroup && "Group saved succesfully"
+                    insertGroup && "Group saved succesfully";
                   }
                 }
               }
@@ -297,7 +299,7 @@ const makeWASocket = async (
                         // message: data.message,
                         // recipient: data.recipient,
                         // sender: data.sender,
-                        ...data
+                        ...data,
                       },
                     });
                     if (response) {
@@ -305,8 +307,8 @@ const makeWASocket = async (
                       return {
                         status: true,
                         message: "Berhasil menyimpan pesan",
-                        data: response
-                      }
+                        data: response,
+                      };
                     }
                   }
                 };
@@ -409,7 +411,7 @@ const makeWASocket = async (
                       custom_value_2?: string | null;
                       custom_value_3?: string | null;
                       response?: string | null; // untuk response dari api
-                    }
+                    };
 
                     let data = {
                       message: messageIn!,
@@ -417,86 +419,107 @@ const makeWASocket = async (
                       sender: phone_number,
                     } as InboxMessage;
 
-                    if(item.url) {
+                    if (item.url) {
                       let objParamProp: string[] = [];
                       let objParamValue: string[] = [];
-                      let params: {[key:string] : string} = {};
+                      let params: { [key: string]: string } = {};
 
                       data.url = item.url;
                       data.type_request = item.type_request;
 
                       data.param_1 = item.param_1 ? item.param_1 : null;
-                      data.isi_param_1 = item.isi_param_1 ? item.isi_param_1 : null;
-                      if(item.param_1 && item.isi_param_1) {
+                      data.isi_param_1 = item.isi_param_1
+                        ? item.isi_param_1
+                        : null;
+                      if (item.param_1 && item.isi_param_1) {
                         objParamProp.push(item.param_1);
-                        let valueObj = CekValueParam(item,'isi_param_1',data as dataInboxType);
+                        let valueObj = CekValueParam(
+                          item,
+                          "isi_param_1",
+                          data as dataInboxType
+                        );
                         objParamValue.push(valueObj);
-                        if(item.custom_value_1) {
+                        if (item.custom_value_1) {
                           data.custom_value_1 = item.custom_value_1;
                         }
                       }
-                      
+
                       data.param_2 = item.param_2 ? item.param_2 : null;
-                      data.isi_param_2 = item.isi_param_2 ? item.isi_param_2 : null;
-                      if(item.param_2 && item.isi_param_2) {
+                      data.isi_param_2 = item.isi_param_2
+                        ? item.isi_param_2
+                        : null;
+                      if (item.param_2 && item.isi_param_2) {
                         objParamProp.push(item.param_2);
-                        let valueObj = CekValueParam(item,'isi_param_2',data as dataInboxType);
-                        if(item.custom_value_2) {
+                        let valueObj = CekValueParam(
+                          item,
+                          "isi_param_2",
+                          data as dataInboxType
+                        );
+                        if (item.custom_value_2) {
                           data.custom_value_2 = valueObj;
                         }
                         objParamValue.push(valueObj);
                       }
 
                       data.param_3 = item.param_3 ? item.param_3 : null;
-                      data.isi_param_3 = item.isi_param_3 ? item.isi_param_3 : null;
-                      if(item.param_3 && item.isi_param_3) {
+                      data.isi_param_3 = item.isi_param_3
+                        ? item.isi_param_3
+                        : null;
+                      if (item.param_3 && item.isi_param_3) {
                         objParamProp.push(item.param_3);
-                        let valueObj = CekValueParam(item,'isi_param_3',data as dataInboxType);
-                        if(item.custom_value_3) {
+                        let valueObj = CekValueParam(
+                          item,
+                          "isi_param_3",
+                          data as dataInboxType
+                        );
+                        if (item.custom_value_3) {
                           data.custom_value_3 = valueObj;
                         }
                         objParamValue.push(valueObj);
                       }
 
-                      if(objParamProp.length && objParamValue.length) {
-                        objParamProp.forEach((val,key) => {
+                      if (objParamProp.length && objParamValue.length) {
+                        objParamProp.forEach((val, key) => {
                           let propName = String(val!);
                           let propValue = objParamValue[key];
                           params[propName] = propValue;
-                        })
+                        });
                       }
-                      const method_type = (item.type_request?.toUpperCase() == 'GET') ? 'GET' : 'POST';
+                      const method_type =
+                        item.type_request?.toUpperCase() == "GET"
+                          ? "GET"
+                          : "POST";
                       data.type_request = method_type;
                       let options = {};
-                      if(method_type == 'POST') {
+                      if (method_type == "POST") {
                         options = {
-                          method: 'POST',
+                          method: "POST",
                           body: params,
                         };
-                      }
-                      else if(method_type == 'GET') {
+                      } else if (method_type == "GET") {
                         options = {
-                          method: 'GET',
+                          method: "GET",
                           params: params,
                         };
                       }
 
                       BaseRequest({
                         url: item.url,
-                        ...options
-                      }).then(response => {
-                        const {result,error} = response;
-                        data.respons = JSON.stringify(result);
-                        // console.log(data);
-                        insertInbox(data).then(response => {
-                          if(response?.status) {
-                            return response.message;
-                          }
+                        ...options,
+                      })
+                        .then((response) => {
+                          const { result, error } = response;
+                          data.respons = JSON.stringify(result);
+                          // console.log(data);
+                          insertInbox(data).then((response) => {
+                            if (response?.status) {
+                              return response.message;
+                            }
+                          });
+                        })
+                        .catch((error) => {
+                          console.log(error);
                         });
-                      }).catch(error => {
-                        console.log(error);
-                      });
-
                     }
                   }
 
@@ -541,11 +564,11 @@ const makeWASocket = async (
           });
 
           messageType = Object.keys(quotedMessage)[0];
-          let clientMessage : string = '';
-          let hasLapWord : boolean | undefined = false;
+          let clientMessage: string = "";
+          let hasLapWord: boolean | undefined = false;
 
-          if(messages[0].message!.extendedTextMessage?.text) {
-            clientMessage = messages[0].message!.extendedTextMessage!.text
+          if (messages[0].message!.extendedTextMessage?.text) {
+            clientMessage = messages[0].message!.extendedTextMessage!.text;
           } else if (messages[0].message!.imageMessage?.caption) {
             clientMessage = messages[0].message!.imageMessage?.caption;
           }
@@ -563,7 +586,7 @@ const makeWASocket = async (
               url: string;
             };
             caption: string;
-          }
+          };
 
           const insertQuote = async (
             quote: string,
@@ -585,11 +608,14 @@ const makeWASocket = async (
             try {
               const response = await prisma.inboxMessage.create({
                 data: {
-                  message: (typeof(clientMessage) == 'string') ? clientMessage : JSON.stringify(clientMessage),
+                  message:
+                    typeof clientMessage == "string"
+                      ? clientMessage
+                      : JSON.stringify(clientMessage),
                   quote: quote,
                   sender: sender_num,
                   recipient: recipient_num,
-                  image_in: image_in
+                  image_in: image_in,
                 },
               });
               result.success = true;
@@ -604,34 +630,42 @@ const makeWASocket = async (
             }
           };
 
-          if(messageType == 'imageMessage') {
+          if (messageType == "imageMessage") {
             // const getImageMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const getImageMessage = messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+            const getImageMessage =
+              messages[0].message?.extendedTextMessage?.contextInfo
+                ?.quotedMessage?.imageMessage;
 
-            const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD");
+            const messageTimestamp = moment(
+              Number(messages[0].messageTimestamp) * 1000
+            ).format("YYYYMMD");
             let urlWaImg = getImageMessage?.url;
             const conditionRegexUrl = /\/([^\/]+)\?/;
             const match = urlWaImg?.match(conditionRegexUrl);
             const extractUrl = match ? match[1] : null;
 
-            let imgIdUrl : string = ''
-            if(extractUrl) {
+            let imgIdUrl: string = "";
+            if (extractUrl) {
               imgIdUrl = extractUrl
-              .substring(12,extractUrl.length)
-              .replace(/-/g,"");
+                .substring(12, extractUrl.length)
+                .replace(/-/g, "");
             }
 
-            const typeFile = getImageMessage!.mimetype?.split('/')[1];
-            const formatName = "IMG-WA-"+ imgIdUrl + "." + typeFile;
+            const typeFile = getImageMessage!.mimetype?.split("/")[1];
+            const formatName = "IMG-WA-" + imgIdUrl + "." + typeFile;
 
-            const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
-            let finalFilePath : string = '';
+            const isDevelopment =
+              process.env.NODE_ENV == "development" ? true : false;
+            let finalFilePath: string = "";
             const currentPath = __dirname;
 
-            if(isDevelopment) {
-              const previousePath = path.join(currentPath, '../../..');
-              const destinationPath = path.join(previousePath,'the_public_html/public');
-              const changeSeparatorPath = destinationPath.split('\\').join('/');
+            if (isDevelopment) {
+              const previousePath = path.join(currentPath, "../../..");
+              const destinationPath = path.join(
+                previousePath,
+                "the_public_html/public"
+              );
+              const changeSeparatorPath = destinationPath.split("\\").join("/");
               finalFilePath = `${changeSeparatorPath}/${formatName}`;
             } else {
               finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
@@ -639,19 +673,22 @@ const makeWASocket = async (
 
             let client_message = messages[0].message?.extendedTextMessage?.text;
             let conversation_quote = getImageMessage?.caption;
-            const senderNum = messages[0].key.remoteJid?.split('@')[0];
+            const senderNum = messages[0].key.remoteJid?.split("@")[0];
             const participantNum = getPhone && getPhone.number;
 
             const replies_list = await phoneReplies;
 
             for (const val of replies_list) {
               const replyText = JSON.parse(JSON.stringify(val.reply));
-              if(val.type == 'text') {
-                if(val.type_keyword == 'Equal') {
-                  if(conversation_quote?.toLowerCase() == val.keyword.toLowerCase()) {
+              if (val.type == "text") {
+                if (val.type_keyword == "Equal") {
+                  if (
+                    conversation_quote?.toLowerCase() ==
+                    val.keyword.toLowerCase()
+                  ) {
                     // console.log('contain');
                     // return;
-                    if(val.is_save_inbox) {
+                    if (val.is_save_inbox) {
                       insertQuote(
                         conversation_quote,
                         String(client_message),
@@ -666,12 +703,15 @@ const makeWASocket = async (
                     );
                     return;
                   }
-                }
-                else if(val.type_keyword == 'Contain') {
-                  if(conversation_quote?.toLowerCase().includes(val.keyword.toLowerCase())) {
+                } else if (val.type_keyword == "Contain") {
+                  if (
+                    conversation_quote
+                      ?.toLowerCase()
+                      .includes(val.keyword.toLowerCase())
+                  ) {
                     // console.log('include');
                     // return;
-                    if(val.is_save_inbox) {
+                    if (val.is_save_inbox) {
                       insertQuote(
                         conversation_quote,
                         String(client_message),
@@ -755,7 +795,7 @@ const makeWASocket = async (
             //       }
 
             //       const recipient = getPhone && getPhone.number;
-                  
+
             //       insertQuote(
             //         String(messages[0].message?.imageMessage?.contextInfo?.quotedMessage?.conversation),
             //         // objClientMessage,
@@ -764,14 +804,13 @@ const makeWASocket = async (
             //         String(recipient),
             //         String(finalFilePath)
             //       );
-                  
 
             //       _waSocket.sendMessage(messages[0].key.remoteJid!, {
             //         text: "Balasan laporan dalam proses pengiriman",
             //       });
             //       return;
             //     }
-              
+
             //   }
 
             //   const participantNum = String(
@@ -793,155 +832,177 @@ const makeWASocket = async (
             // }
 
             const replies_list = await phoneReplies;
-              // console.log(replies_list);
-              let client_message = messages[0].message?.extendedTextMessage?.text;
-              let conversation_quote = quotedMessage.conversation;
-              const participantNum = String(
-                messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
-                    "@"
-                  )[0]
-              );
+            // console.log(replies_list);
+            let client_message = messages[0].message?.extendedTextMessage?.text;
+            let conversation_quote = quotedMessage.conversation;
+            const participantNum = String(
+              messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
+                "@"
+              )[0]
+            );
 
-              const senderNum = messages[0].key.remoteJid?.split("@")[0];
-              
-              for(const val of replies_list) {
-                const replyText = JSON.parse(JSON.stringify(val.reply));
-                if(val.type == 'text') {
-                  if(val.type_keyword == 'Equal') {
-                    if(conversation_quote.toLowerCase() == val.keyword.toLowerCase) {
-                        if(val.is_save_inbox) {
-                          insertQuote(
-                            conversation_quote,
-                            String(client_message),
-                            String(senderNum),
-                            String(participantNum)
-                          );
-                        }
-                        _waSocket.sendMessage(
-                          messages[0].key.remoteJid!,
-                          replyText
-                        );
-                        return;
+            const senderNum = messages[0].key.remoteJid?.split("@")[0];
+
+            for (const val of replies_list) {
+              const replyText = JSON.parse(JSON.stringify(val.reply));
+              if (val.type == "text") {
+                if (val.type_keyword == "Equal") {
+                  if (
+                    conversation_quote.toLowerCase() == val.keyword.toLowerCase
+                  ) {
+                    if (val.is_save_inbox) {
+                      insertQuote(
+                        conversation_quote,
+                        String(client_message),
+                        String(senderNum),
+                        String(participantNum)
+                      );
                     }
+                    _waSocket.sendMessage(
+                      messages[0].key.remoteJid!,
+                      replyText
+                    );
+                    return;
                   }
-                  else if(val.type_keyword == 'Contain') {
-                    if(conversation_quote.toLowerCase().includes(val.keyword.toLowerCase())) {
-                      if(val.is_save_inbox) {
-                        insertQuote(
-                          conversation_quote,
-                          String(client_message),
-                          String(senderNum),
-                          String(participantNum)
-                        );
+                } else if (val.type_keyword == "Contain") {
+                  if (
+                    conversation_quote
+                      .toLowerCase()
+                      .includes(val.keyword.toLowerCase())
+                  ) {
+                    if (val.is_save_inbox) {
+                      insertQuote(
+                        conversation_quote,
+                        String(client_message),
+                        String(senderNum),
+                        String(participantNum)
+                      );
+                    }
+                    _waSocket.sendMessage(
+                      messages[0].key.remoteJid!,
+                      replyText
+                    );
+                    return;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (messageType == "imageMessage" && quotedMessage == null) {
+          const phoneReplies = prisma.autoReply.findMany({
+            where: {
+              phoneId: phoneId,
+            },
+          });
+          const getImageMessage = messages[0].message?.imageMessage;
+          const hasLapWord = isLapWord(String(getImageMessage?.caption));
+          const messageTimestamp = moment(
+            Number(messages[0].messageTimestamp) * 1000
+          ).format("YYYYMMD");
+
+          let urlWaImg = getImageMessage?.url;
+          const conditionRegexUrl = /\/([^\/]+)\?/;
+          const match = urlWaImg?.match(conditionRegexUrl);
+          const extractUrl = match ? match[1] : null;
+
+          let imgIdUrl: string = "";
+          if (extractUrl) {
+            imgIdUrl = extractUrl
+              .substring(12, extractUrl.length)
+              .replace(/-/g, "");
+          }
+
+          const typeFile = getImageMessage!.mimetype?.split("/")[1];
+          // const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
+          const formatName = "IMG-WA-" + imgIdUrl + "." + typeFile;
+          const isDevelopment =
+            process.env.NODE_ENV == "development" ? true : false;
+          let finalFilePath: string = "";
+          const currentPath = __dirname;
+
+          if (isDevelopment) {
+            const previousePath = path.join(currentPath, "../../..");
+            const destinationPath = path.join(
+              previousePath,
+              "the_public_html/public"
+            );
+            const changeSeparatorPath = destinationPath.split("\\").join("/");
+            finalFilePath = `${changeSeparatorPath}/${formatName}`;
+          } else {
+            finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
+          }
+
+          const buffer = await downloadMediaMessage(
+            messages[0],
+            "buffer",
+            {},
+            {
+              logger: waSocketLogOption,
+              reuploadRequest: _waSocket.updateMediaMessage,
+            }
+          );
+
+          if (finalFilePath !== "") {
+            await writeFile(finalFilePath, buffer);
+            let sender = messages[0].key.remoteJid?.split("@")[0];
+            let caption = getImageMessage?.caption;
+            finalFilePath =
+              process.env.NODE_ENV == "development"
+                ? finalFilePath
+                : `jeblast.com/${finalFilePath.split("/")[5]}/${
+                    finalFilePath.split("/")[6]
+                  }`;
+            if (getPhone !== null) {
+              const replies = await phoneReplies;
+              for (const reply of replies) {
+                const replyText = JSON.parse(JSON.stringify(reply.reply));
+                if (reply.type == "text") {
+                  if (reply.type_keyword == "Equal") {
+                    // console.log('ok');
+                    if (caption?.toLowerCase() == reply.keyword.toLowerCase()) {
+                      if (reply.is_save_inbox) {
+                        await prisma.inboxMessage.create({
+                          data: {
+                            sender: sender,
+                            recipient: getPhone.number,
+                            message: getImageMessage?.caption,
+                            image_in: finalFilePath,
+                          } as InboxMessage,
+                        });
                       }
                       _waSocket.sendMessage(
                         messages[0].key.remoteJid!,
                         replyText
                       );
-                      return;
+                    }
+                  } else if (reply.type_keyword == "Contain") {
+                    if (
+                      caption
+                        ?.toLowerCase()
+                        .includes(reply.keyword.toLowerCase())
+                    ) {
+                      if (reply.is_save_inbox) {
+                        await prisma.inboxMessage.create({
+                          data: {
+                            sender: sender,
+                            recipient: getPhone.number,
+                            message: getImageMessage?.caption,
+                            image_in: finalFilePath,
+                          } as InboxMessage,
+                        });
+                      }
+                      _waSocket.sendMessage(
+                        messages[0].key.remoteJid!,
+                        replyText
+                      );
                     }
                   }
                 }
-              };
+              }
+            }
           }
-          
-        }
-
-        if((messageType == 'imageMessage') && (quotedMessage == null)) {
-          const phoneReplies = prisma.autoReply.findMany({
-            where: {
-              phoneId: phoneId,
-            }
-          });
-          const getImageMessage = messages[0].message?.imageMessage;
-          const hasLapWord = isLapWord(String(getImageMessage?.caption));
-          const messageTimestamp = moment(Number(messages[0].messageTimestamp) * 1000).format("YYYYMMD")
-
-            let urlWaImg = getImageMessage?.url;
-            const conditionRegexUrl = /\/([^\/]+)\?/;
-            const match = urlWaImg?.match(conditionRegexUrl);
-            const extractUrl = match ? match[1] : null;
-
-            let imgIdUrl : string = ''
-            if(extractUrl) {
-              imgIdUrl = extractUrl
-              .substring(12,extractUrl.length)
-              .replace(/-/g,"");
-            }
-
-            const typeFile = getImageMessage!.mimetype?.split('/')[1];
-            // const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
-            const formatName = "IMG-WA-"+ imgIdUrl + "." + typeFile;
-            const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
-            let finalFilePath : string = '';
-            const currentPath = __dirname;
-
-            if(isDevelopment) {
-              const previousePath = path.join(currentPath, '../../..');
-              const destinationPath = path.join(previousePath,'the_public_html/public');
-              const changeSeparatorPath = destinationPath.split('\\').join('/');
-              finalFilePath = `${changeSeparatorPath}/${formatName}`;
-            } else {
-              finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
-            }
-
-            const buffer = await downloadMediaMessage(
-              messages[0],
-              'buffer',
-              {},
-              {
-                logger: waSocketLogOption,
-                reuploadRequest: _waSocket.updateMediaMessage
-              }
-            );
-
-            if(finalFilePath !== '') {
-              await writeFile(finalFilePath,buffer);
-              let sender = messages[0].key.remoteJid?.split("@")[0];
-              let caption = getImageMessage?.caption;
-              finalFilePath = (process.env.NODE_ENV == 'development') ? finalFilePath : `jeblast.com/${finalFilePath.split('/')[5]}/${finalFilePath.split('/')[6]}`;
-              if(getPhone !== null) {
-                const replies = await phoneReplies;
-                for(const reply of replies) {
-                  const replyText = JSON.parse(JSON.stringify(reply.reply));
-                  if(reply.type == 'text') {
-                    if(reply.type_keyword == 'Equal') {
-                      // console.log('ok');
-                      if(caption?.toLowerCase() == reply.keyword.toLowerCase()) {
-                        if(reply.is_save_inbox) {
-                          await prisma.inboxMessage.create({
-                            data: {
-                              sender: sender,
-                              recipient: getPhone.number,
-                              message: getImageMessage?.caption,
-                              image_in: finalFilePath,
-                            } as InboxMessage
-                          });
-                        }
-                        _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
-                      }
-                    }
-                    else if(reply.type_keyword == 'Contain') {
-
-                      if(caption?.toLowerCase().includes(reply.keyword.toLowerCase())) {
-                        if(reply.is_save_inbox) {
-                          await prisma.inboxMessage.create({
-                            data: {
-                              sender: sender,
-                              recipient: getPhone.number,
-                              message: getImageMessage?.caption,
-                              image_in: finalFilePath,
-                            } as InboxMessage
-                          });
-                        }
-                        _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
-                      }
-                    }
-                  }
-                  
-                }
-              }
-            }
         }
       }
     });
