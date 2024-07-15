@@ -62,6 +62,7 @@ const makeWASocket = async (
   } else {
     const waSocketLogOption = pino({
       enabled: true,
+      level: "error",
       transport: {
         targets: [
           // {
