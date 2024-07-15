@@ -39,7 +39,7 @@
     "next-auth": "^4.22.1",
     "next-i18next": "^13.3.0",
     "nextjs-progressbar": "^0.0.16",
-    "pino": "^7.0.0",
+    "pino": "^8.0.0",
     "qrcode.react": "^3.1.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",

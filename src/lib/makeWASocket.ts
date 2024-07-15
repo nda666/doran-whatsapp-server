@@ -1,5 +1,3 @@
-// import "pino-pretty";
-// import "pino-roll";
 import _makeWASocket, {
   WASocket,
   useMultiFileAuthState,
@@ -19,6 +17,8 @@ import moment from "moment";
 import path from "path";
 import { BaseRequest } from "./baseRequest";
 import { CekValueParam } from "./cekValueParam";
+import "pino-pretty";
+import "pino-roll";
 
 const session = new Map();
 
@@ -60,35 +60,34 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
     // console.info("GET from session: " + _waSocket.user);
   } else {
-    // const waSocketLogOption = pino({
-    //   enabled: false,
-    //   level: "error",
-    //   transport: {
-    //     targets: [
-    //       {
-    //         level: "error",
-    //         target: "pino-pretty",
-    //         options: {
-    //           colorize: false,
-    //         },
-    //       },
-    //       {
-    //         level: "error",
-    //         target: "pino-roll",
-    //         options: {
-    //           file: "./whatsapp-logs/whatsapp.log",
-    //           frequency: "daily",
-    //           colorize: false,
-    //           mkdir: true,
-    //         },
-    //       },
-    //     ],
-    //   },
-    // });
+    const waSocketLogOption = pino({
+      enabled: true,
+      transport: {
+        targets: [
+          // {
+          //   level: "error",
+          //   target: "pino-pretty",
+          //   options: {
+          //     colorize: false,
+          //   },
+          // },
+          {
+            level: "error",
+            target: "pino-roll",
+            options: {
+              file: "./whatsapp-logs/whatsapp.log",
+              frequency: "daily",
+              colorize: false,
+              mkdir: true,
+            },
+          },
+        ],
+      },
+    }) as any;
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
-      // logger: undefined,
+      logger: waSocketLogOption,
       syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
     });
@@ -936,11 +935,11 @@ const makeWASocket = async (
           const buffer = await downloadMediaMessage(
             messages[0],
             "buffer",
-            {}
-            // {
-            //   // logger: waSocketLogOption,
-            //   reuploadRequest: _waSocket.updateMediaMessage,
-            // }
+            {},
+            {
+              logger: waSocketLogOption,
+              reuploadRequest: _waSocket.updateMediaMessage,
+            }
           );
 
           if (finalFilePath !== "") {
