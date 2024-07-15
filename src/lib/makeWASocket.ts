@@ -120,7 +120,8 @@ const makeWASocket = async (
       }
 
       if (!messages[0].key.fromMe) {
-        let messageByPhone = messages[0].message?.conversation !== undefined ? messages[0].message?.conversation : undefined;
+        // let messageByPhone = messages[0].message?.conversation !== undefined ? messages[0].message?.conversation : undefined;
+        let messageByPhone = messages[0].message?.hasOwnProperty("conversation") ? messages[0].message?.conversation : undefined;
         let messageByWeb = messages[0].message?.extendedTextMessage?.text !== undefined ? messages[0].message?.extendedTextMessage?.text : undefined;
 
         let messageIn: string | undefined = undefined;
@@ -895,120 +896,120 @@ const makeWASocket = async (
           }
         }
 
-        if (messageType == "imageMessage" && quotedMessage == null) {
-          const phoneReplies = prisma.autoReply.findMany({
-            where: {
-              phoneId: phoneId,
-            },
-          });
-          const getImageMessage = messages[0].message?.imageMessage;
-          const hasLapWord = isLapWord(String(getImageMessage?.caption));
-          const messageTimestamp = moment(
-            Number(messages[0].messageTimestamp) * 1000
-          ).format("YYYYMMD");
+        // if (messageType == "imageMessage" && quotedMessage == null) {
+        //   const phoneReplies = prisma.autoReply.findMany({
+        //     where: {
+        //       phoneId: phoneId,
+        //     },
+        //   });
+        //   const getImageMessage = messages[0].message?.imageMessage;
+        //   const hasLapWord = isLapWord(String(getImageMessage?.caption));
+        //   const messageTimestamp = moment(
+        //     Number(messages[0].messageTimestamp) * 1000
+        //   ).format("YYYYMMD");
 
-          let urlWaImg = getImageMessage?.url;
-          const conditionRegexUrl = /\/([^\/]+)\?/;
-          const match = urlWaImg?.match(conditionRegexUrl);
-          const extractUrl = match ? match[1] : null;
+        //   let urlWaImg = getImageMessage?.url;
+        //   const conditionRegexUrl = /\/([^\/]+)\?/;
+        //   const match = urlWaImg?.match(conditionRegexUrl);
+        //   const extractUrl = match ? match[1] : null;
 
-          let imgIdUrl: string = "";
-          if (extractUrl) {
-            imgIdUrl = extractUrl
-              .substring(12, extractUrl.length)
-              .replace(/-/g, "");
-          }
+        //   let imgIdUrl: string = "";
+        //   if (extractUrl) {
+        //     imgIdUrl = extractUrl
+        //       .substring(12, extractUrl.length)
+        //       .replace(/-/g, "");
+        //   }
 
-          const typeFile = getImageMessage!.mimetype?.split("/")[1];
-          // const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
-          const formatName = "IMG-WA-" + imgIdUrl + "." + typeFile;
-          const isDevelopment =
-            process.env.NODE_ENV == "development" ? true : false;
-          let finalFilePath: string = "";
-          const currentPath = __dirname;
+        //   const typeFile = getImageMessage!.mimetype?.split("/")[1];
+        //   // const formatName = "IMG-"+ messageTimestamp + "-WA"+ imgIdUrl + "." + typeFile;
+        //   const formatName = "IMG-WA-" + imgIdUrl + "." + typeFile;
+        //   const isDevelopment =
+        //     process.env.NODE_ENV == "development" ? true : false;
+        //   let finalFilePath: string = "";
+        //   const currentPath = __dirname;
 
-          if (isDevelopment) {
-            const previousePath = path.join(currentPath, "../../..");
-            const destinationPath = path.join(
-              previousePath,
-              "the_public_html/public"
-            );
-            const changeSeparatorPath = destinationPath.split("\\").join("/");
-            finalFilePath = `${changeSeparatorPath}/${formatName}`;
-          } else {
-            finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
-          }
+        //   if (isDevelopment) {
+        //     const previousePath = path.join(currentPath, "../../..");
+        //     const destinationPath = path.join(
+        //       previousePath,
+        //       "the_public_html/public"
+        //     );
+        //     const changeSeparatorPath = destinationPath.split("\\").join("/");
+        //     finalFilePath = `${changeSeparatorPath}/${formatName}`;
+        //   } else {
+        //     finalFilePath = `/home/jeblast/public_html/public/download-wa-image/${formatName}`;
+        //   }
 
-          const buffer = await downloadMediaMessage(
-            messages[0],
-            "buffer",
-            {},
-            {
-              logger: waSocketLogOption,
-              reuploadRequest: _waSocket.updateMediaMessage,
-            }
-          );
+        //   const buffer = await downloadMediaMessage(
+        //     messages[0],
+        //     "buffer",
+        //     {},
+        //     {
+        //       logger: waSocketLogOption,
+        //       reuploadRequest: _waSocket.updateMediaMessage,
+        //     }
+        //   );
 
-          if (finalFilePath !== "") {
-            await writeFile(finalFilePath, buffer);
-            let sender = messages[0].key.remoteJid?.split("@")[0];
-            let caption = getImageMessage?.caption;
-            finalFilePath =
-              process.env.NODE_ENV == "development"
-                ? finalFilePath
-                : `jeblast.com/${finalFilePath.split("/")[5]}/${
-                    finalFilePath.split("/")[6]
-                  }`;
-            if (getPhone !== null) {
-              const replies = await phoneReplies;
-              for (const reply of replies) {
-                const replyText = JSON.parse(JSON.stringify(reply.reply));
-                if (reply.type == "text") {
-                  if (reply.type_keyword == "Equal") {
-                    // console.log('ok');
-                    if (caption?.toLowerCase() == reply.keyword.toLowerCase()) {
-                      if (reply.is_save_inbox) {
-                        await prisma.inboxMessage.create({
-                          data: {
-                            sender: sender,
-                            recipient: getPhone.number,
-                            message: getImageMessage?.caption,
-                            image_in: finalFilePath,
-                          } as InboxMessage,
-                        });
-                      }
-                      _waSocket.sendMessage(
-                        messages[0].key.remoteJid!,
-                        replyText
-                      );
-                    }
-                  } else if (reply.type_keyword == "Contain") {
-                    if (
-                      caption
-                        ?.toLowerCase()
-                        .includes(reply.keyword.toLowerCase())
-                    ) {
-                      if (reply.is_save_inbox) {
-                        await prisma.inboxMessage.create({
-                          data: {
-                            sender: sender,
-                            recipient: getPhone.number,
-                            message: getImageMessage?.caption,
-                            image_in: finalFilePath,
-                          } as InboxMessage,
-                        });
-                      }
-                      _waSocket.sendMessage(
-                        messages[0].key.remoteJid!,
-                        replyText
-                      );
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        //   if (finalFilePath !== "") {
+        //     await writeFile(finalFilePath, buffer);
+        //     let sender = messages[0].key.remoteJid?.split("@")[0];
+        //     let caption = getImageMessage?.caption;
+        //     finalFilePath =
+        //       process.env.NODE_ENV == "development"
+        //         ? finalFilePath
+        //         : `jeblast.com/${finalFilePath.split("/")[5]}/${
+        //             finalFilePath.split("/")[6]
+        //           }`;
+        //     if (getPhone !== null) {
+        //       const replies = await phoneReplies;
+        //       for (const reply of replies) {
+        //         const replyText = JSON.parse(JSON.stringify(reply.reply));
+        //         if (reply.type == "text") {
+        //           if (reply.type_keyword == "Equal") {
+        //             // console.log('ok');
+        //             if (caption?.toLowerCase() == reply.keyword.toLowerCase()) {
+        //               if (reply.is_save_inbox) {
+        //                 await prisma.inboxMessage.create({
+        //                   data: {
+        //                     sender: sender,
+        //                     recipient: getPhone.number,
+        //                     message: getImageMessage?.caption,
+        //                     image_in: finalFilePath,
+        //                   } as InboxMessage,
+        //                 });
+        //               }
+        //               _waSocket.sendMessage(
+        //                 messages[0].key.remoteJid!,
+        //                 replyText
+        //               );
+        //             }
+        //           } else if (reply.type_keyword == "Contain") {
+        //             if (
+        //               caption
+        //                 ?.toLowerCase()
+        //                 .includes(reply.keyword.toLowerCase())
+        //             ) {
+        //               if (reply.is_save_inbox) {
+        //                 await prisma.inboxMessage.create({
+        //                   data: {
+        //                     sender: sender,
+        //                     recipient: getPhone.number,
+        //                     message: getImageMessage?.caption,
+        //                     image_in: finalFilePath,
+        //                   } as InboxMessage,
+        //                 });
+        //               }
+        //               _waSocket.sendMessage(
+        //                 messages[0].key.remoteJid!,
+        //                 replyText
+        //               );
+        //             }
+        //           }
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
       }
     });
   }
