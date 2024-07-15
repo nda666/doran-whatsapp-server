@@ -8,7 +8,7 @@ import _makeWASocket, {
   MessageType,
   downloadMediaMessage,
 } from "@whiskeysockets/baileys";
-import { pino } from "pino";
+import { Logger, pino } from "pino";
 import { prisma } from "./prisma";
 import { WaSockQrTimeout } from "../server/constant";
 import connectionUpdate from "../server/events/connectionUpdate";
@@ -61,18 +61,17 @@ const makeWASocket = async (
     // console.info("GET from session: " + _waSocket.user);
   } else {
     const waSocketLogOption = pino({
-      enabled: true,
+      enabled: false,
       level: "error",
-
       transport: {
         targets: [
-          // {
-          //   level: "error",
-          //   target: "pino-pretty",
-          //   options: {
-          //     colorize: true,
-          //   },
-          // },
+          {
+            level: "error",
+            target: "pino-pretty",
+            options: {
+              colorize: false,
+            },
+          },
           {
             level: "error",
             target: "pino-roll",
@@ -89,7 +88,7 @@ const makeWASocket = async (
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
-      logger: undefined,
+      // logger: undefined,
       syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
     });
