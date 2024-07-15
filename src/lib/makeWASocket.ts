@@ -60,31 +60,31 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
     // console.info("GET from session: " + _waSocket.user);
   } else {
-    const waSocketLogOption = pino({
-      enabled: false,
-      level: "error",
-      transport: {
-        targets: [
-          {
-            level: "error",
-            target: "pino-pretty",
-            options: {
-              colorize: false,
-            },
-          },
-          {
-            level: "error",
-            target: "pino-roll",
-            options: {
-              file: "./whatsapp-logs/whatsapp.log",
-              frequency: "daily",
-              colorize: false,
-              mkdir: true,
-            },
-          },
-        ],
-      },
-    });
+    // const waSocketLogOption = pino({
+    //   enabled: false,
+    //   level: "error",
+    //   transport: {
+    //     targets: [
+    //       {
+    //         level: "error",
+    //         target: "pino-pretty",
+    //         options: {
+    //           colorize: false,
+    //         },
+    //       },
+    //       {
+    //         level: "error",
+    //         target: "pino-roll",
+    //         options: {
+    //           file: "./whatsapp-logs/whatsapp.log",
+    //           frequency: "daily",
+    //           colorize: false,
+    //           mkdir: true,
+    //         },
+    //       },
+    //     ],
+    //   },
+    // });
     _waSocket = await _makeWASocket({
       printQRInTerminal: false,
       auth: state,
@@ -936,11 +936,11 @@ const makeWASocket = async (
           const buffer = await downloadMediaMessage(
             messages[0],
             "buffer",
-            {},
-            {
-              logger: waSocketLogOption,
-              reuploadRequest: _waSocket.updateMediaMessage,
-            }
+            {}
+            // {
+            //   // logger: waSocketLogOption,
+            //   reuploadRequest: _waSocket.updateMediaMessage,
+            // }
           );
 
           if (finalFilePath !== "") {
