@@ -7,6 +7,7 @@ import {
   delay,
   proto,
 } from "@whiskeysockets/baileys";
+import { rmSync } from "fs";
 
 const sendMessageFromIo = async ({
   phoneId,
@@ -106,18 +107,27 @@ const sendMessage = async (
       }
     }
   } catch (e: any) {
-    if (e?.output?.statusCode === 428 && retry < 5) {
-      deleteSession(phoneId);
+    if (e?.output?.statusCode === 428) {
       retry++;
-      await delay(2000);
-      return await sendMessage(
-        _to,
-        phoneCountry,
-        message,
-        retry,
-        phoneId,
-        userId
-      );
+      if (retry < 5) {
+        deleteSession(phoneId);
+
+        await delay(2000);
+        return await sendMessage(
+          _to,
+          phoneCountry,
+          message,
+          retry,
+          phoneId,
+          userId
+        );
+      } else {
+        // rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
+        //   recursive: true,
+        //   force: true,
+        // });
+        return undefined;
+      }
     } else {
       throw e;
     }
