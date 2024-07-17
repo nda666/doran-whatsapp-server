@@ -133,7 +133,7 @@ nextApp.prepare().then(async () => {
         // Kirim balik ke client
         callback(sendResp);
       }
-    )
+    );
 
     if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
       const query = socket.handshake.query;
@@ -145,7 +145,6 @@ nextApp.prepare().then(async () => {
 
       uniqPhoneIds?.forEach(async (phoneId) => {
         const createdWaSock = await makeWASocket(userId, phoneId);
-
         createdWaSock && waSocks.push(createdWaSock);
       });
 
@@ -155,7 +154,7 @@ nextApp.prepare().then(async () => {
 
   const server: Server = createServer(app);
   io.attach(server);
-  const isDevelopment = process.env.NODE_ENV == 'development' ? true : false;
+  const isDevelopment = process.env.NODE_ENV == "development" ? true : false;
   const host = isDevelopment ? "localhost" : "0.0.0.0";
   server.listen(port, host, () => {
     if (process.env.NODE_ENV !== "production")

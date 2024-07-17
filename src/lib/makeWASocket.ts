@@ -91,6 +91,7 @@ const makeWASocket = async (
       logger: waSocketLogOption,
       syncFullHistory: true,
       qrTimeout: WaSockQrTimeout,
+      defaultQueryTimeoutMs: undefined,
     });
 
     // console.info("CREATE new session: " + phoneId);
@@ -121,8 +122,13 @@ const makeWASocket = async (
 
       if (!messages[0].key.fromMe) {
         // let messageByPhone = messages[0].message?.conversation !== undefined ? messages[0].message?.conversation : undefined;
-        let messageByPhone = messages[0].message?.hasOwnProperty("conversation") ? messages[0].message?.conversation : undefined;
-        let messageByWeb = messages[0].message?.extendedTextMessage?.text !== undefined ? messages[0].message?.extendedTextMessage?.text : undefined;
+        let messageByPhone = messages[0].message?.hasOwnProperty("conversation")
+          ? messages[0].message?.conversation
+          : undefined;
+        let messageByWeb =
+          messages[0].message?.extendedTextMessage?.text !== undefined
+            ? messages[0].message?.extendedTextMessage?.text
+            : undefined;
 
         let messageIn: string | undefined = undefined;
 
@@ -395,9 +401,18 @@ const makeWASocket = async (
                     }
                   }
                   if (item.type == "webhook") {
-                    if((item.type_keyword.toLowerCase() == "equal") || (item.type_keyword.toLowerCase() == "contain")) {
-                      if ((messageIn!.toLowerCase() == item.keyword.toLowerCase()) || (messageIn!.toLowerCase().includes(item.keyword.toLowerCase()))) {
-                        if(item.is_save_inbox) {
+                    if (
+                      item.type_keyword.toLowerCase() == "equal" ||
+                      item.type_keyword.toLowerCase() == "contain"
+                    ) {
+                      if (
+                        messageIn!.toLowerCase() ==
+                          item.keyword.toLowerCase() ||
+                        messageIn!
+                          .toLowerCase()
+                          .includes(item.keyword.toLowerCase())
+                      ) {
+                        if (item.is_save_inbox) {
                           type dataInboxType = {
                             message: string;
                             recipient: string;
@@ -415,21 +430,22 @@ const makeWASocket = async (
                             custom_value_3?: string | null;
                             response?: string | null; // untuk response dari api
                           };
-      
+
                           let data = {
                             message: messageIn!,
-                            recipient: messages[0].key.remoteJid!.split("@")[0]!,
+                            recipient:
+                              messages[0].key.remoteJid!.split("@")[0]!,
                             sender: phone_number,
                           } as InboxMessage;
-      
+
                           if (item.url) {
                             let objParamProp: string[] = [];
                             let objParamValue: string[] = [];
                             let params: { [key: string]: string } = {};
-      
+
                             data.url = item.url;
                             data.type_request = item.type_request;
-      
+
                             data.param_1 = item.param_1 ? item.param_1 : null;
                             data.isi_param_1 = item.isi_param_1
                               ? item.isi_param_1
@@ -446,7 +462,7 @@ const makeWASocket = async (
                                 data.custom_value_1 = item.custom_value_1;
                               }
                             }
-      
+
                             data.param_2 = item.param_2 ? item.param_2 : null;
                             data.isi_param_2 = item.isi_param_2
                               ? item.isi_param_2
@@ -463,7 +479,7 @@ const makeWASocket = async (
                               }
                               objParamValue.push(valueObj);
                             }
-      
+
                             data.param_3 = item.param_3 ? item.param_3 : null;
                             data.isi_param_3 = item.isi_param_3
                               ? item.isi_param_3
@@ -480,7 +496,7 @@ const makeWASocket = async (
                               }
                               objParamValue.push(valueObj);
                             }
-      
+
                             if (objParamProp.length && objParamValue.length) {
                               objParamProp.forEach((val, key) => {
                                 let propName = String(val!);
@@ -505,7 +521,7 @@ const makeWASocket = async (
                                 params: params,
                               };
                             }
-      
+
                             BaseRequest({
                               url: item.url,
                               ...options,
