@@ -546,6 +546,8 @@ const makeWASocket = async (
                                 .catch((error) => {
                                   console.log(error);
                                 });
+
+                              running_operation = false;
                               
                               if(_flagstatus) {
                                 return;
@@ -669,9 +671,7 @@ const makeWASocket = async (
                                   console.log(error);
                                 });
                               
-                              if(_flagstatus) {
-                                return;
-                              }
+                              running_operation = false;
                             }
                           }
                         }
