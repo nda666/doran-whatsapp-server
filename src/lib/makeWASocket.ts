@@ -321,330 +321,358 @@ const makeWASocket = async (
 
                 // let phones = await getPhone();
                 let phone_number = getPhone && getPhone.number;
+                let running_operation = true;
                 result.forEach(async (item) => {
                   const replyText = JSON.parse(JSON.stringify(item.reply));
-                  if (item.type == "text") {
-                    if (item.type_keyword.toLowerCase() == "equal") {
-                      //
-                      if (
-                        messageIn!.toLowerCase() == item.keyword.toLowerCase()
-                      ) {
-                        if (item.is_save_inbox) {
-                          const dataInbox: InboxMessage[] = [
-                            {
+                  if(running_operation) {
+                    if (item.type == "text") {
+                      if (item.type_keyword.toLowerCase() == "equal") {
+                        //
+                        if (
+                          messageIn!.toLowerCase() == item.keyword.toLowerCase()
+                        ) {
+                          if (item.is_save_inbox) {
+                            const dataInbox: InboxMessage[] = [
+                              {
+                                message: messageIn!,
+                                recipient:
+                                  messages[0].key.remoteJid!.split("@")[0]!,
+                                sender: phone_number,
+                              } as InboxMessage,
+                            ];
+  
+                            insertInbox(dataInbox[0]);
+                          }
+                          _waSocket.sendMessage(
+                            messages[0].key.remoteJid!,
+                            replyText
+                          );
+                          running_operation = false;
+                        }
+                      } else if (item.type_keyword.toLowerCase() == "contain") {
+                        if (
+                          messageIn!
+                            .toLowerCase()
+                            .includes(item.keyword.toLowerCase())
+                        ) {
+                          if (item.is_save_inbox) {
+                            const dataInbox: InboxMessage[] = [
+                              {
+                                message: messageIn!,
+                                recipient:
+                                  messages[0].key.remoteJid!.split("@")[0]!,
+                                sender: phone_number,
+                              } as InboxMessage,
+                            ];
+  
+                            insertInbox(dataInbox[0]);
+                          }
+  
+                          _waSocket.sendMessage(
+                            messages[0].key.remoteJid!,
+                            replyText
+                          );
+                          running_operation = false;
+                        }
+                      }
+                    }
+                  }
+
+                  if(running_operation) {
+                    if (item.type == "image") {
+                      const image64 = await toBase64(
+                        "./public/" + replyText.image.url
+                      );
+                      // replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
+                      replyText.image = Buffer.from(image64);
+                      if (item.type_keyword.toLowerCase() == "equal") {
+                        if (
+                          messageIn!.toLowerCase() == item.keyword.toLowerCase()
+                        ) {
+                          _waSocket.sendMessage(
+                            messages[0].key.remoteJid!,
+                            replyText
+                          );
+                        }
+                      } else if (item.type_keyword.toLowerCase() == "contain") {
+                        if (
+                          messageIn!
+                            .toLowerCase()
+                            .includes(item.keyword.toLowerCase())
+                        ) {
+                          _waSocket.sendMessage(
+                            messages[0].key.remoteJid!,
+                            replyText
+                          );
+                        }
+                      }
+                    }
+                  }
+
+                  if(running_operation) {
+                    if (item.type == "webhook") {
+  
+                      type dataInboxType = {
+                        message: string;
+                        recipient: string;
+                        sender: string;
+                        url?: string;
+                        type_request?: string | null;
+                        param_1?: string | null;
+                        isi_param_1?: string | null;
+                        param_2?: string | null;
+                        isi_param_2?: string | null;
+                        param_3?: string | null;
+                        isi_param_3?: string | null;
+                        custom_value_1?: string | null;
+                        custom_value_2?: string | null;
+                        custom_value_3?: string | null;
+                        response?: string | null; // untuk response dari api
+                      };
+  
+                      if(item.type_keyword.toLowerCase() == "equal") {
+                        if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
+                          if (item.is_save_inbox) {
+                            let data = {
                               message: messageIn!,
                               recipient:
                                 messages[0].key.remoteJid!.split("@")[0]!,
                               sender: phone_number,
-                            } as InboxMessage,
-                          ];
-
-                          insertInbox(dataInbox[0]);
-                        }
-                        _waSocket.sendMessage(
-                          messages[0].key.remoteJid!,
-                          replyText
-                        );
-                      }
-                    } else if (item.type_keyword.toLowerCase() == "contain") {
-                      if (
-                        messageIn!
-                          .toLowerCase()
-                          .includes(item.keyword.toLowerCase())
-                      ) {
-                        if (item.is_save_inbox) {
-                          const dataInbox: InboxMessage[] = [
-                            {
-                              message: messageIn!,
-                              recipient:
-                                messages[0].key.remoteJid!.split("@")[0]!,
-                              sender: phone_number,
-                            } as InboxMessage,
-                          ];
-
-                          insertInbox(dataInbox[0]);
-                        }
-
-                        _waSocket.sendMessage(
-                          messages[0].key.remoteJid!,
-                          replyText
-                        );
-                      }
-                    }
-                  }
-                  if (item.type == "image") {
-                    const image64 = await toBase64(
-                      "./public/" + replyText.image.url
-                    );
-                    // replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
-                    replyText.image = Buffer.from(image64);
-                    if (item.type_keyword.toLowerCase() == "equal") {
-                      if (
-                        messageIn!.toLowerCase() == item.keyword.toLowerCase()
-                      ) {
-                        _waSocket.sendMessage(
-                          messages[0].key.remoteJid!,
-                          replyText
-                        );
-                      }
-                    } else if (item.type_keyword.toLowerCase() == "contain") {
-                      if (
-                        messageIn!
-                          .toLowerCase()
-                          .includes(item.keyword.toLowerCase())
-                      ) {
-                        _waSocket.sendMessage(
-                          messages[0].key.remoteJid!,
-                          replyText
-                        );
-                      }
-                    }
-                  }
-                  if (item.type == "webhook") {
-
-                    type dataInboxType = {
-                      message: string;
-                      recipient: string;
-                      sender: string;
-                      url?: string;
-                      type_request?: string | null;
-                      param_1?: string | null;
-                      isi_param_1?: string | null;
-                      param_2?: string | null;
-                      isi_param_2?: string | null;
-                      param_3?: string | null;
-                      isi_param_3?: string | null;
-                      custom_value_1?: string | null;
-                      custom_value_2?: string | null;
-                      custom_value_3?: string | null;
-                      response?: string | null; // untuk response dari api
-                    };
-
-                    if(item.type_keyword.toLowerCase() == "equal") {
-                      if(messageIn!.toLowerCase() == item.keyword.toLowerCase()) {
-                        if (item.is_save_inbox) {
-                          let data = {
-                            message: messageIn!,
-                            recipient:
-                              messages[0].key.remoteJid!.split("@")[0]!,
-                            sender: phone_number,
-                          } as InboxMessage;
-
-                          if (item.url) {
-                            let objParamProp: string[] = [];
-                            let objParamValue: string[] = [];
-                            let params: { [key: string]: string } = {};
-
-                            data.url = item.url;
-                            data.type_request = item.type_request;
-
-                            data.param_1 = item.param_1 ? item.param_1 : null;
-                            data.isi_param_1 = item.isi_param_1
-                              ? item.isi_param_1
-                              : null;
-                            if (item.param_1 && item.isi_param_1) {
-                              objParamProp.push(item.param_1);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_1",
-                                data as dataInboxType
-                              );
-                              objParamValue.push(valueObj);
-                              if (item.custom_value_1) {
-                                data.custom_value_1 = item.custom_value_1;
+                            } as InboxMessage;
+  
+                            if (item.url) {
+                              let objParamProp: string[] = [];
+                              let objParamValue: string[] = [];
+                              let params: { [key: string]: string } = {};
+  
+                              data.url = item.url;
+                              data.type_request = item.type_request;
+  
+                              data.param_1 = item.param_1 ? item.param_1 : null;
+                              data.isi_param_1 = item.isi_param_1
+                                ? item.isi_param_1
+                                : null;
+                              if (item.param_1 && item.isi_param_1) {
+                                objParamProp.push(item.param_1);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_1",
+                                  data as dataInboxType
+                                );
+                                objParamValue.push(valueObj);
+                                if (item.custom_value_1) {
+                                  data.custom_value_1 = item.custom_value_1;
+                                }
                               }
-                            }
-
-                            data.param_2 = item.param_2 ? item.param_2 : null;
-                            data.isi_param_2 = item.isi_param_2
-                              ? item.isi_param_2
-                              : null;
-                            if (item.param_2 && item.isi_param_2) {
-                              objParamProp.push(item.param_2);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_2",
-                                data as dataInboxType
-                              );
-                              if (item.custom_value_2) {
-                                data.custom_value_2 = valueObj;
+  
+                              data.param_2 = item.param_2 ? item.param_2 : null;
+                              data.isi_param_2 = item.isi_param_2
+                                ? item.isi_param_2
+                                : null;
+                              if (item.param_2 && item.isi_param_2) {
+                                objParamProp.push(item.param_2);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_2",
+                                  data as dataInboxType
+                                );
+                                if (item.custom_value_2) {
+                                  data.custom_value_2 = valueObj;
+                                }
+                                objParamValue.push(valueObj);
                               }
-                              objParamValue.push(valueObj);
-                            }
-
-                            data.param_3 = item.param_3 ? item.param_3 : null;
-                            data.isi_param_3 = item.isi_param_3
-                              ? item.isi_param_3
-                              : null;
-                            if (item.param_3 && item.isi_param_3) {
-                              objParamProp.push(item.param_3);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_3",
-                                data as dataInboxType
-                              );
-                              if (item.custom_value_3) {
-                                data.custom_value_3 = valueObj;
+  
+                              data.param_3 = item.param_3 ? item.param_3 : null;
+                              data.isi_param_3 = item.isi_param_3
+                                ? item.isi_param_3
+                                : null;
+                              if (item.param_3 && item.isi_param_3) {
+                                objParamProp.push(item.param_3);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_3",
+                                  data as dataInboxType
+                                );
+                                if (item.custom_value_3) {
+                                  data.custom_value_3 = valueObj;
+                                }
+                                objParamValue.push(valueObj);
                               }
-                              objParamValue.push(valueObj);
-                            }
-
-                            if (objParamProp.length && objParamValue.length) {
-                              objParamProp.forEach((val, key) => {
-                                let propName = String(val!);
-                                let propValue = objParamValue[key];
-                                params[propName] = propValue;
-                              });
-                            }
-                            const method_type =
-                              item.type_request?.toUpperCase() == "GET"
-                                ? "GET"
-                                : "POST";
-                            data.type_request = method_type;
-                            let options = {};
-                            if (method_type == "POST") {
-                              options = {
-                                method: "POST",
-                                body: params,
-                              };
-                            } else if (method_type == "GET") {
-                              options = {
-                                method: "GET",
-                                params: params,
-                              };
-                            }
-
-                            BaseRequest({
-                              url: item.url,
-                              ...options,
-                            })
-                              .then((response) => {
-                                const { result, error } = response;
-                                data.respons = JSON.stringify(result);
-                                // console.log(data);
-                                insertInbox(data).then((response) => {
-                                  if (response?.status) {
-                                    return response.message;
-                                  }
+  
+                              if (objParamProp.length && objParamValue.length) {
+                                objParamProp.forEach((val, key) => {
+                                  let propName = String(val!);
+                                  let propValue = objParamValue[key];
+                                  params[propName] = propValue;
                                 });
+                              }
+                              const method_type =
+                                item.type_request?.toUpperCase() == "GET"
+                                  ? "GET"
+                                  : "POST";
+                              data.type_request = method_type;
+                              let options = {};
+                              if (method_type == "POST") {
+                                options = {
+                                  method: "POST",
+                                  body: params,
+                                };
+                              } else if (method_type == "GET") {
+                                options = {
+                                  method: "GET",
+                                  params: params,
+                                };
+                              }
+  
+                              let _flagstatus = false;
+  
+                              BaseRequest({
+                                url: item.url,
+                                ...options,
                               })
-                              .catch((error) => {
-                                console.log(error);
-                              });
+                                .then((response) => {
+                                  const { result, error } = response;
+                                  data.respons = JSON.stringify(result);
+                                  // console.log(data);
+                                  insertInbox(data).then((response) => {
+                                    if (response?.status) {
+                                      // status_res = true;
+                                      _flagstatus = true;
+                                      running_operation = false;
+                                      return response.message;
+                                    }
+                                  });
+                                })
+                                .catch((error) => {
+                                  console.log(error);
+                                });
+                              
+                              if(_flagstatus) {
+                                return;
+                              }
+                            }
                           }
                         }
-                      }
-                    }else if(item.type_keyword.toLowerCase() == "contain") {
-                      if(messageIn!.toLowerCase().includes(item.keyword.toLowerCase())) {
-                        if (item.is_save_inbox) {
-                          let data = {
-                            message: messageIn!,
-                            recipient:
-                              messages[0].key.remoteJid!.split("@")[0]!,
-                            sender: phone_number,
-                          } as InboxMessage;
-
-                          if (item.url) {
-                            let objParamProp: string[] = [];
-                            let objParamValue: string[] = [];
-                            let params: { [key: string]: string } = {};
-
-                            data.url = item.url;
-                            data.type_request = item.type_request;
-
-                            data.param_1 = item.param_1 ? item.param_1 : null;
-                            data.isi_param_1 = item.isi_param_1
-                              ? item.isi_param_1
-                              : null;
-                            if (item.param_1 && item.isi_param_1) {
-                              objParamProp.push(item.param_1);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_1",
-                                data as dataInboxType
-                              );
-                              objParamValue.push(valueObj);
-                              if (item.custom_value_1) {
-                                data.custom_value_1 = item.custom_value_1;
+                      }else if(item.type_keyword.toLowerCase() == "contain") {
+                        if(messageIn!.toLowerCase().includes(item.keyword.toLowerCase())) {
+                          if (item.is_save_inbox) {
+                            let data = {
+                              message: messageIn!,
+                              recipient:
+                                messages[0].key.remoteJid!.split("@")[0]!,
+                              sender: phone_number,
+                            } as InboxMessage;
+  
+                            if (item.url) {
+                              let objParamProp: string[] = [];
+                              let objParamValue: string[] = [];
+                              let params: { [key: string]: string } = {};
+  
+                              data.url = item.url;
+                              data.type_request = item.type_request;
+  
+                              data.param_1 = item.param_1 ? item.param_1 : null;
+                              data.isi_param_1 = item.isi_param_1
+                                ? item.isi_param_1
+                                : null;
+                              if (item.param_1 && item.isi_param_1) {
+                                objParamProp.push(item.param_1);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_1",
+                                  data as dataInboxType
+                                );
+                                objParamValue.push(valueObj);
+                                if (item.custom_value_1) {
+                                  data.custom_value_1 = item.custom_value_1;
+                                }
                               }
-                            }
-
-                            data.param_2 = item.param_2 ? item.param_2 : null;
-                            data.isi_param_2 = item.isi_param_2
-                              ? item.isi_param_2
-                              : null;
-                            if (item.param_2 && item.isi_param_2) {
-                              objParamProp.push(item.param_2);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_2",
-                                data as dataInboxType
-                              );
-                              if (item.custom_value_2) {
-                                data.custom_value_2 = valueObj;
+  
+                              data.param_2 = item.param_2 ? item.param_2 : null;
+                              data.isi_param_2 = item.isi_param_2
+                                ? item.isi_param_2
+                                : null;
+                              if (item.param_2 && item.isi_param_2) {
+                                objParamProp.push(item.param_2);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_2",
+                                  data as dataInboxType
+                                );
+                                if (item.custom_value_2) {
+                                  data.custom_value_2 = valueObj;
+                                }
+                                objParamValue.push(valueObj);
                               }
-                              objParamValue.push(valueObj);
-                            }
-
-                            data.param_3 = item.param_3 ? item.param_3 : null;
-                            data.isi_param_3 = item.isi_param_3
-                              ? item.isi_param_3
-                              : null;
-                            if (item.param_3 && item.isi_param_3) {
-                              objParamProp.push(item.param_3);
-                              let valueObj = CekValueParam(
-                                item,
-                                "isi_param_3",
-                                data as dataInboxType
-                              );
-                              if (item.custom_value_3) {
-                                data.custom_value_3 = valueObj;
+  
+                              data.param_3 = item.param_3 ? item.param_3 : null;
+                              data.isi_param_3 = item.isi_param_3
+                                ? item.isi_param_3
+                                : null;
+                              if (item.param_3 && item.isi_param_3) {
+                                objParamProp.push(item.param_3);
+                                let valueObj = CekValueParam(
+                                  item,
+                                  "isi_param_3",
+                                  data as dataInboxType
+                                );
+                                if (item.custom_value_3) {
+                                  data.custom_value_3 = valueObj;
+                                }
+                                objParamValue.push(valueObj);
                               }
-                              objParamValue.push(valueObj);
-                            }
-
-                            if (objParamProp.length && objParamValue.length) {
-                              objParamProp.forEach((val, key) => {
-                                let propName = String(val!);
-                                let propValue = objParamValue[key];
-                                params[propName] = propValue;
-                              });
-                            }
-                            const method_type =
-                              item.type_request?.toUpperCase() == "GET"
-                                ? "GET"
-                                : "POST";
-                            data.type_request = method_type;
-                            let options = {};
-                            if (method_type == "POST") {
-                              options = {
-                                method: "POST",
-                                body: params,
-                              };
-                            } else if (method_type == "GET") {
-                              options = {
-                                method: "GET",
-                                params: params,
-                              };
-                            }
-
-                            BaseRequest({
-                              url: item.url,
-                              ...options,
-                            })
-                              .then((response) => {
-                                const { result, error } = response;
-                                data.respons = JSON.stringify(result);
-                                // console.log(data);
-                                insertInbox(data).then((response) => {
-                                  if (response?.status) {
-                                    return response.message;
-                                  }
+  
+                              if (objParamProp.length && objParamValue.length) {
+                                objParamProp.forEach((val, key) => {
+                                  let propName = String(val!);
+                                  let propValue = objParamValue[key];
+                                  params[propName] = propValue;
                                 });
+                              }
+                              const method_type =
+                                item.type_request?.toUpperCase() == "GET"
+                                  ? "GET"
+                                  : "POST";
+                              data.type_request = method_type;
+                              let options = {};
+                              if (method_type == "POST") {
+                                options = {
+                                  method: "POST",
+                                  body: params,
+                                };
+                              } else if (method_type == "GET") {
+                                options = {
+                                  method: "GET",
+                                  params: params,
+                                };
+                              }
+  
+                              let _flagstatus = false
+                              BaseRequest({
+                                url: item.url,
+                                ...options,
                               })
-                              .catch((error) => {
-                                console.log(error);
-                              });
+                                .then((response) => {
+                                  const { result, error } = response;
+                                  data.respons = JSON.stringify(result);
+                                  // console.log(data);
+                                  insertInbox(data).then((response) => {
+                                    if (response?.status) {
+                                      // status_res = true;
+                                      _flagstatus = true;
+                                      running_operation = false;
+                                      return response.message;
+                                    }
+                                  });
+                                })
+                                .catch((error) => {
+                                  console.log(error);
+                                });
+                              
+                              if(_flagstatus) {
+                                return;
+                              }
+                            }
                           }
                         }
                       }
