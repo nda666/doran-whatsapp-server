@@ -165,6 +165,8 @@ nextApp.prepare().then(async () => {
 });
 
 process.on("SIGINT", async function () {
+  await nextApp.close();
+  await io.close();
   await prisma.$disconnect();
   process.exit();
 });
