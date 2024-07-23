@@ -170,3 +170,10 @@ process.on("SIGINT", async function () {
   await prisma.$disconnect();
   process.exit();
 });
+
+process.on("SIGKILL", async function () {
+  await nextApp.close();
+  await io.close();
+  await prisma.$disconnect();
+  process.exit();
+});
