@@ -6,4 +6,4 @@ updates:
       interval: "daily"
     groups:
       production-dependencies:
-      dependency-type: "production"
+        dependency-type: "production"
