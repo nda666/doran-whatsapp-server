@@ -1,14 +1,16 @@
-import express from "express";
 import compression from "compression";
-import { prisma } from "./lib/prisma";
+import express from "express";
+import { createServer, Server } from "http";
 import next from "next";
+
 import { WASocket } from "@whiskeysockets/baileys";
-import { getSocketIO } from "./lib/socket";
+
 import makeWASocket from "./lib/makeWASocket";
-import sendMessageFromIo from "./lib/sendMessageFromIo";
-import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
-import { Server, createServer } from "http";
+import { prisma } from "./lib/prisma";
 import sendAttachmentMessageIo from "./lib/sendAttachmentMessageIo";
+import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
+import sendMessageFromIo from "./lib/sendMessageFromIo";
+import { getSocketIO } from "./lib/socket";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -171,9 +173,9 @@ process.on("SIGINT", async function () {
   process.exit();
 });
 
-process.on("SIGKILL", async function () {
-  await nextApp.close();
-  await io.close();
-  await prisma.$disconnect();
-  process.exit();
-});
+// process.on("SIGKILL", async function () {
+//   await nextApp.close();
+//   await io.close();
+//   await prisma.$disconnect();
+//   process.exit();
+// });
