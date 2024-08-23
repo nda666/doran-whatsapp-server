@@ -6,6 +6,8 @@ updates:
       interval: "daily"
     ignore:
       - dependency-name: "next"
+      - dependency-name: "eslint"
+      - dependency-name: "eslint-config-next"
     groups:
       production-dependencies:
         dependency-type: "production"
