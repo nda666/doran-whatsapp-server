@@ -1,13 +1,11 @@
+import axios, { AxiosError } from "axios";
 import NextAuth, { Session } from "next-auth";
 import { Adapter } from "next-auth/adapters";
+import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcrypt";
-import { i18n } from "next-i18next";
-import axios, { AxiosError } from "axios";
-import { GetTokenParams, JWT, getToken } from "next-auth/jwt";
-import { PrismaClient } from "@prisma/client";
+
 import { PrismaAdapter } from "@/lib/prismaAdapter";
-import { signOut } from "next-auth/react";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -16,7 +14,7 @@ export default NextAuth({
     signIn: "/signin",
     newUser: "/signup", // New users will be directed here on first sign in (leave the property out if not of interest)
   },
-  adapter: PrismaAdapter(prisma) as Adapter<boolean>,
+  adapter: PrismaAdapter(prisma) as Adapter,
   jwt: {
     secret: process.env.NEXTAUTH_SECRET,
   },
