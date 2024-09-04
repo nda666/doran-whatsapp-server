@@ -1,27 +1,25 @@
-import { Callback } from "i18next";
 import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
-import { NextApiResponse } from "next";
-import { i18n } from "next-i18next";
-import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import { ZodError, z } from "zod";
+import { z, ZodError } from "zod";
 
 export const SendAttachmentValidation = async (data: any) => {
   const validation = z
     .object({
-      sender: z.string({
+      number: z.string({
         required_error: "Field to is required",
       }),
-      phoneCode: z.string().optional(),
+      api_key: z.string({
+        required_error: "Field to is required",
+      }),
+      phoneCode: z.string().optional().default("ID"),
       caption: z.string().optional(),
-      image: z.any().optional(),
     })
     .required({
-      sender: true,
-      image: true,
+      number: true,
+      api_key: true,
     })
     .refine(
       (data) => {
-        const tos = data.sender.split(",");
+        const tos = data.number.split(",");
         let result = true;
         tos.forEach((x) => {
           try {
@@ -50,12 +48,16 @@ export const SendAttachmentValidation = async (data: any) => {
   try {
     const res = validation.parse(data);
 
-    return { result: true, error: null };
+    return { result: true, error: null, data: res };
   } catch (e) {
     if (e instanceof ZodError) {
-      return { result: false, error: e };
+      return { result: false, error: e, data: undefined };
     } else {
-      return { result: false, error: "Something happen to server" };
+      return {
+        result: false,
+        error: "Something happen to server",
+        data: undefined,
+      };
     }
   }
 };
