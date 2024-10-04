@@ -128,6 +128,7 @@ enum ParamType {
   Sender
   Recipient
   Message
+  Quote
   Custom
 }
 

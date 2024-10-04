@@ -763,6 +763,10 @@ const AutoReplyFormModal = forwardRef<
                     label: "Message"
                   },
                   {
+                    value: "Quote",
+                    label: "Quote"
+                  },
+                  {
                     value: "Custom",
                     label: "Manual Input"
                   },
@@ -808,6 +812,10 @@ const AutoReplyFormModal = forwardRef<
                     label: "Message"
                   },
                   {
+                    value: "Quote",
+                    label: "Quote"
+                  },
+                  {
                     value: "Custom",
                     label: "Manual Input"
                   },
@@ -851,6 +859,10 @@ const AutoReplyFormModal = forwardRef<
                   {
                     value: "Message",
                     label: "Message"
+                  },
+                  {
+                    value: "Quote",
+                    label: "Quote"
                   },
                   {
                     value: "Custom",
