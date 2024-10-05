@@ -4,9 +4,10 @@ type RecipientSenderType = {
     recipient?: string;
     sender?: string | number | null;
     message?: string;
+    quote?: string;
 }
 export const CekValueParam = (items: AutoReply, isi_param: string, recipientSender:RecipientSenderType): string => {
-    const {recipient, sender, message} = recipientSender;
+    const {recipient, sender, message, quote} = recipientSender;
 
     let value_result: string = '';
 
@@ -22,6 +23,8 @@ export const CekValueParam = (items: AutoReply, isi_param: string, recipientSend
                         return String(message);
                     } else if (items[isi_param] === "Custom") {
                         return String(items['custom_value_1']);
+                    } else if (items[isi_param] == "Quote") {
+                        return String(quote);
                     }
                     break;
                 case "isi_param_2":
@@ -33,6 +36,8 @@ export const CekValueParam = (items: AutoReply, isi_param: string, recipientSend
                         return String(message);
                     } else if (items[isi_param] === "Custom") {
                         return String(items['custom_value_2']);
+                    } else if (items[isi_param] === "Quote") {
+                        return String(quote);
                     }
                     break;
                 case "isi_param_3":
@@ -44,6 +49,8 @@ export const CekValueParam = (items: AutoReply, isi_param: string, recipientSend
                         return String(message);
                     } else if (items[isi_param] === "Custom") {
                         return String(items['custom_value_3']);
+                    } else if (items[isi_param] === "Quote") {
+                        return String(quote);
                     }
                     break;
                 default:
