@@ -1,20 +1,20 @@
+import { Phone } from "@prisma/client";
+import { proto, WASocket } from "@whiskeysockets/baileys";
+
 import {
   CekValueParam,
   checkIdGroupFormat,
   getImageFromWaMessage,
   messageKeywordTypeChecker,
   runFetchGetResponse,
-} from "@/server/utils";
-import { getAutoReplyByPhoneId } from "@/services/autoReply";
-import { saveToGrup } from "@/services/group";
+} from "../../server/utils";
+import { getAutoReplyByPhoneId } from "../../services/autoReply";
+import { saveToGrup } from "../../services/group";
 import {
   insertToInboxMessage,
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
-} from "@/services/inboxMessage";
-import { Phone } from "@prisma/client";
-import { proto, WASocket } from "@whiskeysockets/baileys";
-
+} from "../../services/inboxMessage";
 import toBase64 from "../libs/toBase64";
 
 export const handleMessageInEvent = async (
@@ -104,6 +104,7 @@ export const handleMessageInEvent = async (
         message: messageIn!,
         recipient: messages[0].key.remoteJid!.split("@")[0]!,
         sender: phone_number,
+        auto_reply_id: item.id.toString(),
       } as InserttWebhookToInboxMessageProps;
 
       if (!item.url) {

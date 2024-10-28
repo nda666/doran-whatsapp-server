@@ -1,7 +1,7 @@
-import { checkIdGroupFormat } from "@/server/utils/checkIdGroupFormat";
 import { proto, WASocket } from "@whiskeysockets/baileys";
 
 import { prisma } from "../lib/prisma";
+import { checkIdGroupFormat } from "../server/utils/checkIdGroupFormat";
 
 export const saveToGrup = async (
   messages: proto.IWebMessageInfo[],

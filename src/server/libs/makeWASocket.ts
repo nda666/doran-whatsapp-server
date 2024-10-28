@@ -3,14 +3,14 @@ import "pino-roll";
 
 import { pino } from "pino";
 
-import { getWaMesage } from "@/server/utils/getWaMessage";
-import { getPhoneById } from "@/services/phone";
 import _makeWASocket, {
   useMultiFileAuthState,
   WASocket,
 } from "@whiskeysockets/baileys";
 
 import { prisma } from "../../lib/prisma";
+import { getWaMesage } from "../../server/utils/getWaMessage";
+import { getPhoneById } from "../../services/phone";
 import { WaSockQrTimeout } from "../constant";
 import connectionUpdate from "../events/connectionUpdate";
 import { handleMessageInEvent } from "../events/handleMessageInEvent";

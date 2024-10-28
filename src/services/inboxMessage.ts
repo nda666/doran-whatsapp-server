@@ -1,5 +1,6 @@
-import { prisma } from "@/lib/prisma";
 import { InboxMessage, ParamType, TypeRequest } from "@prisma/client";
+
+import { prisma } from "../lib/prisma";
 
 export type InsertToInboxMessageProps = Pick<
   InboxMessage,
@@ -35,6 +36,7 @@ export type InserttWebhookToInboxMessageProps = {
   custom_value_3?: string | null;
   respons?: string | null; // untuk response dari api
   image_in?: string | null | undefined;
+  auto_reply_id?: string | null | undefined;
 };
 export const insertWebhookToInboxMessage = async (
   data: InserttWebhookToInboxMessageProps

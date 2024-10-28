@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from "../lib/prisma";
 
 /**
  * Retrieves a list of auto replies associated with a specific phone ID.
