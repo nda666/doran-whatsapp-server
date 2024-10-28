@@ -5,7 +5,7 @@ module.exports = {
       script: "./dist/src/server.js",
       env: { NODE_ENV: "production" },
       node_args: ["--max-old-space-size=1024"],
-      max_memory_restart: "600M",
+      max_memory_restart: "1000M",
     },
   ],
 };

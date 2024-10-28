@@ -95,7 +95,7 @@ export default async function connectionUpdate(
       (lastDisconnect?.error as any)?.output?.statusCode ==
       DisconnectReason.loggedOut
     ) {
-      fs.rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
+      fs.rmSync(`./storage/whatsapp-auth/${userId}-${phoneId}`, {
         recursive: true,
         force: true,
       });
