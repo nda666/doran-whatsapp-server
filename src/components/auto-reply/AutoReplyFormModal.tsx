@@ -120,7 +120,8 @@ const AutoReplyFormModal = forwardRef<
         form.setFieldValue("type_keyword", editReply.type_keyword);
         setTypeMessage(editReply.type);
         form.setFieldValue("type_message", editReply.type);
-        setIsSaveInbox(editReply.is_save_inbox);
+        form.setFieldValue("is_save_inbox", editReply.is_save_inbox);
+        // setIsSaveInbox(editReply.is_save_inbox);
         form.setFieldValue("url", editReply.url);
         form.setFieldValue("type_request", editReply.type_request);
         form.setFieldValue("param_1", editReply.param_1);
@@ -284,17 +285,8 @@ const AutoReplyFormModal = forwardRef<
           >
             <Input disabled />
           </Form.Item>
-          <Form.Item
-            name="is_save_inbox"
-            initialValue={isSaveInbox}
-            valuePropName="checked"
-          >
-            <Checkbox
-              onChange={(e) => setIsSaveInbox(e.target.checked)}
-              checked={isSaveInbox}
-            >
-              Simpan Pesan Masuk
-            </Checkbox>
+          <Form.Item name="is_save_inbox" valuePropName="checked">
+            <Checkbox>Simpan Pesan Masuk</Checkbox>
           </Form.Item>
           <Form.Item
             name={"type_keyword"}
