@@ -38,7 +38,7 @@ export const handleQuotedMessageEvent = async (
 
   if (messages[0].message!.extendedTextMessage?.text) {
     clientMessage = messages[0].message!.extendedTextMessage!.text;
-    String(
+    participantNum = String(
       messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
         "@"
       )[0]
