@@ -106,9 +106,9 @@ const makeWASocket = async (
 
     // for reply
     _waSocket.ev.on("messages.upsert", async ({ messages }) => {
-      // if (messages[0].key.fromMe) {
-      //   return;
-      // }
+      if (messages[0].key.fromMe) {
+        return;
+      }
       const { messageIn, messageType, quotedMessage } = getWaMesage(messages);
 
       const getPhone = await getPhoneById(phoneId);
