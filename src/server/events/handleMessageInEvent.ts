@@ -44,8 +44,8 @@ export const handleMessageInEvent = async (
       if (item.is_save_inbox) {
         insertToInboxMessage({
           message: messageIn!,
-          recipient: messages[0].key.remoteJid!.split("@")[0]!,
-          sender: phone_number!,
+          sender: messages[0].key.remoteJid!.split("@")[0]!,
+          recipient: phone_number!,
         });
       }
       await _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
@@ -102,8 +102,8 @@ export const handleMessageInEvent = async (
       let data = {
         image_in: finalFilePath,
         message: messageIn!,
-        recipient: messages[0].key.remoteJid!.split("@")[0]!,
-        sender: phone_number,
+        sender: messages[0].key.remoteJid!.split("@")[0]!,
+        recipient: phone_number,
         // auto_reply_id: item.id.toString(),
       } as InserttWebhookToInboxMessageProps;
 
