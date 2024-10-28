@@ -23,12 +23,6 @@ app.use(compression());
 app.use(
   pinoHttp({
     logger: logger(`${process.env.WEBSITE_LOG}/website.log`),
-    customLogLevel: (res, err) => {
-      const statusCode = res.statusCode ?? 200; // Fallback to 200 if undefined
-      if (statusCode >= 400 && statusCode < 500) return "warn";
-      if (statusCode >= 500 || err) return "error";
-      return "info";
-    },
   })
 );
 
