@@ -1,6 +1,9 @@
 {
-  "watch": ["src"],
+  "watch": ["src", "public/locales"],
   "ext": "ts,json",
   "ignore": ["src/**/*.spec.ts"],
-  "exec": "ts-node --project tsconfig.server.json src/server.ts"
+  "exec": "ts-node -r tsconfig-paths/register --project tsconfig.server.json src/server/index.ts",
+  "env": {
+    "NODE_ENV": "development"
+  }
 }

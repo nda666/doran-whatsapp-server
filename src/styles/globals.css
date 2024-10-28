@@ -10,3 +10,34 @@ body {
   min-height: 100%;
   height: 100%;
 }
+
+.form-container {
+  overflow: hidden;
+  transition: all 0.5s ease;
+  opacity: 0;
+  height: 0;
+}
+
+.form-container.visible {
+  opacity: 1;
+  height: auto; /* Allow the form to expand fully */
+}
+
+.form-container.hidden {
+  opacity: 0;
+  height: 0; /* Collapse to zero height */
+}
+
+.antd-upload-image-custom {
+  width: 100%;
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.antd-upload-image-custom .ant-upload {
+  width: 100%;
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+}

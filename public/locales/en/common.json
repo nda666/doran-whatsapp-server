@@ -47,5 +47,22 @@
     "required": "{{field}} is required",
     "min": "{{field}} at least {{value}} characters",
     "email": "{{field}} is not valid email address"
-  }
+  },
+  "enter_number": "Enter number",
+  "enter_name": "Enter name",
+  "search": "Search",
+  "status": "Status",
+  "filter": "Filter",
+  "show_all": "Show all",
+  "hide_search": "Hide Search",
+  "show_search": "Show Search",
+  "equal": "Equal",
+  "contain": "Contain",
+  "matches_everything": "Matches everything",
+  "reply_message_type": "Reply message type",
+  "save_success": "Saved successfully",
+  "save_failed": "Failed to save",
+  "cancel": "Cancel",
+  "save": "Save",
+  "whatsapp_qrcode": "Whatsapp QRCode"
 }

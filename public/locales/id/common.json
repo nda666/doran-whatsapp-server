@@ -48,5 +48,21 @@
   "number": "Nomor",
   "api_token": "Token api",
   "action": "Tindakan",
-  "getting_qrcode": "Harap tunggu, sementara kami mendapatkan kode qr"
+  "getting_qrcode": "Harap tunggu, sementara kami mendapatkan kode qr",
+  "enter_number": "Masukkan nomor",
+  "enter_name": "Masukkan name",
+  "search": "Cari",
+  "filter": "Menyaring",
+  "show_all": "Tunjukkan semuanya",
+  "hide_search": "Sembunyikan Pencarian",
+  "show_search": "Tampilkan Pencarian",
+  "equal": "Sama dengan",
+  "contain": "Berisi",
+  "matches_everything": "Cocok dengan segalanya",
+  "reply_message_type": "Jenis pesan balasan",
+  "save_success": "Berhasil disimpan",
+  "save_failed": "Gagal disimpan",
+  "save": "Simpan",
+  "cancel": "Batal",
+  "whatsapp_qrcode": "QRCode Whatsapp"
 }

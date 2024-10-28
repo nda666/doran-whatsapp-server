@@ -1,16 +1,8 @@
-import base64toImage from "@/lib/base64toImage";
-import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
+import { NextApiResponse } from "next";
+import { io } from "socket.io-client";
+
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
-import { SendMessageValidation } from "@/validations/sendMessage";
-import { delay } from "@whiskeysockets/baileys";
-import axios from "axios";
-import formidable from "formidable";
-import { readFile } from "fs";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
-import { NextApiRequest, NextApiResponse } from "next";
-import { NextRequest } from "next/server";
-import { io } from "socket.io-client";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -101,7 +93,7 @@ const sendGroupMessage = async (
         phoneCountry,
         message,
         image,
-        id_group
+        id_group,
       });
 
     res.status(200).json({ result: true, data: resSocket });

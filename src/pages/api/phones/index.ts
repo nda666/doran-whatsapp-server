@@ -1,9 +1,8 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getToken } from "next-auth/jwt";
+
 import { prisma } from "@/lib/prisma";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
-import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
-import Nextauth from "../auth/[...nextauth]";
-import { getToken } from "next-auth/jwt";
 import { AuthNextApiRequest } from "@/types/global";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,10 +18,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   const token = await getToken({ req });
+
   try {
+    const { number, name, is_online } = req.query;
+    // if (status && !isPhoneStatus(status)) {
+    //   res.status(400).json({ message: "status_is_invalid" });
+    //   return;
+    // }
     const phones = await prisma.phone.findMany({
       where: {
         userId: req?.user?.id!,
+        ...(number && {
+          number: {
+            contains: String(number), // Case-insensitive search, adjust if needed
+          },
+        }),
+        ...(name && {
+          name: {
+            contains: String(name), // Case-insensitive search, adjust if needed
+          },
+        }),
+        ...(typeof is_online !== "undefined" && {
+          isOnline: is_online == "1" ? true : false,
+        }),
       },
       orderBy: {
         createdAt: "desc",
@@ -43,7 +61,7 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
       },
       data: {
         name: req.body.name,
-        is_save_group: req.body.is_save_group
+        is_save_group: req.body.is_save_group,
       },
     });
   } else {

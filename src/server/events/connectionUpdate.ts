@@ -1,13 +1,15 @@
+import * as fs from "fs";
+
 import {
   ConnectionState,
   DisconnectReason,
   WASocket,
 } from "@whiskeysockets/baileys";
-import * as fs from "fs";
-import makeWASocket, { deleteSession } from "../../lib/makeWASocket";
-import { WaSockQrTimeout } from "../constant";
+
 import { prisma } from "../../lib/prisma";
-import { getSocketIO } from "../../lib/socket";
+import { WaSockQrTimeout } from "../constant";
+import makeWASocket, { deleteSession } from "../libs/makeWASocket";
+import { getSocketIO } from "../libs/socket";
 
 export default async function connectionUpdate(
   waSock: WASocket,
@@ -30,14 +32,14 @@ export default async function connectionUpdate(
       qr: update.qr,
       timeout: WaSockQrTimeout,
     });
-    await prisma.phone.update({
-      where: {
-        id: phoneId,
-      },
-      data: {
-        qrCode: update.qr,
-      },
-    });
+    // await prisma.phone.update({
+    //   where: {
+    //     id: phoneId,
+    //   },
+    //   data: {
+    //     qrCode: update.qr,
+    //   },
+    // });
   }
 
   const { connection, lastDisconnect } = update;

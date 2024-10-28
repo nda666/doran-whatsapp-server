@@ -1,8 +1,9 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
-import { prisma } from "./prisma";
-import { Phone } from "@prisma/client";
+
 import axios, { AxiosError } from "axios";
+
 import { PhoneFormData } from "@/components/phone/PhoneFormModal";
+import { Phone } from "@prisma/client";
 
 type ResponseResult = {
   success: boolean;
@@ -20,7 +21,16 @@ export type usePhoneDataType = {
   ) => Promise<ResponseResult>;
   refetchPhone: () => void;
 };
-export default function usePhoneData(token: string): usePhoneDataType {
+
+export type SearchPhoneParams = {
+  name?: string | undefined | null;
+  number?: string | undefined | null;
+  is_online?: string | undefined | null;
+};
+export default function usePhoneData(
+  token: string,
+  search: SearchPhoneParams
+): usePhoneDataType {
   const [runRefetchPhone, setRunRefetchPhone] = useState(false);
   const [phones, setPhones] = useState<Phone[] | undefined>([]);
   // const socketRef = useRef<any>();
@@ -36,18 +46,26 @@ export default function usePhoneData(token: string): usePhoneDataType {
   useEffect(() => {
     const fetchPhones = async () => {
       setRunRefetchPhone(false);
-      const response = await axios.get(`/api/phones`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = response.data;
-      setPhones(result);
+      try {
+        const response = await axios.get(`/api/phones`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            ...(search.name && { name: search.name }),
+            ...(search.number && { number: search.number }),
+            ...(search.is_online && { is_online: search.is_online }),
+          },
+        });
+        const result = response.data;
+        setPhones(result);
+      } catch (e) {
+        console.log(e);
+      }
     };
-
     runRefetchPhone && token && fetchPhones();
     return () => {};
-  }, [runRefetchPhone, token]);
+  }, [runRefetchPhone, token, search.name, search.number, search.is_online]);
 
   const deleteById = async (phoneId: string) => {
     const result: {

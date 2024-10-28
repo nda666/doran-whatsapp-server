@@ -1,12 +1,7 @@
+import { delay, proto } from "@whiskeysockets/baileys";
+
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 import makeWASocket, { deleteSession } from "./makeWASocket";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
-import {
-  AnyMessageContent,
-  WASocket,
-  delay,
-  proto,
-} from "@whiskeysockets/baileys";
 
 const sendGroupMessageFromIo = async ({
   phoneId,

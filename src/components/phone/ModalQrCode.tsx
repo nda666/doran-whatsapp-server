@@ -1,38 +1,69 @@
+import { useEffect, useState } from "react";
+
+import { Modal, Space, Typography } from "antd";
+import axios from "axios";
+import { useTranslation } from "next-i18next";
+import Image from "next/image";
+import { QRCodeSVG } from "qrcode.react";
+
 import useSocket from "@/lib/useSocket";
 import { Phone } from "@prisma/client";
-import { Button, Image, Modal, Space, Spin, Typography } from "antd";
-import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
-import { useTranslation } from "next-i18next";
-import { Socket, io } from "socket.io-client";
 
 interface ModalQrCodeProps {
   phone?: Phone;
   userId?: string;
   open: boolean;
+  token?: string;
   onClose?: () => void;
 }
 export default function ModalQrCode({
   open,
   phone,
   userId,
+  token,
   ...props
 }: ModalQrCodeProps) {
   const [waQrCode, setWaQrCode] = useState<string | undefined>(undefined);
   const [waQrCodeTimeout, setWaQrCodeTimeout] = useState(0);
-  const [isOnline, setIsOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [allowRunSocket, setAllowRunSocket] = useState(false);
   const { socket, setEvents } = useSocket({
+    autoConnect: false,
     query: {
       phoneId: phone?.id,
       userId: userId,
     },
     transports: ["websocket"],
   });
-  const { t } = useTranslation();
+  const { t } = useTranslation("common");
+
+  const getQrCode = async () => {
+    try {
+      const res = await axios.get(`/api/phones/${phone?.id}/qrcode`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.status == 200 && res.data?.qr) {
+        setWaQrCode(res.data?.qr);
+        const _timeout =
+          res.data?.timeout > 0 ? res.data?.timeout / 1000 - 5 : 0;
+        setWaQrCodeTimeout(_timeout);
+        setTimeout(() => {
+          setAllowRunSocket(true);
+        }, res.data?.timeout || 10);
+      }
+    } catch (e) {
+      setAllowRunSocket(true);
+    }
+  };
 
   useEffect(() => {
-    if (!open || !phone) {
+    token && phone?.id && open && getQrCode();
+  }, [phone?.id, token, open]);
+
+  useEffect(() => {
+    if (!open || !phone || !allowRunSocket) {
       socket?.disconnect();
       setEvents(null);
       return;
@@ -64,7 +95,7 @@ export default function ModalQrCode({
         name: "connectionState",
         handler(connectionState) {
           if ("connection" in connectionState) {
-            setIsLoading(connectionState.connection === "connecting");
+            // setIsLoading(connectionState.connection === "connecting");
           }
         },
       },
@@ -82,7 +113,7 @@ export default function ModalQrCode({
       socket?.disconnect();
       setEvents(null);
     };
-  }, [open, phone]);
+  }, [open, phone, allowRunSocket]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -96,15 +127,10 @@ export default function ModalQrCode({
     };
   }, [waQrCodeTimeout]);
 
-  // useEffect(() => {
-  //   setWaQrCode(phone?.qrCode || "");
-  //   setWaQrCodeTimeout(30);
-  // }, [phone?.qrCode]);
-
   return (
     <>
       <Modal
-        title={t("whatsaap_qrcode")}
+        title={t("whatsapp_qrcode")}
         closable={false}
         open={open}
         onCancel={() => {
@@ -134,7 +160,12 @@ export default function ModalQrCode({
           ) : (
             <>
               <Typography.Text>{t("getting_qrcode")}</Typography.Text>
-              <Spin size="large"></Spin>
+              <Image
+                src={"/waiting.gif"}
+                height={300}
+                alt="Aku menunggu"
+                width={300}
+              />
             </>
           )}
         </Space>

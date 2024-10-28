@@ -1,11 +1,11 @@
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 
-import { getAllSession } from "@/lib/makeWASocket";
+import { NextApiResponse } from "next";
+import { io } from "socket.io-client";
+
 import { prisma } from "@/lib/prisma";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
-import { NextApiResponse } from "next";
-import { io } from "socket.io-client";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -37,7 +37,7 @@ const handler = async (req: SendMessageRequest, res: NextApiResponse) => {
 const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   const { number, message, api_key, phoneCountry, image } = req.body;
   const tos = (number as string).split(",");
-
+  console.log(req.body);
   const phone = await prisma.phone.findUnique({
     where: {
       token: api_key,

@@ -1,5 +1,6 @@
-import { PhoneStatus } from "@prisma/client";
-import { prisma } from "./prisma";
+import { PhoneStatus } from '@prisma/client';
+
+import { prisma } from '../lib/prisma';
 
 export const updatePhoneStatusAndOnline = async (
   id: string,
@@ -16,3 +17,10 @@ export const updatePhoneStatusAndOnline = async (
     },
   });
 };
+
+export const getPhoneById = async (phoneId: any) =>
+  await prisma.phone.findUnique({
+    where: {
+      id: phoneId,
+    },
+  });

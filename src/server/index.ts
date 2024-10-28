@@ -2,15 +2,17 @@ import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
 import next from "next";
+import { pinoHttp } from "pino-http";
 
 import { WASocket } from "@whiskeysockets/baileys";
 
-import makeWASocket from "./lib/makeWASocket";
-import { prisma } from "./lib/prisma";
-import sendAttachmentMessageIo from "./lib/sendAttachmentMessageIo";
-import sendGroupMessageFromIo from "./lib/sendGroupMessageFromIo";
-import sendMessageFromIo from "./lib/sendMessageFromIo";
-import { getSocketIO } from "./lib/socket";
+import { prisma } from "../lib/prisma";
+import { logger } from "./libs/logger";
+import makeWASocket from "./libs/makeWASocket";
+import sendAttachmentMessageIo from "./libs/sendAttachmentMessageIo";
+import sendGroupMessageFromIo from "./libs/sendGroupMessageFromIo";
+import sendMessageFromIo from "./libs/sendMessageFromIo";
+import { getSocketIO } from "./libs/socket";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -18,6 +20,17 @@ const dev = process.env.NODE_ENV !== "production";
 
 const app = express();
 app.use(compression());
+app.use(
+  pinoHttp({
+    logger: logger(`${process.env.WEBSITE_LOG}/website.log`),
+    customLogLevel: (res, err) => {
+      const statusCode = res.statusCode ?? 200; // Fallback to 200 if undefined
+      if (statusCode >= 400 && statusCode < 500) return "warn";
+      if (statusCode >= 500 || err) return "error";
+      return "info";
+    },
+  })
+);
 
 const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
@@ -157,14 +170,24 @@ nextApp.prepare().then(async () => {
   const server: Server = createServer(app);
   io.attach(server);
   const isDevelopment = process.env.NODE_ENV == "development" ? true : false;
-  const host = isDevelopment ? "localhost" : "0.0.0.0";
-  server.listen(port, host, () => {
-    if (process.env.NODE_ENV !== "production")
+  const host = isDevelopment ? "0.0.0.0" : "0.0.0.0";
+  server.listen(port, host, async () => {
+    if (process.env.NODE_ENV !== "production") {
       console.info(
         `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
       );
+    }
+    connectAllWa();
   });
 });
+
+const connectAllWa = async () => {
+  const phones = await prisma.phone.findMany();
+  phones?.forEach(async (phone) => {
+    const createdWaSock = await makeWASocket(phone.userId, phone.id);
+    createdWaSock && waSocks.push(createdWaSock);
+  });
+};
 
 process.on("SIGINT", async function () {
   await nextApp.close();

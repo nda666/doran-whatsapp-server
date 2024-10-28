@@ -1,46 +1,25 @@
-import Layout from "@/components/Layout";
-import AutoReplyFormModal, {
-  AutoReplyFormModalRef,
-  AutoReplyFormData,
-  ImageReply,
-} from "@/components/auto-reply/AutoReplyFormModal";
-import ModalQrCode from "@/components/phone/ModalQrCode";
-import PhoneFormModal, {
-  PhoneFormData,
-  PhoneFormModalRef,
-} from "@/components/phone/PhoneFormModal";
-// import PhoneTableButton from "@/components/phone/PhoneTableButton";
-import ReplyTableButton from "@/components/auto-reply/ReplyTableButton";
-import { copyToClipboard } from "@/lib/copyToClipboard";
-import useAutoReplyData from "@/lib/useAutoReplyData";
-import usePhoneData from "@/lib/usePhoneData";
-import useSocket from "@/lib/useSocket";
-import { SocketEvent } from "@/lib/useSocket";
-import useWhatsappBot from "@/lib/useWhatsappBot";
-import { AutoReply, Phone, User } from "@prisma/client";
-import {
-  Button,
-  Dropdown,
-  Menu,
-  Modal,
-  Space,
-  Table,
-  notification,
-} from "antd";
+import { ReactElement, useRef, useState } from "react";
+
+import { Button, Flex, Modal, notification, Table } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSession } from "next-auth/react";
 import { i18n, useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { useRouter } from "next/router";
+
+import AutoReplyFormModal from "@/components/auto-reply/AutoReplyFormModal";
+import ReplyTableButton from "@/components/auto-reply/ReplyTableButton";
+import Layout from "@/components/Layout";
+import ModalQrCode from "@/components/phone/ModalQrCode";
+import { PhoneFormModalRef } from "@/components/phone/PhoneFormModal";
+import useAutoReplyData from "@/lib/useAutoReplyData";
 import {
-  ReactElement,
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+  AutoReplyFormData,
+  AutoReplyFormModalRef,
+  ImageReply,
+} from "@/types/components/IAutoReplyFormModal";
+import { AutoReply, Phone } from "@prisma/client";
 
 const AutoReplyPage = () => {
   const [state, setState] = useState<{
@@ -63,95 +42,24 @@ const AutoReplyPage = () => {
   const router = useRouter();
   //
   const phone_id = router.query.phone_id ? router.query.phone_id : undefined;
+
   const phone_num = router.query.phone_num;
   const { data: session } = useSession();
   const [imageReply, setImageReply] = useState<ImageReply>({
     preview: "",
     raw: "",
   });
-  const phoneData = usePhoneData(session?.user?.token!);
+
   const replyData = useAutoReplyData(
     session?.user?.token!,
     phone_id?.toString()
   );
-  const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
-  const [socketOption, setSocketOption] = useState<any>({
-    autoConnect: false,
-    transports: ["websocket"],
-  });
-  const { socket, setEvents } = useSocket(socketOption);
-  const { t, i18n } = useTranslation("common");
+
+  const { t } = useTranslation("common");
   const [modal, contextHolder] = Modal.useModal();
   const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
   const formAutoRep = useRef<AutoReplyFormModalRef>(null);
-  useEffect(() => {
-    if ((phoneData.phones?.length || 0) <= 0) {
-      setSocketOption(undefined);
-      return;
-    }
-    setSocketOption({
-      query: {
-        userId: session?.user?.id,
-        phoneId: phoneData.phones?.map((x) => x.id),
-      },
-      autoConnect: false,
-      transports: ["websocket"],
-    });
-    return () => {
-      setSocketOption(undefined);
-    };
-  }, [phoneData.phones]);
-
-  const setPh = (phoneId: string) => {
-    // !phoneOnline.includes(phoneId) &&
-    //   setPhoneOnline((prevArr) => [...prevArr, phoneId]);
-  };
-
-  //
-
-  useEffect(() => {
-    if (!socketOption || state.openQrModal || state.openQrModal) {
-      //
-      setEvents([]);
-      socket?.disconnect();
-      return;
-    }
-    const events: SetStateAction<SocketEvent[] | null> = [];
-
-    events.push({
-      name: `isOnline`,
-      handler: (connection) => {
-        //
-        setPh(connection.phoneId);
-      },
-    });
-    events.push({
-      name: `waUser`,
-      handler: (waUser) => {
-        let _phones = phoneData.phones;
-        let editPhones = _phones?.find((x) => x.id === waUser.phoneId);
-        if (editPhones) {
-          editPhones.account_name = waUser.waUser.name;
-          editPhones.number = waUser.waUser.id.split(":")[0];
-          phoneData.setPhones(_phones);
-        }
-      },
-    });
-
-    events.push({
-      name: "connect",
-      handler: () => {
-        //
-      },
-    });
-    setEvents(events);
-    socket?.connect();
-    return () => {
-      setEvents([]);
-      socket?.disconnect();
-    };
-  }, [socketOption, state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<AutoReply> = [
     {
@@ -253,12 +161,6 @@ const AutoReplyPage = () => {
         return (
           <ReplyTableButton
             auto_replies={auto_replies}
-            // onAutoReply={
-            //   (_phone: Phone | undefined) => {
-            //     _phone &&
-            //       setState({...state, openReplyForm: true, phoneId: _phone })
-            //   }
-            // }
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
           />
@@ -284,16 +186,32 @@ const AutoReplyPage = () => {
     }
     setState({ ...state, formLoading: true });
     const res = await replyData.save(data);
+    notif.destroy();
+    console.log(res);
     if (res.success) {
       form.current?.resetForm();
+
+      notif.success({
+        closeIcon: true,
+        message: t("save_success"),
+      });
+      setState({
+        ...state,
+        openReplyForm: false,
+        phoneId: undefined,
+        editReply: undefined,
+        formLoading: false,
+      });
+    } else {
+      notif.error({
+        closeIcon: true,
+        message: res.error?.message ? t(res.error.message) : t("save_failed"),
+      });
+      setState({
+        ...state,
+        formLoading: false,
+      });
     }
-    setState({
-      ...state,
-      formLoading: false,
-      openReplyForm: false,
-      phoneId: undefined,
-      editReply: undefined,
-    });
   };
 
   const onCancel = () =>
@@ -334,49 +252,52 @@ const AutoReplyPage = () => {
 
   return (
     <>
-      <Button
-        onClick={() =>
-          setState({
-            ...state,
-            openReplyForm: true,
-            phoneId: { id: phone_id, number: phone_num } as Phone,
-          })
-        }
-      >
-        {t("new_reply")}
-      </Button>
+      <Flex gap="middle" vertical>
+        <Flex>
+          <Button
+            onClick={() =>
+              setState({
+                ...state,
+                openReplyForm: true,
+                phoneId: { id: phone_id, number: phone_num } as Phone,
+              })
+            }
+          >
+            {t("new_reply")}
+          </Button>
+        </Flex>
+        <AutoReplyFormModal
+          ref={formAutoRep}
+          loading={state.formLoading}
+          open={state.openReplyForm}
+          onCancel={onCancel}
+          onSubmitReply={onSubmitReply}
+          onChangeImageReply={handleTambahImageReply}
+          editReply={state.editReply}
+          phoneId={state.phoneId}
+        />
+        <Table
+          scroll={{ x: true }}
+          onRow={(record) => {
+            return {
+              onContextMenu: (event) => {
+                event.preventDefault();
+              },
+            };
+          }}
+          dataSource={replyData.auto_replies}
+          columns={dataColumn}
+        />
+        <ModalQrCode
+          userId={session?.user?.id}
+          open={state.openQrModal}
+          phone={state.selectedPhone || undefined}
+          onClose={() => setState({ ...state, openQrModal: false })}
+        />
 
-      <AutoReplyFormModal
-        ref={formAutoRep}
-        loading={state.formLoading}
-        open={state.openReplyForm}
-        onCancel={onCancel}
-        onSubmitReply={onSubmitReply}
-        onChangeImageReply={handleTambahImageReply}
-        editReply={state.editReply}
-        phoneId={state.phoneId}
-      />
-      <Table
-        scroll={{ x: true }}
-        onRow={(record) => {
-          return {
-            onContextMenu: (event) => {
-              event.preventDefault();
-            },
-          };
-        }}
-        dataSource={replyData.auto_replies}
-        columns={dataColumn}
-      />
-      <ModalQrCode
-        userId={session?.user?.id}
-        open={state.openQrModal}
-        phone={state.selectedPhone || undefined}
-        onClose={() => setState({ ...state, openQrModal: false })}
-      />
-
-      {contextHolder}
-      {notificationContext}
+        {contextHolder}
+        {notificationContext}
+      </Flex>
     </>
   );
 };

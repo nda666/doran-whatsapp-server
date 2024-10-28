@@ -1,27 +1,3 @@
-import Layout from "@/components/Layout";
-import {
-  AutoReplyFormData,
-  AutoReplyFormModalRef,
-} from "@/components/auto-reply/AutoReplyFormModal";
-import ModalQrCode from "@/components/phone/ModalQrCode";
-import PhoneFormModal, {
-  PhoneFormData,
-  PhoneFormModalRef,
-} from "@/components/phone/PhoneFormModal";
-import PhoneTableButton from "@/components/phone/PhoneTableButton";
-import { copyToClipboard } from "@/lib/copyToClipboard";
-import useAutoReplyData from "@/lib/useAutoReplyData";
-import usePhoneData from "@/lib/usePhoneData";
-import useSocket, { SocketEvent } from "@/lib/useSocket";
-import { Phone } from "@prisma/client";
-import { Button, Modal, Space, Switch, Table, notification } from "antd";
-import { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
-import { useSession } from "next-auth/react";
-import { i18n, useTranslation } from "next-i18next";
-import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import getConfig from "next/config";
-import { useRouter } from "next/router";
 import {
   ReactElement,
   SetStateAction,
@@ -29,6 +5,27 @@ import {
   useRef,
   useState,
 } from "react";
+
+import { Button, Flex, Modal, notification, Space, Switch, Table } from "antd";
+import { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import { useSession } from "next-auth/react";
+import { i18n, useTranslation } from "next-i18next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { useRouter } from "next/router";
+
+import Layout from "@/components/Layout";
+import ModalQrCode from "@/components/phone/ModalQrCode";
+import PhoneFormModal, {
+  PhoneFormData,
+  PhoneFormModalRef,
+} from "@/components/phone/PhoneFormModal";
+import PhoneTableButton from "@/components/phone/PhoneTableButton";
+import SearchPhoneForm from "@/components/phone/SearchPhoneForm";
+import usePhoneData from "@/lib/usePhoneData";
+import useSocket, { SocketEvent } from "@/lib/useSocket";
+import { copyToClipboard } from "@/utils/copyToClipboard";
+import { Phone } from "@prisma/client";
 
 const PhonePage = () => {
   const [state, setState] = useState<{
@@ -49,16 +46,21 @@ const PhonePage = () => {
     phoneId: undefined,
   });
   const { data: session } = useSession();
-  const phoneData = usePhoneData(session?.user?.token!);
-  const replyData = useAutoReplyData(session?.user?.token!);
+
+  const [searchQuery, setSearchQuery] = useState({
+    number: undefined,
+    name: undefined,
+    is_online: undefined,
+  });
+  const phoneData = usePhoneData(session?.user?.token!, searchQuery);
+  const [showSearch, setShowSearch] = useState(true);
   const [phoneOnline, setPhoneOnline] = useState<string[]>([]);
   const [socketOption, setSocketOption] = useState<any>(undefined);
   const { socket, setEvents } = useSocket(socketOption);
-  const { t, i18n } = useTranslation("common");
+  const { t } = useTranslation("common");
   const [modal, contextHolder] = Modal.useModal();
   const [notif, notificationContext] = notification.useNotification();
   const form = useRef<PhoneFormModalRef>(null);
-  const formAutoRep = useRef<AutoReplyFormModalRef>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -252,21 +254,6 @@ const PhonePage = () => {
     });
   };
 
-  const onSubmitReply = async (data: AutoReplyFormData) => {
-    setState({ ...state, formLoading: true });
-    //
-    const res = await replyData.save(data);
-    if (res.success) {
-      form.current?.resetForm();
-    }
-    setState({
-      ...state,
-      formLoading: false,
-      openReplyForm: false,
-      phoneId: undefined,
-    });
-  };
-
   const onCancel = () =>
     setState({
       ...state,
@@ -332,18 +319,27 @@ const PhonePage = () => {
 
   return (
     <>
-      <Button onClick={() => setState({ ...state, openForm: true })}>
-        {t("add_devices")}
-      </Button>
-      <PhoneFormModal
-        ref={form}
-        loading={state.formLoading}
-        open={state.openForm}
-        onCancel={onCancel}
-        onSubmit={onSubmit}
-        editPhone={state.editPhone}
-      />
-      {/* <AutoReplyFormModal
+      <Flex gap="middle" vertical>
+        <Flex gap="middle">
+          <Button
+            type="primary"
+            onClick={() => setState({ ...state, openForm: true })}
+          >
+            {t("add_devices")}
+          </Button>
+          <Button onClick={() => setShowSearch(!showSearch)}>
+            {showSearch ? t("hide_search") : t("show_search")}
+          </Button>
+        </Flex>
+        <PhoneFormModal
+          ref={form}
+          loading={state.formLoading}
+          open={state.openForm}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+          editPhone={state.editPhone}
+        />
+        {/* <AutoReplyFormModal
       ref={formAutoRep}
       loading={state.formLoading}
       open={state.openReplyForm}
@@ -352,29 +348,38 @@ const PhonePage = () => {
       onChangeImageReply={handleTambahImageReply}
       phoneId={state.phoneId} 
       />*/}
-      <Table
-        scroll={{ x: true }}
-        onRow={(record) => {
-          return {
-            onContextMenu: (event) => {
-              event.preventDefault();
-              //
-            },
-          };
-        }}
-        dataSource={phoneData.phones}
-        columns={dataColumn}
-        rowKey="id"
-      />
-      <ModalQrCode
-        userId={session?.user?.id}
-        open={state.openQrModal}
-        phone={state.selectedPhone || undefined}
-        onClose={() => setState({ ...state, openQrModal: false })}
-      />
+        <SearchPhoneForm
+          visible={showSearch}
+          onSubmitSuccess={(data) => {
+            setSearchQuery(data);
+            phoneData.refetchPhone();
+          }}
+        />
+        <Table
+          scroll={{ x: true }}
+          onRow={(record) => {
+            return {
+              onContextMenu: (event) => {
+                event.preventDefault();
+                //
+              },
+            };
+          }}
+          dataSource={phoneData.phones}
+          columns={dataColumn}
+          rowKey="id"
+        />
+        <ModalQrCode
+          token={session?.user?.token!}
+          userId={session?.user?.id}
+          open={state.openQrModal}
+          phone={state.selectedPhone || undefined}
+          onClose={() => setState({ ...state, openQrModal: false })}
+        />
 
-      {contextHolder}
-      {notificationContext}
+        {contextHolder}
+        {notificationContext}
+      </Flex>
     </>
   );
 };

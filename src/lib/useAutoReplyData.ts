@@ -1,11 +1,13 @@
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
-import { prisma } from "./prisma";
+import { useEffect, useState } from "react";
+
+import axios, { AxiosError } from "axios";
+import { File } from "buffer";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
-import { AutoReply, Phone } from "@prisma/client";
-import axios, { AxiosError } from "axios";
-import { AutoReplyFormData } from "@/components/auto-reply/AutoReplyFormModal";
-import { File } from "buffer";
+
+import { AutoReplyFormData } from "@/types/components/IAutoReplyFormModal";
+import { AutoReply } from "@prisma/client";
+
 // import { PhoneFormData } from "@/components/phone/PhoneFormModal";
 
 type ResponseResult = {
@@ -32,8 +34,7 @@ export type useAutoReplyDataType = {
 };
 export default function useAutoReplyData(
   token: string,
-  phone_id?: string | undefined,
-  user_id?: string
+  phone_id?: string | undefined
 ): useAutoReplyDataType {
   const [runRefetchReplies, setRunRefetchReplies] = useState(false);
   //   const [phones, setPhones] = useState<Phone[] | undefined>([]);
@@ -53,24 +54,18 @@ export default function useAutoReplyData(
   useEffect(() => {
     const fetchAutoReplies = async () => {
       setRunRefetchReplies(false);
-      const params = {
-        user_id: user_id ? user_id : session?.user?.id,
-        phone_id: phone_id ? phone_id : router.query.phone_id,
-      };
-      const response = await axios.get(
-        `/api/auto_reply?user_id=${user_id}&phone_id=${phone_id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+
+      const response = await axios.get(`/api/auto_reply?phone_id=${phone_id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const result = response.data;
       setAutoReplies(result);
     };
 
-    runRefetchReplies && token && fetchAutoReplies();
-  }, [runRefetchReplies, token]);
+    runRefetchReplies && phone_id && token && fetchAutoReplies();
+  }, [runRefetchReplies, token, phone_id]);
 
   //   const deleteById = async (phoneId: string) => {
   //     const result: {
@@ -101,52 +96,73 @@ export default function useAutoReplyData(
   //     return result;
   //   };
   const save = async (data: AutoReplyFormData) => {
-    let uploadStatus = false;
     const result: ResponseResult = {
       success: false,
       error: undefined,
       data: undefined,
     };
 
-    // return result;
-    if (data.type_message == "image") {
-      if (data.image !== null && (data.image as File)) {
-        //
-        data.image_type = "file";
-        const imgFile: File = data.image as File;
-        let image_extension = imgFile!.name.split(".").pop();
-        if (imgExt.includes(image_extension!)) {
-          const formData = new FormData();
-          // let change_name = new Date().getTime()+"_"+phone_id+"."+image_extension;
-          formData.append("image", data.image);
+    const isValidImage = (imageFile: File) => {
+      const validImageTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+      ];
 
-          const responseImg = await axios.post(
-            `/api/image?phone_id=${phone_id}`,
-            formData
-          );
-          // result.data = responseImg;
-          if (responseImg.status == 200) {
-            const { file } = responseImg.data;
-            let change_name: string = "";
-            if (file) {
-              for (let imgFile of file.image) {
-                change_name = imgFile.newFilename;
-              }
-            }
-            // return result;
-            data.image = change_name && change_name;
-            uploadStatus = true;
-          }
+      // Check if the file's MIME type is valid
+      return validImageTypes.includes(imageFile.type);
+    };
+
+    const uploadImage = async (image: File): Promise<string | null> => {
+      const formData = new FormData();
+      formData.append("image", image as Blob, image.name);
+
+      const responseImg = await axios.post(
+        `/api/image?phone_id=${phone_id}`,
+        formData
+      );
+      if (responseImg.status === 200 && responseImg.data.file) {
+        return responseImg.data.file.image[0].newFilename || null;
+      }
+      return null;
+    };
+
+    const isImageMessage = data.type_message === "image";
+    let uploadStatus = false;
+
+    // Handle image messages
+    if (isImageMessage) {
+      if (!data.image || data.image === "") {
+        return {
+          success: false,
+          error: "Image is empty",
+          data: undefined,
+        };
+      }
+
+      if (typeof data.image !== "string" && isValidImage(data.image as File)) {
+        data.image_type = "file";
+
+        const imageFile = await uploadImage(data.image as File);
+        if (imageFile) {
+          data.image = imageFile;
+          uploadStatus = true;
         }
-      } else if (data.image !== null && (data.image as string)) {
+      } else if (typeof data.image === "string") {
         data.image_type = "text";
-        data.image = data.image && data.image;
         uploadStatus = true;
       }
     }
 
-    if (data.type_message == "text" || data.type_message == "button" || data.type_message == "webhook")
+    // Handle non-image message types
+    if (
+      ["text", "button", "webhook"].includes(data.type_message) ||
+      uploadStatus
+    ) {
       uploadStatus = true;
+    }
+
     try {
       if (uploadStatus) {
         const resp = await axios.post(`/api/auto_reply`, data, {
@@ -158,16 +174,11 @@ export default function useAutoReplyData(
         result.data = resp.data;
 
         setRunRefetchReplies(true);
-        // uploadStatus = false;
       } else {
         throw new Error("failed insert");
       }
     } catch (e) {
-      if (e instanceof AxiosError) {
-        result.error = e;
-      } else {
-        result.error = e;
-      }
+      result.error = e instanceof AxiosError ? e : e;
     }
 
     return result;
