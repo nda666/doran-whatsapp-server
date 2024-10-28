@@ -1,12 +1,3 @@
 {
-  "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
-  "plugins": ["@typescript-eslint"],
-  "rules": {
-    "@typescript-eslint/consistent-type-imports": [
-      "error",
-      {
-        "prefer": "type-imports"
-      }
-    ]
-  }
+  "extends": ["next/core-web-vitals"]
 }

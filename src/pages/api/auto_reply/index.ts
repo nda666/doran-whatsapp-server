@@ -1,17 +1,10 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getToken } from "next-auth/jwt";
+
 import { prisma } from "@/lib/prisma";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
-import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
-import Nextauth from "../auth/[...nextauth]";
-import { getToken } from "next-auth/jwt";
+import { ButtonMessage } from "@/types/components/IAutoReplyFormModal";
 import { AuthNextApiRequest } from "@/types/global";
-import { ButtonMessage } from "@/components/auto-reply/AutoReplyFormModal";
-import { AutoReply } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
-import formidable from "formidable";
-import { writeFile } from "fs/promises";
-import path from "path";
-import fs from "fs/promises";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   switch (req.method) {
@@ -158,15 +151,21 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
         is_save_inbox: req.body.is_save_inbox,
         url: req.body.url,
         type_request: req.body.type_request,
-        param_1: (req.body.param_1 != undefined) ? req.body.param_1 : null,
-        isi_param_1: (req.body.isi_param_1 != undefined) ? req.body.isi_param_1 : null,
-        param_2: (req.body.param_2 != undefined) ? req.body.param_2 : null,
-        isi_param_2: (req.body.isi_param_2 != undefined) ? req.body.isi_param_2 : null,
-        param_3: (req.body.param_3 != undefined) ? req.body.param_3 : null,
-        isi_param_3: (req.body.isi_param_3 != undefined) ? req.body.isi_param_3 : null,
-        custom_value_1: (req.body.custom_input_1 != undefined) ? req.body.custom_input_1 : null,
-        custom_value_2: (req.body.custom_input_2 != undefined) ? req.body.custom_input_2 : null,
-        custom_value_3: (req.body.custom_input_3 != undefined) ? req.body.custom_input_3 : null
+        param_1: req.body.param_1 != undefined ? req.body.param_1 : null,
+        isi_param_1:
+          req.body.isi_param_1 != undefined ? req.body.isi_param_1 : null,
+        param_2: req.body.param_2 != undefined ? req.body.param_2 : null,
+        isi_param_2:
+          req.body.isi_param_2 != undefined ? req.body.isi_param_2 : null,
+        param_3: req.body.param_3 != undefined ? req.body.param_3 : null,
+        isi_param_3:
+          req.body.isi_param_3 != undefined ? req.body.isi_param_3 : null,
+        custom_value_1:
+          req.body.custom_input_1 != undefined ? req.body.custom_input_1 : null,
+        custom_value_2:
+          req.body.custom_input_2 != undefined ? req.body.custom_input_2 : null,
+        custom_value_3:
+          req.body.custom_input_3 != undefined ? req.body.custom_input_3 : null,
       },
     });
   } else {
@@ -181,15 +180,21 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
         reply: replies && JSON.parse(replies),
         url: req.body.url,
         type_request: req.body.type_request,
-        param_1: (req.body.param_1 != undefined) ? req.body.param_1 : null,
-        isi_param_1: (req.body.isi_param_1 != undefined) ? req.body.isi_param_1 : null,
-        param_2: (req.body.param_2 != undefined) ? req.body.param_2 : null,
-        isi_param_2: (req.body.isi_param_2 != undefined) ? req.body.isi_param_2 : null,
-        param_3: (req.body.param_3 != undefined) ? req.body.param_3 : null,
-        isi_param_3: (req.body.isi_param_3 != undefined) ? req.body.isi_param_3 : null,
-        custom_value_1: (req.body.custom_input_1 != undefined) ? req.body.custom_input_1 : null,
-        custom_value_2: (req.body.custom_input_2 != undefined) ? req.body.custom_input_2 : null,
-        custom_value_3: (req.body.custom_input_3 != undefined) ? req.body.custom_input_3 : null
+        param_1: req.body.param_1 != undefined ? req.body.param_1 : null,
+        isi_param_1:
+          req.body.isi_param_1 != undefined ? req.body.isi_param_1 : null,
+        param_2: req.body.param_2 != undefined ? req.body.param_2 : null,
+        isi_param_2:
+          req.body.isi_param_2 != undefined ? req.body.isi_param_2 : null,
+        param_3: req.body.param_3 != undefined ? req.body.param_3 : null,
+        isi_param_3:
+          req.body.isi_param_3 != undefined ? req.body.isi_param_3 : null,
+        custom_value_1:
+          req.body.custom_input_1 != undefined ? req.body.custom_input_1 : null,
+        custom_value_2:
+          req.body.custom_input_2 != undefined ? req.body.custom_input_2 : null,
+        custom_value_3:
+          req.body.custom_input_3 != undefined ? req.body.custom_input_3 : null,
       },
     });
   }
