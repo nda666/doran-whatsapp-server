@@ -4,7 +4,12 @@
     "module": "commonjs",
     "outDir": "dist",
     "target": "ES2019",
-    "lib": ["ES2019", "DOM"]
+    "lib": ["ES2019", "DOM"],
+    "isolatedModules": false,
+    "noEmit": false,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"]
 }
