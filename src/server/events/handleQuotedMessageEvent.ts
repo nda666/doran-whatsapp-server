@@ -158,7 +158,7 @@ export const handleQuotedMessageEvent = async (
           params["image"] = `${process.env.APP_URL}/api/image/${finalFilePath}`;
           params["quote"] = conversation_quote;
           params["message"] = clientMessage;
-          params["detail"] = JSON.stringify(messages[0]);
+          // params["detail"] = JSON.stringify(messages[0]);
 
           const method_type =
             val.type_request?.toUpperCase() == "GET" ? "GET" : "POST";

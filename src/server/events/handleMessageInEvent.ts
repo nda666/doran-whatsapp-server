@@ -176,7 +176,7 @@ export const handleMessageInEvent = async (
       params["image"] = `${process.env.APP_URL}/api/image/${finalFilePath}`;
       params["message"] = data.message;
 
-      params["detail"] = JSON.stringify(messages[0]);
+      // params["detail"] = JSON.stringify(messages[0]);
 
       const method_type =
         item.type_request?.toUpperCase() == "GET" ? "GET" : "POST";
