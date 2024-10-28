@@ -94,7 +94,7 @@ export const handleQuotedMessageEvent = async (
           recipient: participantNum,
           sender: senderNum,
           image_in: finalFilePath,
-          auto_reply_id: val.id.toString(),
+          // auto_reply_id: val.id.toString(),
         } as InserttWebhookToInboxMessageProps;
 
         if (val.url) {

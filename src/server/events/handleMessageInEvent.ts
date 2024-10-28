@@ -104,7 +104,7 @@ export const handleMessageInEvent = async (
         message: messageIn!,
         recipient: messages[0].key.remoteJid!.split("@")[0]!,
         sender: phone_number,
-        auto_reply_id: item.id.toString(),
+        // auto_reply_id: item.id.toString(),
       } as InserttWebhookToInboxMessageProps;
 
       if (!item.url) {
