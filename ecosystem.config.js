@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "doran-whatsapp",
-      script: "./dist/src/server.js",
+      script: "./dist/src/server/index.js",
       env: {
         NODE_ENV: "production",
         WHATSAPP_AUTH_FOLDER: "./storage/whatsapp-auth",
