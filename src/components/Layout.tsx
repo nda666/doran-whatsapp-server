@@ -1,24 +1,27 @@
+import React, { ReactNode, useState } from "react";
+
 import {
-  DashboardOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  WhatsAppOutlined,
-  WechatFilled,
-} from "@ant-design/icons";
-import {
-  Layout as AntdLayout,
   Button,
+  Layout as AntdLayout,
   Menu,
   Popover,
   Space,
-  Typography,
   theme,
+  Typography,
 } from "antd";
-import Image from "next/image";
-import React, { ReactNode, useState } from "react";
 import { i18n, useTranslation } from "next-i18next";
-import router, { useRouter } from "next/router";
+import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/router";
+
+import {
+  DashboardOutlined,
+  HistoryOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  WhatsAppOutlined,
+} from "@ant-design/icons";
+
 const { Header, Sider, Content } = AntdLayout;
 const { Text, Title } = Typography;
 const langMenuSelected = undefined;
@@ -118,6 +121,14 @@ export default function Layout({
               <Space size={"middle"}>
                 <WhatsAppOutlined />
                 {!collapsed && t("phone_devices")}
+              </Space>
+            </Link>
+          </Menu.Item>
+          <Menu.Item key={"/dashboard/log"} title={t("log")}>
+            <Link href={"/dashboard/log"}>
+              <Space size={"middle"}>
+                <HistoryOutlined />
+                {!collapsed && t("log")}
               </Space>
             </Link>
           </Menu.Item>

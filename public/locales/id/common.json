@@ -64,5 +64,9 @@
   "save_failed": "Gagal disimpan",
   "save": "Simpan",
   "cancel": "Batal",
-  "whatsapp_qrcode": "QRCode Whatsapp"
+  "whatsapp_qrcode": "QRCode Whatsapp",
+  "recipient": "Penerima",
+  "sender": "Pengirim",
+  "enter_sender": "Masukan no pengirim",
+  "enter_recipient": "Masukan no penerima"
 }

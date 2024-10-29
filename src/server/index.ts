@@ -1,18 +1,20 @@
-import compression from "compression";
-import express from "express";
-import { createServer, Server } from "http";
-import next from "next";
-import { pinoHttp } from "pino-http";
+import compression from 'compression';
+import express from 'express';
+import {
+  createServer,
+  Server,
+} from 'http';
+import next from 'next';
 
-import { WASocket } from "@whiskeysockets/baileys";
+import { WASocket } from '@whiskeysockets/baileys';
 
-import { prisma } from "../lib/prisma";
-import { logger } from "./libs/logger";
-import makeWASocket from "./libs/makeWASocket";
-import sendAttachmentMessageIo from "./libs/sendAttachmentMessageIo";
-import sendGroupMessageFromIo from "./libs/sendGroupMessageFromIo";
-import sendMessageFromIo from "./libs/sendMessageFromIo";
-import { getSocketIO } from "./libs/socket";
+import { prisma } from '../lib/prisma';
+import { logger } from './libs/logger';
+import makeWASocket from './libs/makeWASocket';
+import sendAttachmentMessageIo from './libs/sendAttachmentMessageIo';
+import sendGroupMessageFromIo from './libs/sendGroupMessageFromIo';
+import sendMessageFromIo from './libs/sendMessageFromIo';
+import { getSocketIO } from './libs/socket';
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -20,26 +22,30 @@ const dev = process.env.NODE_ENV !== "production";
 
 const app = express();
 app.use(compression());
-app.use(
-  pinoHttp({
-    logger: logger(`${process.env.WEBSITE_LOG}/website.log`),
-  })
-);
+// app.use(
+//   pinoHttp({
+//     logger: logger(`${process.env.WEBSITE_LOG}/website.log`),
+//   })
+// );
 
-const nextApp = next({ dev, hostname, port, customServer: true });
+const nextApp = next({ dev, hostname, port, customServer: false });
 const nextHandler = nextApp.getRequestHandler();
 
 const waSocks: WASocket[] = [];
 const io = getSocketIO;
 
 nextApp.prepare().then(async () => {
+  const appLogger = logger(`${process.env.WEBSITE_LOG}/website.log`);
   // const server = http.createServer(app);
 
   app.all("*", (req, res, next) => {
     res.setTimeout(20000, function () {
       res.status(408).end();
     });
-    nextHandler(req, res);
+    nextHandler(req, res).catch((err) => {
+      appLogger.error(err);
+      res.status(500).send("Internal Server Error");
+    });
   });
   io?.on("connection", async (socket) => {
     socket.on(

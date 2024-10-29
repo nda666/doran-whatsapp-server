@@ -52,19 +52,20 @@ model VerificationToken {
 }
 
 model User {
-  id            String      @id @default(uuid())
+  id            String         @id @default(uuid())
   name          String?
-  email         String?     @unique
+  email         String?        @unique
   password      String
-  token         String      @unique
+  token         String         @unique
   image         String?
   emailVerified DateTime?
-  createdAt     DateTime    @default(now()) @map(name: "created_at")
-  updatedAt     DateTime    @updatedAt @map(name: "updated_at")
+  createdAt     DateTime       @default(now()) @map(name: "created_at")
+  updatedAt     DateTime       @updatedAt @map(name: "updated_at")
   phones        Phone[]
   auto_replies  AutoReply[]
   accounts      Account[]
   sessions      Session[]
+  InboxMessage  InboxMessage[]
 
   @@map(name: "users")
 }
@@ -166,6 +167,7 @@ model AutoReply {
 
 model InboxMessage {
   id             Int          @id @default(autoincrement())
+  userId         String?
   message        String?      @db.Text
   image_in       String?
   quote          String?      @db.Text
@@ -189,6 +191,7 @@ model InboxMessage {
   custom_value_3 String?
   respons        String?      @db.Text
   keterangan     String?      @map("keterangan") @db.VarChar(255)
+  user           User?        @relation(fields: [userId], references: [id])
 
   @@map(name: "inbox_messages")
 }

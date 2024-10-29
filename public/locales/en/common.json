@@ -64,5 +64,9 @@
   "save_failed": "Failed to save",
   "cancel": "Cancel",
   "save": "Save",
-  "whatsapp_qrcode": "Whatsapp QRCode"
+  "whatsapp_qrcode": "Whatsapp QRCode",
+  "recipient": "Recipient",
+  "sender": "Sender",
+  "enter_sender": "Enter the sender number",
+  "enter_recipient": "Enter the recipient number"
 }

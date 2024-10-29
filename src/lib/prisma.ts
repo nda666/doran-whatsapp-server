@@ -1,7 +1,7 @@
-import chalk from "chalk";
+import chalk from 'chalk';
 
-import { PrismaClient } from "@prisma/client";
-import { PrismaClientOptions } from "@prisma/client/runtime";
+import { PrismaClient } from '@prisma/client';
+import { PrismaClientOptions } from '@prisma/client/runtime';
 
 const globalForPrisma = global as unknown as {
   prisma: PrismaClient<
