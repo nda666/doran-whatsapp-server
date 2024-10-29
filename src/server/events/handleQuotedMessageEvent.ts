@@ -57,7 +57,7 @@ export const handleQuotedMessageEvent = async (
 
   const replies_list = await phoneReplies();
   let conversation_quote = quotedMessage.conversation;
-  console.error("conversation_quote", conversation_quote);
+  console.error("conversation_quote", quotedMessage);
   const senderNum = messages[0].key.remoteJid?.split("@")[0];
 
   replies_list.forEach(async (val) => {
