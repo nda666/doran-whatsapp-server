@@ -62,7 +62,6 @@ export const handleQuotedMessageEvent = async (
   } else if (quotedMessage.imageMessage) {
     conversation_quote = quotedMessage.imageMessage?.caption || "";
   }
-  console.error("conversation_quote", conversation_quote);
   const senderNum = messages[0].key.remoteJid?.split("@")[0];
 
   replies_list.forEach(async (val) => {

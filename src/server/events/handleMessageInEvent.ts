@@ -205,7 +205,6 @@ export const handleMessageInEvent = async (
       data.respons = result ? JSON.stringify(result) : JSON.stringify(error);
 
       const resultSave = await insertWebhookToInboxMessage(data);
-      console.error(resultSave, data);
     }
   });
 };
