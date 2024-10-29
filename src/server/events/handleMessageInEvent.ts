@@ -1,5 +1,8 @@
-import { Phone } from "@prisma/client";
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { Phone } from '@prisma/client';
+import {
+  proto,
+  WASocket,
+} from '@whiskeysockets/baileys';
 
 import {
   CekValueParam,
@@ -7,15 +10,15 @@ import {
   getImageFromWaMessage,
   messageKeywordTypeChecker,
   runFetchGetResponse,
-} from "../../server/utils";
-import { getAutoReplyByPhoneId } from "../../services/autoReply";
-import { saveToGrup } from "../../services/group";
+} from '../../server/utils';
+import { getAutoReplyByPhoneId } from '../../services/autoReply';
+import { saveToGrup } from '../../services/group';
 import {
   insertToInboxMessage,
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
-} from "../../services/inboxMessage";
-import toBase64 from "../libs/toBase64";
+} from '../../services/inboxMessage';
+import toBase64 from '../libs/toBase64';
 
 export const handleMessageInEvent = async (
   phone: Phone,
@@ -199,8 +202,10 @@ export const handleMessageInEvent = async (
         ...options,
       });
 
-      data.respons = error ? error : JSON.stringify(result);
-      await insertWebhookToInboxMessage(data);
+      data.respons = result ? JSON.stringify(result) : JSON.stringify(error);
+
+      const resultSave = await insertWebhookToInboxMessage(data);
+      console.error(resultSave, data);
     }
   });
 };

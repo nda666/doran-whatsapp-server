@@ -1,18 +1,21 @@
-import { Phone } from "@prisma/client";
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { Phone } from '@prisma/client';
+import {
+  proto,
+  WASocket,
+} from '@whiskeysockets/baileys';
 
-import { prisma } from "../../lib/prisma";
+import { prisma } from '../../lib/prisma';
 import {
   CekValueParam,
   getImageFromWaMessage,
   messageKeywordTypeChecker,
   runFetchGetResponse,
-} from "../../server/utils";
+} from '../../server/utils';
 import {
   insertQuotesToInboxMessage,
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
-} from "../../services/inboxMessage";
+} from '../../services/inboxMessage';
 
 export type HandleQuotedMessageEventProps = {
   messageType: string;
@@ -182,9 +185,12 @@ export const handleQuotedMessageEvent = async (
           });
           data.respons = webhookRes.result
             ? JSON.stringify(webhookRes.result)
-            : webhookRes.error;
+            : JSON.stringify(webhookRes.error);
         }
-        insertWebhookToInboxMessage(data);
+
+        const resultSave = await insertWebhookToInboxMessage(data);
+
+        console.error(resultSave, data);
       }
     }
   });
