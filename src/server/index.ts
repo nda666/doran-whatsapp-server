@@ -28,7 +28,7 @@ app.use(compression());
 //   })
 // );
 
-const nextApp = next({ dev, hostname, port, customServer: false });
+const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
 const waSocks: WASocket[] = [];
