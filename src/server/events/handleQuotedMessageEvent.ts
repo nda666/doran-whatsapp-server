@@ -56,8 +56,13 @@ export const handleQuotedMessageEvent = async (
   const finalFilePath = await getImageFromWaMessage(messages, waSocket);
 
   const replies_list = await phoneReplies();
-  let conversation_quote = quotedMessage.conversation;
-  console.error("conversation_quote", quotedMessage);
+  let conversation_quote = "";
+  if (quotedMessage.conversation) {
+    conversation_quote = quotedMessage.conversation;
+  } else if (quotedMessage.imageMessage) {
+    conversation_quote = quotedMessage.imageMessage?.caption || "";
+  }
+  console.error("conversation_quote", conversation_quote);
   const senderNum = messages[0].key.remoteJid?.split("@")[0];
 
   replies_list.forEach(async (val) => {
