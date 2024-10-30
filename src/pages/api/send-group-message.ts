@@ -1,7 +1,7 @@
 import { NextApiResponse } from "next";
-import { io } from "socket.io-client";
 
 import { prisma } from "@/lib/prisma";
+import sendGroupMessageFromIo from "@/server/libs/sendGroupMessageFromIo";
 import { AuthNextApiRequest } from "@/types/global";
 
 let retry = 0;
@@ -76,59 +76,20 @@ const sendGroupMessage = async (
 
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
-  const socketIo = io(url!, {
-    path: "/socket.io",
-    autoConnect: true,
-    timeout: 10000,
-    transports: ["websocket"],
-  });
-
   try {
-    const resSocket = await socketIo
-      .timeout(10000)
-      .emitWithAck("sendGroupMessage", {
-        phoneId: phone.id,
-        userId: phone.userId,
-        // tos,
-        phoneCountry,
-        message,
-        image,
-        id_group,
-      });
+    const resSocket = await sendGroupMessageFromIo({
+      phoneId: phone.id,
+      userId: phone.userId,
+      phoneCountry: phoneCountry || "ID",
+      message: message || "",
+      id_group,
+      image,
+    });
 
     res.status(200).json({ result: true, data: resSocket });
   } catch (err) {
     res.status(200).json({ result: false, data: err });
   }
-
-  // socketIo.on("connect", () => {
-  //   // Now that the connection is established, emit the event
-  //   socketIo.emit("sendGroupMessage", {
-  //     phoneId: phone.id,
-  //     userId: phone.userId,
-  //     // tos,
-  //     phoneCountry,
-  //     message,
-  //     image,
-  //     id_group,
-  //   });
-  //   res.status(200).json({ success: true });
-
-  // });
-
-  // // Handle connection errors
-  // socketIo.on("connect_error", (err) => {
-  //   res.status(400).json({ message: "Gagal koneksi ke IO" });
-  // });
-
-  // // Handle connection timeout
-  // socketIo.on("connect_timeout", () => {
-  //   res.status(400).json({ message: "Gagal koneksi ke IO" });
-  // });
 };
-
-// const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-//   return res.status(200).json("ok");
-// }
 
 export default handler;

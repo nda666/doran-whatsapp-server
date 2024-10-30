@@ -1,8 +1,8 @@
 import formidable, { IncomingForm } from "formidable";
 import { NextApiRequest, NextApiResponse } from "next";
-import { io } from "socket.io-client";
 
 import { prisma } from "@/lib/prisma";
+import sendAttachmentMessageIo from "@/server/libs/sendAttachmentMessageIo";
 import { SendAttachmentValidation } from "@/validations/sendAttachment";
 
 // import IncomingForm from "formidable/Formidable";
@@ -111,23 +111,16 @@ const sendAttachment = async (
 
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
-  const socketIo = io(url!, {
-    path: "/socket.io",
-    autoConnect: true,
-    timeout: 10000,
-    transports: ["websocket"],
-  });
   try {
-    const resSocket = await socketIo
-      .timeout(10000)
-      .emitWithAck("sendAttachment", {
-        phoneId,
-        userId,
-        tos,
-        phoneCountry,
-        caption,
-        image: file,
-      });
+    const resSocket = await sendAttachmentMessageIo({
+      userId,
+      caption,
+      phoneCountry,
+      phoneId,
+      tos,
+      image: file,
+    });
+
     res.status(200).json({ result: true, data: resSocket });
   } catch (err) {
     res.status(200).json({ result: false, data: err });
