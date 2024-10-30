@@ -1,9 +1,12 @@
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
+import { parsePhoneNumber } from 'libphonenumber-js';
 
-import { delay, proto } from "@whiskeysockets/baileys";
+import {
+  delay,
+  proto,
+} from '@whiskeysockets/baileys';
 
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
-import makeWASocket, { deleteSession } from "./makeWASocket";
+import makeWASocket, { deleteSession } from './makeWASocket';
 
 const sendMessageFromIo = async ({
   phoneId,
@@ -61,7 +64,6 @@ const sendMessage = async (
 ): Promise<proto.WebMessageInfo | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
-    console.log("_to", (phoneCountry || "ID") as CountryCode);
     const parsedTo = parsePhoneNumber(_to, "ID");
     if (!image) {
       return await createdWaSock.sendMessage(
