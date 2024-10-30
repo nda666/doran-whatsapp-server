@@ -1,21 +1,15 @@
-import chalk from 'chalk';
-import compression from 'compression';
-import express from 'express';
-import {
-  createServer,
-  Server,
-} from 'http';
-import next from 'next';
+import chalk from "chalk";
+import compression from "compression";
+import express from "express";
+import { createServer, Server } from "http";
+import next from "next";
 
-import { WASocket } from '@whiskeysockets/baileys';
+import { WASocket } from "@whiskeysockets/baileys";
 
-import { prisma } from '../lib/prisma';
-import { logger } from './libs/logger';
-import makeWASocket from './libs/makeWASocket';
-import sendAttachmentMessageIo from './libs/sendAttachmentMessageIo';
-import sendGroupMessageFromIo from './libs/sendGroupMessageFromIo';
-import sendMessageFromIo from './libs/sendMessageFromIo';
-import { getSocketIO } from './libs/socket';
+import { prisma } from "../lib/prisma";
+import { logger } from "./libs/logger";
+import makeWASocket from "./libs/makeWASocket";
+import { getSocketIO } from "./libs/socket";
 
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -49,108 +43,6 @@ nextApp.prepare().then(async () => {
     });
   });
   io?.on("connection", async (socket) => {
-    socket.on(
-      "sendTextMessage",
-      async (
-        {
-          phoneId,
-          userId,
-          tos,
-          phoneCountry,
-          message,
-          image,
-        }: {
-          phoneId: string;
-          userId: string;
-          tos: string[];
-          phoneCountry: string;
-          message: string;
-          image: any;
-        },
-        callback
-      ) => {
-        const sendResp = await sendMessageFromIo({
-          userId,
-          phoneId,
-          message,
-          phoneCountry,
-          tos,
-          image,
-        });
-        // Kirim balik ke client
-        callback(sendResp);
-      }
-    );
-
-    socket.on(
-      "sendGroupMessage",
-      async (
-        {
-          phoneId,
-          userId,
-          // tos,
-          phoneCountry,
-          message,
-          image,
-          id_group,
-        }: {
-          phoneId: string;
-          userId: string;
-          // tos: string[];
-          phoneCountry: string;
-          message: string;
-          image: any;
-          id_group: string;
-        },
-        callback
-      ) => {
-        const sendResp = await sendGroupMessageFromIo({
-          userId,
-          phoneId,
-          // tos,
-          phoneCountry,
-          message,
-          image,
-          id_group,
-        });
-        // Kirim balik ke client
-        callback(sendResp);
-      }
-    );
-
-    socket.on(
-      "sendAttachment",
-      async (
-        {
-          phoneId,
-          userId,
-          tos,
-          phoneCountry,
-          caption,
-          image,
-        }: {
-          phoneId: string;
-          userId: string;
-          tos: string[];
-          phoneCountry: string;
-          caption: string;
-          image: any;
-        },
-        callback
-      ) => {
-        const sendResp = await sendAttachmentMessageIo({
-          userId,
-          phoneId,
-          tos,
-          phoneCountry,
-          caption,
-          image,
-        });
-        // Kirim balik ke client
-        callback(sendResp);
-      }
-    );
-
     if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
       const query = socket.handshake.query;
       const userId = socket.handshake.query?.userId?.toString();
