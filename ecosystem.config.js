@@ -13,7 +13,7 @@ module.exports = {
       },
       node_args: ["--max-old-space-size=2048"],
       // node_args: ["--max-old-space-size=1024"],
-      // max_memory_restart: "2000M",
+      max_memory_restart: "2G",
     },
   ],
 };
