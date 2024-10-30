@@ -1,21 +1,18 @@
-import { getAutoReplyByPhoneId } from '@/services/autoReply';
-import { Phone } from '@prisma/client';
-import {
-  proto,
-  WASocket,
-} from '@whiskeysockets/baileys';
+import { Phone } from "@prisma/client";
+import { proto, WASocket } from "@whiskeysockets/baileys";
 
 import {
   CekValueParam,
   getImageFromWaMessage,
   messageKeywordTypeChecker,
   runFetchGetResponse,
-} from '../../server/utils';
+} from "../../server/utils";
+import { getAutoReplyByPhoneId } from "../../services/autoReply";
 import {
   insertQuotesToInboxMessage,
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
-} from '../../services/inboxMessage';
+} from "../../services/inboxMessage";
 
 export type HandleQuotedMessageEventProps = {
   messageType: string;
