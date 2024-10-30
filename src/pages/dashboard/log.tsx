@@ -1,13 +1,19 @@
-import { ReactElement, useState } from "react";
+import {
+  ReactElement,
+  useState,
+} from 'react';
 
-import { Button, Flex } from "antd";
-import { useSession } from "next-auth/react";
-import { i18n } from "next-i18next";
-import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import { useTranslation } from "react-i18next";
+import {
+  Button,
+  Flex,
+} from 'antd';
+import { useSession } from 'next-auth/react';
+import { i18n } from 'next-i18next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'react-i18next';
 
-import Layout from "@/components/Layout";
-import { LogTable } from "@/components/log/LogTable";
+import Layout from '@/components/Layout';
+import { LogTable } from '@/components/log/LogTable';
 
 const LogPage = () => {
   const { data: session } = useSession();
@@ -29,7 +35,7 @@ const LogPage = () => {
             {state.showSearch ? t("hide_search") : t("show_search")}
           </Button>
         </Flex>
-        <LogTable token={session?.user?.token!} />
+        <LogTable showSearch={state.showSearch} token={session?.user?.token!} />
       </Flex>
     </>
   );

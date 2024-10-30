@@ -13,9 +13,9 @@ const globalForPrisma = global as unknown as {
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    ...(process.env.NODE_ENV === "development"
-      ? { log: [{ level: "query", emit: "event" }] }
-      : {}),
+    // ...(process.env.NODE_ENV === "development"
+    //   ? { log: [{ level: "query", emit: "event" }] }
+    //   : {}),
   });
 // Listen for query events
 prisma.$on("query", (e) => {

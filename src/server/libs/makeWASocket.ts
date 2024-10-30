@@ -1,20 +1,20 @@
-import "pino-pretty";
-import "pino-roll";
+import 'pino-pretty';
+import 'pino-roll';
 
-import { pino } from "pino";
+import { pino } from 'pino';
 
 import _makeWASocket, {
   useMultiFileAuthState,
   WASocket,
-} from "@whiskeysockets/baileys";
+} from '@whiskeysockets/baileys';
 
-import { prisma } from "../../lib/prisma";
-import { getWaMesage } from "../../server/utils/getWaMessage";
-import { getPhoneById } from "../../services/phone";
-import { WaSockQrTimeout } from "../constant";
-import connectionUpdate from "../events/connectionUpdate";
-import { handleMessageInEvent } from "../events/handleMessageInEvent";
-import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
+import { prisma } from '../../lib/prisma';
+import { getWaMesage } from '../../server/utils/getWaMessage';
+import { getPhoneById } from '../../services/phone';
+import { WaSockQrTimeout } from '../constant';
+import connectionUpdate from '../events/connectionUpdate';
+import { handleMessageInEvent } from '../events/handleMessageInEvent';
+import { handleQuotedMessageEvent } from '../events/handleQuotedMessageEvent';
 
 const session = new Map();
 
@@ -57,13 +57,6 @@ const makeWASocket = async (
     level: "error",
     transport: {
       targets: [
-        // {
-        //   level: "error",
-        //   target: "pino-pretty",
-        //   options: {
-        //     colorize: false,
-        //   },
-        // },
         {
           level: "error",
           target: "pino-roll",
@@ -88,7 +81,7 @@ const makeWASocket = async (
       auth: state,
       logger: waSocketLogOption,
       syncFullHistory: true,
-      qrTimeout: WaSockQrTimeout + 5,
+      qrTimeout: WaSockQrTimeout,
       defaultQueryTimeoutMs: undefined,
     });
 
@@ -113,7 +106,13 @@ const makeWASocket = async (
 
       const getPhone = await getPhoneById(phoneId);
       if (messageIn && !quotedMessage && getPhone) {
-        await handleMessageInEvent(getPhone, _waSocket, messageIn, messages);
+        await handleMessageInEvent({
+          phone: getPhone,
+          _waSocket: _waSocket,
+          messageIn: messageIn,
+          messages: messages,
+          userId: userId,
+        });
       }
 
       if (quotedMessage && getPhone) {
@@ -123,6 +122,7 @@ const makeWASocket = async (
           phone: getPhone,
           quotedMessage: quotedMessage,
           waSocket: _waSocket,
+          userId,
         });
       }
     });

@@ -1,10 +1,14 @@
-import { InboxMessage, ParamType, TypeRequest } from "@prisma/client";
+import {
+  InboxMessage,
+  ParamType,
+  TypeRequest,
+} from '@prisma/client';
 
-import { prisma } from "../lib/prisma";
+import { prisma } from '../lib/prisma';
 
 export type InsertToInboxMessageProps = Pick<
   InboxMessage,
-  "message" | "sender" | "recipient"
+  "message" | "sender" | "recipient" | "userId"
 > & {
   image_in?: string | null | undefined;
 };
@@ -20,6 +24,7 @@ export const insertToInboxMessage = async (data: InsertToInboxMessageProps) => {
 };
 
 export type InserttWebhookToInboxMessageProps = {
+  userId: string;
   message: string;
   recipient: string;
   sender: string;
@@ -54,7 +59,7 @@ type ImageReply = {
 };
 export type InsertQuotesToInboxMessageProps = Pick<
   InboxMessage,
-  "sender" | "recipient" | "quote"
+  "sender" | "recipient" | "quote" | "userId"
 > & {
   message: ImageReply | string;
   image_in?: string | null | undefined;

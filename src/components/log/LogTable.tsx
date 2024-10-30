@@ -22,15 +22,18 @@ import { useTranslation } from 'react-i18next';
 import useWebhookLogData, { SearchWebhookLogParams } from '@/lib/useWebhookLog';
 import { InboxMessage } from '@prisma/client';
 
-export const LogTable = ({ token }: { token: string }) => {
+export const LogTable = ({
+  token,
+  showSearch,
+}: {
+  token: string;
+  showSearch: boolean;
+}) => {
   const [searchQuery, setSearchQuery] = useState<SearchWebhookLogParams>({
     limit: 10,
     page: 1,
     recipient: "",
     sender: "",
-  });
-  const [state, setState] = useState({
-    showSearch: true,
   });
 
   const log = useWebhookLogData(token, searchQuery);
@@ -161,9 +164,9 @@ export const LogTable = ({ token }: { token: string }) => {
     <>
       <Card
         title={t("filter")}
-        className={`form-container ${state.showSearch ? "visible" : "hidden"}`}
+        className={`form-container ${showSearch ? "visible" : "hidden"}`}
       >
-        {state.showSearch && (
+        {showSearch && (
           <Form
             layout="horizontal"
             onFinish={onSearch}

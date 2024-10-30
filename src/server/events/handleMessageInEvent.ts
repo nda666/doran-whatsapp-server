@@ -20,12 +20,19 @@ import {
 } from '../../services/inboxMessage';
 import toBase64 from '../libs/toBase64';
 
+type HandleMessageInEventProps = {
+  phone: Phone;
+  _waSocket: WASocket;
+  messageIn: string;
+  messages: proto.IWebMessageInfo[];
+  userId: string;
+};
+
 export const handleMessageInEvent = async (
-  phone: Phone,
-  _waSocket: WASocket,
-  messageIn: string,
-  messages: proto.IWebMessageInfo[]
+  props: HandleMessageInEventProps
 ) => {
+  const { phone, _waSocket, messageIn, messages, userId } = props;
+
   if (phone?.is_save_group) {
     await saveToGrup(messages, _waSocket);
   }
@@ -49,6 +56,7 @@ export const handleMessageInEvent = async (
           message: messageIn!,
           sender: messages[0].key.remoteJid!.split("@")[0]!,
           recipient: phone_number!,
+          userId,
         });
       }
       await _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
@@ -98,15 +106,12 @@ export const handleMessageInEvent = async (
         return;
       }
 
-      if (!item.is_save_inbox) {
-        return;
-      }
-
       let data = {
         image_in: finalFilePath,
         message: messageIn!,
         sender: messages[0].key.remoteJid!.split("@")[0]!,
         recipient: phone_number,
+        userId,
         // auto_reply_id: item.id.toString(),
       } as InserttWebhookToInboxMessageProps;
 
@@ -173,8 +178,7 @@ export const handleMessageInEvent = async (
           params[propName] = propValue;
         });
       }
-
-      params["phone"] = data.sender ?? null;
+      params["phone"] = params["phone"] = data.sender ?? null;
       params["recipient"] = data.recipient ?? "";
       params["image"] = `${process.env.APP_URL}/api/image/${finalFilePath}`;
       params["message"] = data.message;
@@ -204,7 +208,9 @@ export const handleMessageInEvent = async (
 
       data.respons = result ? JSON.stringify(result) : JSON.stringify(error);
 
-      const resultSave = await insertWebhookToInboxMessage(data);
+      if (item.is_save_inbox) {
+        const resultSave = await insertWebhookToInboxMessage(data);
+      }
     }
   });
 };

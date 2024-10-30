@@ -1,3 +1,4 @@
+import chalk from 'chalk';
 import compression from 'compression';
 import express from 'express';
 import {
@@ -154,14 +155,9 @@ nextApp.prepare().then(async () => {
       const query = socket.handshake.query;
       const userId = socket.handshake.query?.userId?.toString();
       const phoneIds = query?.phoneId?.toString().split(",");
-      const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
-        return i == self.indexOf(v);
-      });
-
-      uniqPhoneIds?.forEach(async (phoneId) => {
-        const createdWaSock = await makeWASocket(userId, phoneId);
-        createdWaSock && waSocks.push(createdWaSock);
-      });
+      // const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
+      //   return i == self.indexOf(v);
+      // });
 
       socket.join(`${userId}`);
     }
@@ -184,8 +180,13 @@ nextApp.prepare().then(async () => {
 const connectAllWa = async () => {
   const phones = await prisma.phone.findMany();
   phones?.forEach(async (phone) => {
-    const createdWaSock = await makeWASocket(phone.userId, phone.id);
-    createdWaSock && waSocks.push(createdWaSock);
+    if (phone.userId && phone.id) {
+      const createdWaSock = await makeWASocket(phone.userId, phone.id);
+      createdWaSock && waSocks.push(createdWaSock);
+      if (process.env.NODE_ENV == "development") {
+        console.log(`${chalk.green(phone.number)}: ${createdWaSock.user?.id}`);
+      }
+    }
   });
 };
 
