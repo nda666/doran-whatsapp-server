@@ -42,18 +42,7 @@ nextApp.prepare().then(async () => {
       res.status(500).send("Internal Server Error");
     });
   });
-  io?.on("connection", async (socket) => {
-    if (socket.handshake.query?.phoneId && socket.handshake.query?.userId) {
-      const query = socket.handshake.query;
-      const userId = socket.handshake.query?.userId?.toString();
-      const phoneIds = query?.phoneId?.toString().split(",");
-      // const uniqPhoneIds = phoneIds!.filter(function (v, i, self) {
-      //   return i == self.indexOf(v);
-      // });
-
-      socket.join(`${userId}`);
-    }
-  });
+  io?.on("connection", async (socket) => {});
 
   const server: Server = createServer(app);
   io.attach(server);
