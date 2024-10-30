@@ -1,9 +1,9 @@
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 
 import { NextApiResponse } from "next";
-import { io } from "socket.io-client";
 
 import { prisma } from "@/lib/prisma";
+import sendMessageFromIo from "@/server/libs/sendMessageFromIo";
 import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
 
@@ -50,23 +50,16 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
 
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
-  const socketIo = io(url!, {
-    path: "/socket.io",
-    autoConnect: true,
-    timeout: 10000,
-    transports: ["websocket"],
-  });
   try {
-    const resSocket = await socketIo
-      .timeout(10000)
-      .emitWithAck("sendTextMessage", {
-        phoneId: phone.id,
-        userId: phone.userId,
-        tos,
-        phoneCountry,
-        message,
-        image,
-      });
+    const resSocket = sendMessageFromIo({
+      phoneId: phone.id,
+      userId: phone.userId,
+      tos,
+      phoneCountry: phoneCountry || "ID",
+      message: message || "",
+      image,
+    });
+
     res.status(200).json({ result: true, data: resSocket });
   } catch (err) {
     res.status(200).json({ result: false, data: err });
