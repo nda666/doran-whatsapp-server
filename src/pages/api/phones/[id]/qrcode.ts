@@ -29,6 +29,7 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
 const getQrCode = async (waSock: WASocket): Promise<string> => {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
+      waSock.ev.off("connection.update", updateEvent);
       reject(new Error("QR code generation timed out"));
     }, 60000); // 60 seconds timeout
     const updateEvent = (update: Partial<ConnectionState>) => {

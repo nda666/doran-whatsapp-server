@@ -4,11 +4,9 @@ import express from "express";
 import { createServer, Server } from "http";
 import next from "next";
 
-import { WASocket } from "@whiskeysockets/baileys";
-
 import { prisma } from "../lib/prisma";
 import { logger } from "./libs/logger";
-import makeWASocket from "./libs/makeWASocket";
+import makeWASocket, { forceUpdateConnectionState } from "./libs/makeWASocket";
 import { getSocketIO } from "./libs/socket";
 
 const hostname = "localhost";
@@ -26,7 +24,7 @@ app.use(compression());
 const nextApp = next({ dev, hostname, port, customServer: true });
 const nextHandler = nextApp.getRequestHandler();
 
-const waSocks: WASocket[] = [];
+// const waSocks: WASocket[] = [];
 const io = getSocketIO;
 
 nextApp.prepare().then(async () => {
@@ -56,14 +54,39 @@ nextApp.prepare().then(async () => {
     }
     connectAllWa();
   });
+
+  let intervalConnectRun = false;
+  setInterval(() => {
+    if (intervalConnectRun) {
+      return;
+    }
+
+    intervalConnectRun = true;
+    doForceUpdateConnectionState()
+      .then(() => {
+        intervalConnectRun = false;
+      })
+      .catch(() => {
+        intervalConnectRun = false;
+      });
+  }, 1000 * 60);
 });
+
+const doForceUpdateConnectionState = async () => {
+  const phones = await prisma.phone.findMany();
+  phones?.forEach(async (phone) => {
+    if (phone.userId && phone.id) {
+      await forceUpdateConnectionState(phone.userId, phone.id);
+      console.log("Force Update State");
+    }
+  });
+};
 
 const connectAllWa = async () => {
   const phones = await prisma.phone.findMany();
   phones?.forEach(async (phone) => {
     if (phone.userId && phone.id) {
       const createdWaSock = await makeWASocket(phone.userId, phone.id);
-      createdWaSock && waSocks.push(createdWaSock);
       if (process.env.NODE_ENV == "development") {
         console.log(`${chalk.green(phone.number)}: ${createdWaSock.user?.id}`);
       }

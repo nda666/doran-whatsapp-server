@@ -1,22 +1,24 @@
-import 'pino-pretty';
-import 'pino-roll';
+import "pino-pretty";
+import "pino-roll";
 
-import { pino } from 'pino';
+import pino from "pino";
 
 import _makeWASocket, {
+  ConnectionState,
   useMultiFileAuthState,
   WASocket,
-} from '@whiskeysockets/baileys';
+} from "@whiskeysockets/baileys";
 
-import { prisma } from '../../lib/prisma';
-import { getWaMesage } from '../../server/utils/getWaMessage';
-import { getPhoneById } from '../../services/phone';
-import { WaSockQrTimeout } from '../constant';
-import connectionUpdate from '../events/connectionUpdate';
-import { handleMessageInEvent } from '../events/handleMessageInEvent';
-import { handleQuotedMessageEvent } from '../events/handleQuotedMessageEvent';
+import { prisma } from "../../lib/prisma";
+import { getWaMesage } from "../../server/utils/getWaMessage";
+import { getPhoneById } from "../../services/phone";
+import { WaSockQrTimeout } from "../constant";
+import connectionUpdate from "../events/connectionUpdate";
+import { handleMessageInEvent } from "../events/handleMessageInEvent";
+import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
+import { getSocketIO } from "./socket";
 
-const session = new Map();
+export const session = new Map();
 
 // {
 // transport: {
@@ -41,6 +43,47 @@ const session = new Map();
 //   ],
 // },
 // }
+
+export const forceUpdateConnectionState = async (
+  userId: string,
+  phoneId: string
+) => {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { state, saveCreds } = await useMultiFileAuthState(
+    `${process.env.WHATSAPP_AUTH_FOLDER}/${userId}-${phoneId}`
+  );
+
+  const _waSocket = await _makeWASocket({
+    printQRInTerminal: false,
+    auth: state,
+    syncFullHistory: false,
+    qrTimeout: WaSockQrTimeout,
+    defaultQueryTimeoutMs: undefined,
+  });
+  const updateOnlineStatus = async (update: Partial<ConnectionState>) => {
+    const io = getSocketIO;
+    // console.log(update);
+    if (update.hasOwnProperty("isOnline")) {
+      io?.to(userId).emit("isOnline", {
+        isOnline: update.isOnline,
+        phoneId: phoneId,
+      });
+
+      await prisma.phone.update({
+        where: {
+          id: phoneId,
+        },
+        data: {
+          isOnline: update.isOnline,
+        },
+      });
+    }
+  };
+  setTimeout(() => {
+    _waSocket.ev.off("connection.update", updateOnlineStatus);
+  }, 1000 * 60);
+  _waSocket.ev.on("connection.update", updateOnlineStatus);
+};
 
 const makeWASocket = async (
   userId: string,
@@ -74,16 +117,17 @@ const makeWASocket = async (
   }) as any;
   if (session.get(phoneId)) {
     _waSocket = session.get(phoneId);
-    // console.info("GET from session: " + _waSocket.user);
+    console.info("GET from session: " + _waSocket.user);
   } else {
     _waSocket = await _makeWASocket({
+      logger: waSocketLogOption,
       printQRInTerminal: false,
       auth: state,
-      logger: waSocketLogOption,
-      syncFullHistory: true,
+      syncFullHistory: false,
       qrTimeout: WaSockQrTimeout,
       defaultQueryTimeoutMs: undefined,
     });
+    console.info("GET from not session: " + _waSocket.user);
 
     // console.info("CREATE new session: " + phoneId);
     _waSocket.ev.on("creds.update", (authState) => {
