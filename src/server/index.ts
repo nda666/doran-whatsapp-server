@@ -77,7 +77,6 @@ const doForceUpdateConnectionState = async () => {
   phones?.forEach(async (phone) => {
     if (phone.userId && phone.id) {
       await forceUpdateConnectionState(phone.userId, phone.id);
-      console.log("Force Update State");
     }
   });
 };
