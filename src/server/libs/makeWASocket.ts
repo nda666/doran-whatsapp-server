@@ -1,5 +1,4 @@
 import "pino-pretty";
-import "pino-roll";
 
 import pino from "pino";
 
@@ -20,29 +19,10 @@ import { getSocketIO } from "./socket";
 
 export const session = new Map();
 
-// {
-// transport: {
-//   targets: [
-//     {
-//       level: "debug",
-//       target: "pino-pretty",
-//       options: {
-//         colorize: true,
-//       },
-//     },
-//     {
-//       level: "error",
-//       target: "pino-roll",
-//       options: {
-//         file: "./whatsapp-logs/whatsapp.log",
-//         frequency: "daily",
-//         colorize: true,
-//         mkdir: true,
-//       },
-//     },
-//   ],
-// },
-// }
+const waSocketLogOption = pino({
+  enabled: false,
+  level: "error",
+}) as any;
 
 export const forceUpdateConnectionState = async (
   userId: string,
@@ -54,6 +34,7 @@ export const forceUpdateConnectionState = async (
   );
 
   const _waSocket = await _makeWASocket({
+    logger: waSocketLogOption,
     printQRInTerminal: false,
     auth: state,
     syncFullHistory: false,
@@ -95,29 +76,9 @@ const makeWASocket = async (
     `${process.env.WHATSAPP_AUTH_FOLDER}/${userId}-${phoneId}`
   );
   let _waSocket = {} as WASocket;
-  const waSocketLogOption = pino({
-    enabled: true,
-    level: "error",
-    transport: {
-      targets: [
-        {
-          level: "error",
-          target: "pino-roll",
-          options: {
-            file: `${process.env.WHATSAPP_LOG}/whatsapp.log`,
-            frequency: "daily",
-            colorize: false,
-            mkdir: true,
-            dateFormat: "yyyy-MM-dd",
-            symlink: true,
-          },
-        },
-      ],
-    },
-  }) as any;
+
   if (session.get(phoneId)) {
     _waSocket = session.get(phoneId);
-    console.info("GET from session: " + _waSocket.user);
   } else {
     _waSocket = await _makeWASocket({
       logger: waSocketLogOption,
@@ -127,7 +88,6 @@ const makeWASocket = async (
       qrTimeout: WaSockQrTimeout,
       defaultQueryTimeoutMs: undefined,
     });
-    console.info("GET from not session: " + _waSocket.user);
 
     // console.info("CREATE new session: " + phoneId);
     _waSocket.ev.on("creds.update", (authState) => {

@@ -1,12 +1,9 @@
-import { parsePhoneNumber } from 'libphonenumber-js';
+import { parsePhoneNumber } from "libphonenumber-js";
 
-import {
-  delay,
-  proto,
-} from '@whiskeysockets/baileys';
+import { delay, proto } from "@whiskeysockets/baileys";
 
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
-import makeWASocket, { deleteSession } from './makeWASocket';
+import makeWASocket, { deleteSession } from "./makeWASocket";
 
 const sendMessageFromIo = async ({
   phoneId,
@@ -66,12 +63,14 @@ const sendMessage = async (
   try {
     const parsedTo = parsePhoneNumber(_to, "ID");
     if (!image) {
-      return await createdWaSock.sendMessage(
+      const res = await createdWaSock.sendMessage(
         `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
         {
           text: message!,
         }
       );
+      console.log("HERE", res);
+      return res;
     } else {
       const imgExt = ["jpg", "jpeg", "png", "gif"];
       if (isBase64(image)) {

@@ -51,7 +51,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
   try {
-    const resSocket = sendMessageFromIo({
+    const resSocket = await sendMessageFromIo({
       phoneId: phone.id,
       userId: phone.userId,
       tos,
