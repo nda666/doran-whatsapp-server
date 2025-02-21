@@ -69,7 +69,7 @@ nextApp.prepare().then(async () => {
       .catch(() => {
         intervalConnectRun = false;
       });
-  }, 30 * 60 * 1000); // 10 minutes interval
+  }, 30 * 60 * 1000); // 30 minutes interval
 });
 
 const connectAllWa = async (replaceSession = false) => {
