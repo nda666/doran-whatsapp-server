@@ -71,7 +71,6 @@ export const handleQuotedMessageEvent = async (
     }
 
     const replyText = JSON.parse(JSON.stringify(val.reply));
-
     if (val.type == "text") {
       val.is_save_inbox &&
         (await insertQuotesToInboxMessage({

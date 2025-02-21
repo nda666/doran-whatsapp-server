@@ -1,8 +1,5 @@
-import { Phone } from '@prisma/client';
-import {
-  proto,
-  WASocket,
-} from '@whiskeysockets/baileys';
+import { Phone } from "@prisma/client";
+import { proto, WASocket } from "@whiskeysockets/baileys";
 
 import {
   CekValueParam,
@@ -10,15 +7,15 @@ import {
   getImageFromWaMessage,
   messageKeywordTypeChecker,
   runFetchGetResponse,
-} from '../../server/utils';
-import { getAutoReplyByPhoneId } from '../../services/autoReply';
-import { saveToGrup } from '../../services/group';
+} from "../../server/utils";
+import { getAutoReplyByPhoneId } from "../../services/autoReply";
+import { saveToGrup } from "../../services/group";
 import {
   insertToInboxMessage,
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
-} from '../../services/inboxMessage';
-import toBase64 from '../libs/toBase64';
+} from "../../services/inboxMessage";
+import toBase64 from "../libs/toBase64";
 
 type HandleMessageInEventProps = {
   phone: Phone;
@@ -41,6 +38,7 @@ export const handleMessageInEvent = async (
   // insert inbox moved to top;
   // let phones = await phone();
   let phone_number = phone && phone.number;
+
   phoneReplies.forEach(async (item) => {
     const replyText = JSON.parse(JSON.stringify(item.reply));
 
@@ -49,7 +47,6 @@ export const handleMessageInEvent = async (
     ) {
       return;
     }
-
     if (item.type == "text") {
       if (item.is_save_inbox) {
         insertToInboxMessage({
@@ -59,7 +56,11 @@ export const handleMessageInEvent = async (
           userId,
         });
       }
-      await _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+      const res = await _waSocket.sendMessage(
+        messages[0].key.remoteJid!,
+        replyText
+      );
+      console.log(res);
     }
 
     if (item.type == "image") {

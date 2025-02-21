@@ -3,7 +3,6 @@ import "pino-pretty";
 import pino from "pino";
 
 import _makeWASocket, {
-  ConnectionState,
   useMultiFileAuthState,
   WASocket,
 } from "@whiskeysockets/baileys";
@@ -15,61 +14,18 @@ import { WaSockQrTimeout } from "../constant";
 import connectionUpdate from "../events/connectionUpdate";
 import { handleMessageInEvent } from "../events/handleMessageInEvent";
 import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
-import { getSocketIO } from "./socket";
 
 export const session = new Map();
 
 const waSocketLogOption = pino({
-  enabled: false,
+  enabled: true,
   level: "error",
 }) as any;
-
-export const forceUpdateConnectionState = async (
-  userId: string,
-  phoneId: string
-) => {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { state, saveCreds } = await useMultiFileAuthState(
-    `${process.env.WHATSAPP_AUTH_FOLDER}/${userId}-${phoneId}`
-  );
-
-  const _waSocket = await _makeWASocket({
-    logger: waSocketLogOption,
-    printQRInTerminal: false,
-    auth: state,
-    syncFullHistory: false,
-    qrTimeout: WaSockQrTimeout,
-    defaultQueryTimeoutMs: undefined,
-  });
-  const updateOnlineStatus = async (update: Partial<ConnectionState>) => {
-    const io = getSocketIO;
-    // console.log(update);
-    if (update.hasOwnProperty("isOnline")) {
-      io?.to(userId).emit("isOnline", {
-        isOnline: update.isOnline,
-        phoneId: phoneId,
-      });
-
-      await prisma.phone.update({
-        where: {
-          id: phoneId,
-        },
-        data: {
-          isOnline: update.isOnline,
-        },
-      });
-    }
-  };
-  setTimeout(() => {
-    _waSocket.ev.off("connection.update", updateOnlineStatus);
-  }, 1000 * 60);
-  _waSocket.ev.on("connection.update", updateOnlineStatus);
-};
 
 const makeWASocket = async (
   userId: string,
   phoneId: string,
-  onCreated?: (waSock: WASocket) => void
+  replaceState = false
 ): Promise<WASocket> => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(
@@ -77,10 +33,11 @@ const makeWASocket = async (
   );
   let _waSocket = {} as WASocket;
 
-  if (session.get(phoneId)) {
+  if (session.get(phoneId) && !replaceState) {
     _waSocket = session.get(phoneId);
   } else {
     _waSocket = await _makeWASocket({
+      keepAliveIntervalMs: 5000,
       logger: waSocketLogOption,
       printQRInTerminal: false,
       auth: state,
@@ -99,11 +56,11 @@ const makeWASocket = async (
       connectionUpdate(_waSocket, userId, phoneId, update);
     });
 
-    onCreated && onCreated(_waSocket);
+    // onCreated && onCreated(_waSocket);
 
     // for reply
     _waSocket.ev.on("messages.upsert", async ({ messages }) => {
-      if (messages[0].key.fromMe) {
+      if (messages[0].key.fromMe && process.env.NODE_ENV == "production") {
         return;
       }
       const { messageIn, messageType, quotedMessage } = getWaMesage(messages);

@@ -6,7 +6,7 @@ import next from "next";
 
 import { prisma } from "../lib/prisma";
 import { logger } from "./libs/logger";
-import makeWASocket, { forceUpdateConnectionState } from "./libs/makeWASocket";
+import makeWASocket from "./libs/makeWASocket";
 import { getSocketIO } from "./libs/socket";
 
 const hostname = "localhost";
@@ -62,30 +62,25 @@ nextApp.prepare().then(async () => {
     }
 
     intervalConnectRun = true;
-    doForceUpdateConnectionState()
+    connectAllWa(true)
       .then(() => {
         intervalConnectRun = false;
       })
       .catch(() => {
         intervalConnectRun = false;
       });
-  }, 1000 * 60);
+  }, 30 * 60 * 1000); // 10 minutes interval
 });
 
-const doForceUpdateConnectionState = async () => {
+const connectAllWa = async (replaceSession = false) => {
   const phones = await prisma.phone.findMany();
   phones?.forEach(async (phone) => {
     if (phone.userId && phone.id) {
-      await forceUpdateConnectionState(phone.userId, phone.id);
-    }
-  });
-};
-
-const connectAllWa = async () => {
-  const phones = await prisma.phone.findMany();
-  phones?.forEach(async (phone) => {
-    if (phone.userId && phone.id) {
-      const createdWaSock = await makeWASocket(phone.userId, phone.id);
+      const createdWaSock = await makeWASocket(
+        phone.userId,
+        phone.id,
+        replaceSession
+      );
       if (process.env.NODE_ENV == "development") {
         console.log(`${chalk.green(phone.number)}: ${createdWaSock.user?.id}`);
       }
