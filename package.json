@@ -18,11 +18,14 @@
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy"
   },
+  "prisma": {
+    "seed": "node  ./prisma/seeds/seeder.js"
+  },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@ant-design/icons": "^5.1.4",
     "@types/formidable": "^3.4.4",
-    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys",
+    "@whiskeysockets/baileys": "^6.7.18",
     "antd": "^5.11.0",
     "antd-phone-input": "^0.3.9",
     "axios": "^1.4.0",
