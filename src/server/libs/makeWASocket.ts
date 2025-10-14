@@ -1,19 +1,19 @@
-import 'pino-pretty';
+import "pino-pretty";
 
-import pino from 'pino';
+import pino from "pino";
 
 import _makeWASocket, {
   useMultiFileAuthState,
   WASocket,
-} from '@whiskeysockets/baileys';
+} from "@whiskeysockets/baileys";
 
-import { prisma } from '../../lib/prisma';
-import { getWaMesage } from '../../server/utils/getWaMessage';
-import { getPhoneById } from '../../services/phone';
-import { WaSockQrTimeout } from '../constant';
-import connectionUpdate from '../events/connectionUpdate';
-import { handleMessageInEvent } from '../events/handleMessageInEvent';
-import { handleQuotedMessageEvent } from '../events/handleQuotedMessageEvent';
+import { prisma } from "../../lib/prisma";
+import { getWaMesage } from "../../server/utils/getWaMessage";
+import { getPhoneById } from "../../services/phone";
+import { WaSockQrTimeout } from "../constant";
+import connectionUpdate from "../events/connectionUpdate";
+import { handleMessageInEvent } from "../events/handleMessageInEvent";
+import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
 
 export const session = new Map();
 
@@ -37,10 +37,11 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
   } else {
     _waSocket = await _makeWASocket({
+      version: [2, 3000, 1025190524],
       logger: waSocketLogOption,
       printQRInTerminal: false,
       auth: state,
-      shouldSyncHistoryMessage: (m) =>  false,
+      shouldSyncHistoryMessage: (m) => false,
       syncFullHistory: false,
       qrTimeout: WaSockQrTimeout,
       defaultQueryTimeoutMs: undefined,
