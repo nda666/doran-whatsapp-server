@@ -16,7 +16,9 @@
     "prisma": "prisma",
     "migration:create": "prisma migrate dev --create-only",
     "migrate": "prisma migrate dev",
-    "migrate:prod": "prisma migrate deploy"
+    "migrate:prod": "prisma migrate deploy",
+    "worker": "ts-node -r tsconfig-paths/register --project tsconfig.server.json src/lib/workers/index.ts",
+    "worker:dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json --require tsconfig-paths/register src/lib/workers/index.ts"
   },
   "prisma": {
     "seed": "node  ./prisma/seeds/seeder.js"
@@ -24,13 +26,16 @@
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@ant-design/icons": "^5.1.4",
+    "@bull-board/express": "^6.12.0",
     "@types/formidable": "^3.4.4",
-    "@whiskeysockets/baileys": "^6.7.18",
+    "@whiskeysockets/baileys": "^6.7.21",
     "antd": "^5.11.0",
     "antd-phone-input": "^0.3.9",
     "axios": "^1.4.0",
     "bcrypt": "^5.1.0",
     "body-parser": "^1.20.2",
+    "bull": "^4.16.5",
+    "bullmq": "^5.56.7",
     "compression": "^1.7.4",
     "dayjs": "^1.11.8",
     "eslint": "8.42.0",
@@ -70,7 +75,7 @@
     "@types/ws": "^8.5.5",
     "chalk": "^4.1.2",
     "express": "^4.18.2",
-    "jimp": "^0.16.1",
+    "jimp": "^1.6.0",
     "link-preview-js": "^3.0.5",
     "nodemon": "^3.1.4",
     "pino-pretty": "^11.2.2",
@@ -80,6 +85,7 @@
     "qrcode-terminal": "^0.12.0",
     "socket.io": "^4.7.2",
     "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.4.0",
     "typescript": "5.5.4"
