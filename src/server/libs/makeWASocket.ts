@@ -37,7 +37,7 @@ const makeWASocket = async (
     _waSocket = session.get(phoneId);
   } else {
     _waSocket = await _makeWASocket({
-      version: [2, 3000, 1025190524],
+      version: [2, 3000, 1027934701],
       logger: waSocketLogOption,
       printQRInTerminal: false,
       auth: state,
