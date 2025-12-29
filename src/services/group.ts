@@ -1,10 +1,10 @@
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { WAMessage, WASocket } from "@whiskeysockets/baileys";
 
 import { prisma } from "../lib/prisma";
 import { checkIdGroupFormat } from "../server/utils/checkIdGroupFormat";
 
 export const saveToGrup = async (
-  messages: proto.IWebMessageInfo[],
+  messages: WAMessage[],
   _waSocket: WASocket
 ) => {
   if (!messages[0].key.remoteJid) {

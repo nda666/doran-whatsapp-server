@@ -1,14 +1,14 @@
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
+import { writeFile } from "fs/promises";
+import { join } from "path";
 
 import {
   downloadMediaMessage,
-  proto,
+  WAMessage,
   WASocket,
-} from '@whiskeysockets/baileys';
+} from "@whiskeysockets/baileys";
 
 export async function getImageFromWaMessage(
-  messages: proto.IWebMessageInfo[],
+  messages: WAMessage[],
   sock: WASocket
 ) {
   let getImageMessage =

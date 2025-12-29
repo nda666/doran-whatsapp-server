@@ -1,6 +1,6 @@
-import { proto } from '@whiskeysockets/baileys';
+import { proto, WAMessage } from "@whiskeysockets/baileys";
 
-export const getWaMesage = (messages: proto.IWebMessageInfo[]) => {
+export const getWaMesage = (messages: WAMessage[]) => {
   const m = messages[0]?.message;
   if (!m) {
     return { messageIn: null, quotedMessage: null, messageType: null };

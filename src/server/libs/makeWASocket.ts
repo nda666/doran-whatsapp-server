@@ -39,14 +39,12 @@ const makeWASocket = async (
   } else {
     const webVersion = await fetchLatestWaWebVersion({});
     _waSocket = await _makeWASocket({
-      version: webVersion.version,
       logger: waSocketLogOption,
       printQRInTerminal: false,
       auth: state,
       shouldSyncHistoryMessage: (m) => false,
       syncFullHistory: false,
       qrTimeout: WaSockQrTimeout,
-      defaultQueryTimeoutMs: undefined,
     });
 
     // console.info("CREATE new session: " + phoneId);

@@ -4,6 +4,12 @@ import express from "express";
 import { createServer, Server } from "http";
 import next from "next";
 
+import sendWaQueue from "@/lib/queues/sendWaQueue";
+import { createBullBoard } from "@bull-board/api";
+import { BullAdapter } from "@bull-board/api/bullAdapter";
+import { ExpressAdapter } from "@bull-board/express";
+import { fetchLatestWaWebVersion } from "@whiskeysockets/baileys";
+
 import { prisma } from "../lib/prisma";
 import { logger } from "./libs/logger";
 import makeWASocket from "./libs/makeWASocket";
@@ -27,14 +33,27 @@ const nextHandler = nextApp.getRequestHandler();
 // const waSocks: WASocket[] = [];
 const io = getSocketIO;
 
+const bullExpress = new ExpressAdapter();
+
+createBullBoard({
+  queues: [new BullAdapter(sendWaQueue)],
+  serverAdapter: bullExpress,
+});
+
+bullExpress.setBasePath("/queues");
+app.use("/queues", bullExpress.getRouter());
+
 nextApp.prepare().then(async () => {
+  const webVersion = await fetchLatestWaWebVersion({});
+  console.log("webVersion", webVersion);
   const appLogger = logger(`${process.env.WEBSITE_LOG}/website.log`);
   // const server = http.createServer(app);
 
   app.all("*", (req, res, next) => {
-    res.setTimeout(20000, function () {
+    res.setTimeout(120000, () => {
       res.status(408).end();
     });
+
     nextHandler(req, res).catch((err) => {
       appLogger.error(err);
       res.status(500).send("Internal Server Error");

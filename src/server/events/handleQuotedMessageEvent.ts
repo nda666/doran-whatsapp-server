@@ -1,5 +1,5 @@
 import { Phone } from "@prisma/client";
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { proto, WAMessage, WASocket } from "@whiskeysockets/baileys";
 
 import {
   CekValueParam,
@@ -19,7 +19,7 @@ export type HandleQuotedMessageEventProps = {
   phone: Phone;
   quotedMessage: proto.IMessage;
   waSocket: WASocket;
-  messages: proto.IWebMessageInfo[];
+  messages: WAMessage[];
   userId: string;
 };
 export const handleQuotedMessageEvent = async (

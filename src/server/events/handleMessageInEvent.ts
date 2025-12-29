@@ -1,5 +1,5 @@
 import { Phone } from "@prisma/client";
-import { proto, WASocket } from "@whiskeysockets/baileys";
+import { WAMessage, WASocket } from "@whiskeysockets/baileys";
 
 import {
   CekValueParam,
@@ -21,7 +21,7 @@ type HandleMessageInEventProps = {
   phone: Phone;
   _waSocket: WASocket;
   messageIn: string;
-  messages: proto.IWebMessageInfo[];
+  messages: WAMessage[];
   userId: string;
 };
 
@@ -47,17 +47,17 @@ export const handleMessageInEvent = async (
     ) {
       return;
     }
-    if (item.type == "text") {
+    if (item.type == "text" && messages[0]) {
       if (item.is_save_inbox) {
         insertToInboxMessage({
           message: messageIn!,
-          sender: messages[0].key.remoteJid!.split("@")[0]!,
+          sender: messages[0]?.key?.remoteJid!.split("@")[0]!,
           recipient: phone_number!,
           userId,
         });
       }
       const res = await _waSocket.sendMessage(
-        messages[0].key.remoteJid!,
+        messages[0]?.key?.remoteJid!,
         replyText
       );
       console.log(res);
@@ -71,12 +71,12 @@ export const handleMessageInEvent = async (
         messageIn ?? "",
         item.keyword,
         item.type_keyword
-      ) && _waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+      ) && _waSocket.sendMessage(messages[0]?.key?.remoteJid!, replyText);
     }
 
     if (
       item.type == "webhook" &&
-      !checkIdGroupFormat(messages[0].key.remoteJid!)
+      !checkIdGroupFormat(messages[0]?.key?.remoteJid!)
     ) {
       const finalFilePath = await getImageFromWaMessage(messages, _waSocket);
 
@@ -110,7 +110,7 @@ export const handleMessageInEvent = async (
       let data = {
         image_in: finalFilePath,
         message: messageIn!,
-        sender: messages[0].key.remoteJid!.split("@")[0]!,
+        sender: messages[0]?.key?.remoteJid!.split("@")[0]!,
         recipient: phone_number,
         userId,
         // auto_reply_id: item.id.toString(),
