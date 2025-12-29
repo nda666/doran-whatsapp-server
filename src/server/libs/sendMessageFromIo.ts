@@ -1,6 +1,6 @@
 import { parsePhoneNumber } from "libphonenumber-js";
 
-import { delay, proto } from "@whiskeysockets/baileys";
+import { delay, WAMessage } from "@whiskeysockets/baileys";
 
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 import makeWASocket, { deleteSession } from "./makeWASocket";
@@ -19,10 +19,10 @@ const sendMessageFromIo = async ({
   phoneCountry: string;
   message: string;
   image?: any;
-}): Promise<proto.WebMessageInfo[]> => {
+}): Promise<WAMessage[]> => {
   let retry = 0;
 
-  let send: proto.WebMessageInfo[] = [];
+  let send: WAMessage[] = [];
   for (const _to of tos) {
     const sendResult = await sendMessage(
       _to,
@@ -58,7 +58,7 @@ const sendMessage = async (
   phoneId: string,
   userId: string,
   image?: any
-): Promise<proto.WebMessageInfo | undefined> => {
+): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
     const parsedTo = parsePhoneNumber(_to, "ID");

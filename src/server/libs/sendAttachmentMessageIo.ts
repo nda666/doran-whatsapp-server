@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
 
-import { delay, proto } from "@whiskeysockets/baileys";
+import { delay, WAMessage } from "@whiskeysockets/baileys";
 
 import makeWASocket, { deleteSession } from "./makeWASocket";
 import toBase64 from "./toBase64";
@@ -48,7 +48,7 @@ const sendAttachmentMessage = async (
   phoneId: string,
   userId: string,
   image: any
-): Promise<proto.WebMessageInfo | undefined> => {
+): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
     const parsedTo = parsePhoneNumber(

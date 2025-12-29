@@ -1,4 +1,4 @@
-import { delay, proto } from "@whiskeysockets/baileys";
+import { delay, WAMessage } from "@whiskeysockets/baileys";
 
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
 import makeWASocket, { deleteSession } from "./makeWASocket";
@@ -58,7 +58,7 @@ const sendGroupMessage = async (
   userId: string,
   image?: any,
   id_group?: string
-): Promise<proto.WebMessageInfo | undefined> => {
+): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
     let is_exist_idgroup = await createdWaSock.groupMetadata(id_group!);
