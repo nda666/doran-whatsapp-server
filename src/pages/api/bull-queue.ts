@@ -1,10 +1,11 @@
 import express from "express";
 import { NextApiRequest, NextApiResponse } from "next";
 
-import sendWaQueue from "@/lib/queues/sendWaQueue"; // sesuaikan path queue kamu
 import { createBullBoard } from "@bull-board/api";
 import { BullAdapter } from "@bull-board/api/bullAdapter";
 import { ExpressAdapter } from "@bull-board/express";
+
+import sendWaQueue from "../../lib/queues/sendWaQueue"; // sesuaikan path queue kamu
 
 let handler: any; // singleton
 

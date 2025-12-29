@@ -4,13 +4,13 @@ import express from "express";
 import { createServer, Server } from "http";
 import next from "next";
 
-import sendWaQueue from "@/lib/queues/sendWaQueue";
 import { createBullBoard } from "@bull-board/api";
 import { BullAdapter } from "@bull-board/api/bullAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { fetchLatestWaWebVersion } from "@whiskeysockets/baileys";
 
 import { prisma } from "../lib/prisma";
+import sendWaQueue from "../lib/queues/sendWaQueue";
 import { logger } from "./libs/logger";
 import makeWASocket from "./libs/makeWASocket";
 import { getSocketIO } from "./libs/socket";

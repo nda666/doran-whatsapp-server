@@ -2,8 +2,9 @@
 
 import { NextApiResponse } from "next";
 
-import sendWaQueue from "@/lib/queues/sendWaQueue";
 import { AuthNextApiRequest } from "@/types/global";
+
+import sendWaQueue from "../../../lib/queues/sendWaQueue";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {}
