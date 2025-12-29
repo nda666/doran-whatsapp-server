@@ -39,7 +39,9 @@ const makeWASocket = async (
   } else {
     const webVersion = await fetchLatestWaWebVersion({});
     _waSocket = await _makeWASocket({
-      logger: waSocketLogOption,
+      // logger: waSocketLogOption,
+
+      logger: pino({ level: "silent" }),
       printQRInTerminal: false,
       auth: state,
       shouldSyncHistoryMessage: (m) => false,
