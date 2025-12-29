@@ -3,7 +3,6 @@ import "pino-pretty";
 import pino from "pino";
 
 import _makeWASocket, {
-  fetchLatestWaWebVersion,
   useMultiFileAuthState,
   WASocket,
 } from "@whiskeysockets/baileys";
@@ -37,10 +36,10 @@ const makeWASocket = async (
   if (session.get(phoneId) && !replaceState) {
     _waSocket = session.get(phoneId);
   } else {
-    const webVersion = await fetchLatestWaWebVersion({});
+    // const webVersion = await fetchLatestWaWebVersion({});
     _waSocket = await _makeWASocket({
       // logger: waSocketLogOption,
-      version: webVersion.version,
+      version: [3, 3000, 1031504512],
       logger: pino({ level: "silent" }),
       printQRInTerminal: false,
       auth: state,
