@@ -31,7 +31,7 @@ const getQrCode = async (waSock: WASocket): Promise<string> => {
     const timeout = setTimeout(() => {
       waSock.ev.off("connection.update", updateEvent);
       reject(new Error("QR code generation timed out"));
-    }, 60000); // 60 seconds timeout
+    }, 60000 * 2); // 60 seconds timeout
     const updateEvent = (update: Partial<ConnectionState>) => {
       if (update.qr) {
         clearTimeout(timeout); // Clear timeout when QR code is received
