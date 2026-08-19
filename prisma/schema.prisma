@@ -89,6 +89,7 @@ model Phone {
   userId        String
   auto_replies  AutoReply[]
   is_save_group Boolean      @default(value: false) @map("is_save_group")
+  active        Int          @default(value: 1)
   createdAt     DateTime     @default(now()) @map(name: "created_at")
   updatedAt     DateTime     @updatedAt @map(name: "updated_at")
 

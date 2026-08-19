@@ -20,7 +20,7 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   const token = await getToken({ req });
 
   try {
-    const { number, name, is_online } = req.query;
+    const { number, name, is_online, active } = req.query;
     // if (status && !isPhoneStatus(status)) {
     //   res.status(400).json({ message: "status_is_invalid" });
     //   return;
@@ -38,8 +38,11 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
             contains: String(name), // Case-insensitive search, adjust if needed
           },
         }),
-        ...(typeof is_online !== "undefined" && {
+        ...(typeof is_online !== "undefined" && is_online !== "" && {
           isOnline: is_online == "1" ? true : false,
+        }),
+        ...(typeof active !== "undefined" && active !== "" && {
+          active: Number(active),
         }),
       },
       orderBy: {

@@ -27,6 +27,11 @@ const makeWASocket = async (
   phoneId: string,
   replaceState = false
 ): Promise<WASocket> => {
+  const phone = await getPhoneById(phoneId);
+  if (!phone || phone.active !== 1) {
+    throw new Error(`Device ${phoneId} is not active`);
+  }
+
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(
     `${process.env.WHATSAPP_AUTH_FOLDER}/${userId}-${phoneId}`

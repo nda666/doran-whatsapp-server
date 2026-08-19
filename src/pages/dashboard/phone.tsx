@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 
-import { Button, Flex, Modal, notification, Space, Switch, Table } from "antd";
+import { Button, Flex, Modal, notification, Space, Switch, Table, Tag } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSession } from "next-auth/react";
@@ -47,10 +47,16 @@ const PhonePage = () => {
   });
   const { data: session } = useSession();
 
-  const [searchQuery, setSearchQuery] = useState({
+  const [searchQuery, setSearchQuery] = useState<{
+    number: string | undefined;
+    name: string | undefined;
+    is_online: string | undefined;
+    active: string | undefined;
+  }>({
     number: undefined,
     name: undefined,
     is_online: undefined,
+    active: undefined,
   });
   const phoneData = usePhoneData(session?.user?.token!, searchQuery);
   const [showSearch, setShowSearch] = useState(true);
@@ -198,6 +204,16 @@ const PhonePage = () => {
       ),
     },
     {
+      title: "Status Perangkat",
+      key: "active",
+      dataIndex: "active",
+      render: (v) => (
+        <Tag color={v === 1 ? "green" : "red"}>
+          {v === 1 ? "Aktif" : "Tidak Aktif"}
+        </Tag>
+      ),
+    },
+    {
       title: t("created_at"),
       key: "createdAt",
       dataIndex: "createdAt",
@@ -234,6 +250,7 @@ const PhonePage = () => {
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
             onGetQrCodeClick={onGetQrCodeClick}
+            onToggleActiveClick={onToggleActiveClick}
           />
         );
       },
@@ -282,6 +299,24 @@ const PhonePage = () => {
           });
         },
       });
+  };
+
+  const onToggleActiveClick = (_phone: Phone | undefined, active: number) => {
+    if (_phone) {
+      modal.confirm({
+        title: active === 1 ? "Konfirmasi Aktifkan Perangkat" : "Konfirmasi Nonaktifkan Perangkat",
+        content: `Apakah Anda yakin ingin ${active === 1 ? "mengaktifkan" : "menonaktifkan"} perangkat ${_phone.name}?`,
+        onOk: async () => {
+          const result = await phoneData.toggleActive(_phone.id, active);
+          notif[result.success ? "success" : "error"]({
+            message: result.success ? t("success") : t("failed"),
+            description: result.success
+              ? `Perangkat berhasil ${active === 1 ? "diaktifkan" : "dinonaktifkan"}`
+              : `Gagal ${active === 1 ? "mengaktifkan" : "menonaktifkan"} perangkat`,
+          });
+        },
+      });
+    }
   };
 
   const onSaveGroup = (_phone: Phone | undefined, checked: boolean) => {

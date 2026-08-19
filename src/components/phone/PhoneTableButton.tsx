@@ -1,12 +1,12 @@
-import phones from "@/pages/api/phones";
 import {
+  CheckCircleOutlined,
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
   QrcodeOutlined,
   SettingOutlined,
+  StopOutlined,
   WechatFilled,
-  UserOutlined,
 } from "@ant-design/icons";
 import { Phone } from "@prisma/client";
 import { Button, Dropdown, MenuProps, Space } from "antd";
@@ -20,6 +20,11 @@ export interface PhoneTableButtonProps {
   onEditClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onGetQrCodeClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onDeleteClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
+  onToggleActiveClick?: (
+    phone: Phone | undefined,
+    active: number,
+    menuInfo: MenuInfo
+  ) => void;
 }
 export default function PhoneTableButton({
   phone,
@@ -28,6 +33,7 @@ export default function PhoneTableButton({
   onEditClick,
   onGetQrCodeClick,
   onDeleteClick,
+  onToggleActiveClick,
 }: PhoneTableButtonProps) {
   const { t } = useTranslation("common");
   const items: MenuProps["items"] = [
@@ -42,6 +48,14 @@ export default function PhoneTableButton({
       key: `${phone.id}-2`,
       icon: <QrcodeOutlined />,
       onClick: (e) => onGetQrCodeClick && onGetQrCodeClick(phone, e),
+    },
+    {
+      label: phone.active === 1 ? "Nonaktifkan" : "Aktifkan",
+      key: `${phone.id}-5`,
+      icon: phone.active === 1 ? <StopOutlined /> : <CheckCircleOutlined />,
+      onClick: (e) =>
+        onToggleActiveClick &&
+        onToggleActiveClick(phone, phone.active === 1 ? 0 : 1, e),
     },
     {
       label: t("delete"),

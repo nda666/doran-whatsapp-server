@@ -3,8 +3,8 @@ module.exports = {
     {
       name: "doran-whatsapp",
       script: "./dist/src/server/index.js",
-      instances: 4,
-      exec_mode: "cluster",
+      instances: 1,
+      exec_mode: "fork",
       env: {
         NODE_ENV: "production",
         WHATSAPP_AUTH_FOLDER: "./storage/whatsapp-auth",
@@ -13,10 +13,9 @@ module.exports = {
       },
       node_args: [
         "--http-server-default-timeout=0",
-        "--max-old-space-size=2048",
+        "--max-old-space-size=4096",
       ],
-      // node_args: ["--max-old-space-size=1024"],
-      max_memory_restart: "10G",
+      max_memory_restart: "4500M",
     },
   ],
 };

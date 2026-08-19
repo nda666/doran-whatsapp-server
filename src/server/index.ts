@@ -92,7 +92,11 @@ nextApp.prepare().then(async () => {
 });
 
 const connectAllWa = async (replaceSession = false) => {
-  const phones = await prisma.phone.findMany();
+  const phones = await prisma.phone.findMany({
+    where: {
+      active: 1,
+    },
+  });
   phones?.forEach(async (phone) => {
     if (phone.userId && phone.id) {
       const createdWaSock = await makeWASocket(

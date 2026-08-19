@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `phones` ADD COLUMN `active` INTEGER NOT NULL DEFAULT 1;

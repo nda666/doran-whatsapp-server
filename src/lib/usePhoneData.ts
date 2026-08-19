@@ -19,6 +19,7 @@ export type usePhoneDataType = {
     phoneId: string,
     is_save_group: boolean
   ) => Promise<ResponseResult>;
+  toggleActive: (phoneId: string, active: number) => Promise<ResponseResult>;
   refetchPhone: () => void;
 };
 
@@ -26,6 +27,7 @@ export type SearchPhoneParams = {
   name?: string | undefined | null;
   number?: string | undefined | null;
   is_online?: string | undefined | null;
+  active?: string | undefined | null;
 };
 export default function usePhoneData(
   token: string,
@@ -55,6 +57,7 @@ export default function usePhoneData(
             ...(search.name && { name: search.name }),
             ...(search.number && { number: search.number }),
             ...(search.is_online && { is_online: search.is_online }),
+            ...(search.active && { active: search.active }),
           },
         });
         const result = response.data;
@@ -65,7 +68,7 @@ export default function usePhoneData(
     };
     runRefetchPhone && token && fetchPhones();
     return () => {};
-  }, [runRefetchPhone, token, search.name, search.number, search.is_online]);
+  }, [runRefetchPhone, token, search.name, search.number, search.is_online, search.active]);
 
   const deleteById = async (phoneId: string) => {
     const result: {
@@ -159,12 +162,51 @@ export default function usePhoneData(
     return result;
   };
 
+  const toggleActive = async (phoneId: string, active: number) => {
+    const result: {
+      success: boolean;
+      error: any;
+      data: any;
+    } = {
+      success: false,
+      error: undefined,
+      data: undefined,
+    };
+
+    try {
+      const resp = await axios.patch(
+        `/api/phones/${phoneId}/toggle-active`,
+        {
+          active: active,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      result.success = true;
+      result.data = resp.data;
+      setRunRefetchPhone(true);
+    } catch (e) {
+      if (e instanceof AxiosError) {
+        result.error = e;
+      } else {
+        result.error = e;
+      }
+    }
+
+    return result;
+  };
+
   return {
     phones,
     setPhones,
     save,
     deleteById,
     isSaveGroup,
+    toggleActive,
     refetchPhone,
   };
 }

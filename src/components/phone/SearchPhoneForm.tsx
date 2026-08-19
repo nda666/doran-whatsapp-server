@@ -94,6 +94,27 @@ const SearchPhoneForm: React.FC<SearchPhoneFormProps> = ({
                 </Select>
               </Form.Item>
               <Form.Item
+                label="Aktif"
+                name="active"
+                initialValue={""}
+                labelCol={{
+                  xs: { span: 24 },
+                  sm: { span: 24 },
+                  md: { span: 5 },
+                }}
+                wrapperCol={{
+                  xs: { span: 24 },
+                  sm: { span: 24 },
+                  md: { span: 19 },
+                }}
+              >
+                <Select placeholder="Pilih status aktif">
+                  <Option value="">Semua</Option>
+                  <Option value="1">Aktif</Option>
+                  <Option value="0">Tidak Aktif</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
                 wrapperCol={{
                   xs: { span: 24 },
                   sm: { span: 24 },
