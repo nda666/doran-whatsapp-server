@@ -12,7 +12,6 @@ module.exports = {
         WEBSITE_LOG: "./storage/logs/website",
       },
       node_args: [
-        "--http-server-default-timeout=0",
         "--max-old-space-size=4096",
       ],
       max_memory_restart: "4500M",
