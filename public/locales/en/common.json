@@ -68,5 +68,7 @@
   "recipient": "Recipient",
   "sender": "Sender",
   "enter_sender": "Enter the sender number",
-  "enter_recipient": "Enter the recipient number"
+  "enter_recipient": "Enter the recipient number",
+  "setting": "Settings",
+  "webhook_settings": "Webhook Settings"
 }

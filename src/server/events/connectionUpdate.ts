@@ -5,8 +5,10 @@ import {
   DisconnectReason,
   WASocket,
 } from "@whiskeysockets/baileys";
+import { PhoneStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
+import { broadcastPhoneStatusUpdate } from "../../services/webhookService";
 import { WaSockQrTimeout } from "../constant";
 import makeWASocket, { deleteSession } from "../libs/makeWASocket";
 import { getSocketIO } from "../libs/socket";
@@ -32,14 +34,12 @@ export default async function connectionUpdate(
       qr: update.qr,
       timeout: WaSockQrTimeout,
     });
-    // await prisma.phone.update({
-    //   where: {
-    //     id: phoneId,
-    //   },
-    //   data: {
-    //     qrCode: update.qr,
-    //   },
-    // });
+
+    broadcastPhoneStatusUpdate({
+      phoneId,
+      qr: update.qr,
+      connection: update.connection,
+    });
   }
 
   const { connection, lastDisconnect } = update;
@@ -48,9 +48,9 @@ export default async function connectionUpdate(
     // whatsappSocket(io, userId, phoneId);
   }
 
-  if (update.isOnline) {
+  if (connection === "open" || update.isOnline) {
     io?.to(userId).emit("isOnline", {
-      isOnline: update.isOnline,
+      isOnline: true,
       phoneId: phoneId,
     });
 
@@ -60,10 +60,33 @@ export default async function connectionUpdate(
       },
       data: {
         isOnline: true,
+        status: PhoneStatus.OPEN,
       },
     });
 
-    // waSock.ev.flush(true);
+    broadcastPhoneStatusUpdate({
+      phoneId,
+      isOnline: true,
+      status: PhoneStatus.OPEN,
+      connection: connection || "open",
+    });
+  }
+
+  if (connection === "connecting") {
+    await prisma.phone.update({
+      where: {
+        id: phoneId,
+      },
+      data: {
+        status: PhoneStatus.CONNECTING,
+      },
+    });
+
+    broadcastPhoneStatusUpdate({
+      phoneId,
+      status: PhoneStatus.CONNECTING,
+      connection: "connecting",
+    });
   }
 
   if (connection === "close") {
@@ -73,11 +96,20 @@ export default async function connectionUpdate(
       },
       data: {
         isOnline: false,
+        status: PhoneStatus.CLOSE,
       },
     });
     io?.to(userId).emit("connectionState", {
       update: "lalalala",
       t: (lastDisconnect?.error as any)?.output?.statusCode,
+    });
+
+    broadcastPhoneStatusUpdate({
+      phoneId,
+      isOnline: false,
+      status: PhoneStatus.CLOSE,
+      connection: "close",
+      lastDisconnect,
     });
 
     const shouldReconnectStatus = [
@@ -106,3 +138,4 @@ export default async function connectionUpdate(
     makeWASocket(userId, phoneId);
   }
 }
+

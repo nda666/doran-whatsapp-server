@@ -68,5 +68,7 @@
   "recipient": "Penerima",
   "sender": "Pengirim",
   "enter_sender": "Masukan no pengirim",
-  "enter_recipient": "Masukan no penerima"
+  "enter_recipient": "Masukan no penerima",
+  "setting": "Pengaturan",
+  "webhook_settings": "Pengaturan Webhook"
 }

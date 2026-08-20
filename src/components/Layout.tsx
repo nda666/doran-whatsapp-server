@@ -19,6 +19,7 @@ import {
   HistoryOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  SettingOutlined,
   WhatsAppOutlined,
 } from "@ant-design/icons";
 
@@ -129,6 +130,14 @@ export default function Layout({
               <Space size={"middle"}>
                 <HistoryOutlined />
                 {!collapsed && t("log")}
+              </Space>
+            </Link>
+          </Menu.Item>
+          <Menu.Item key={"/dashboard/setting"} title={t("setting") || "Pengaturan"}>
+            <Link href={"/dashboard/setting"}>
+              <Space size={"middle"}>
+                <SettingOutlined />
+                {!collapsed && (t("setting") || "Pengaturan")}
               </Space>
             </Link>
           </Menu.Item>
