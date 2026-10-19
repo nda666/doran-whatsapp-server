@@ -366,6 +366,7 @@ body { color: var(--ui-text); background: var(--ui-soft); font-family: "Segoe UI
 .device-setting-copy > label { display: block; color: var(--ui-text); font-weight: 400; font-size: 14px; line-height: 1.6; cursor: pointer; }
 .device-settings-list > .device-setting-row .device-setting-copy > label { font-weight: 600; }
 .device-setting-help { margin-top: 6px; color: var(--ui-muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.device-setting-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--ui-soft); }
 .device-setting-control { flex: 0 0 auto; display: grid; grid-template-columns: 44px 66px; align-items: center; gap: 8px; padding-top: 2px; }
 .device-setting-control .ant-switch { min-width: 44px; }
 .device-setting-state { color: var(--ui-muted); font-size: 11px; line-height: 1.5; white-space: nowrap; }
