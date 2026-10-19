@@ -19,8 +19,11 @@ perbaiki dengan migration baru yang direview, bukan mengedit migration yang suda
 
 ## Konfigurasi GitHub sekali
 
-Buat Environment `production` di repository Settings > Environments.
-Batasi deployment environment ke branch `main`. Tambahkan secrets berikut:
+Buat Environment `production` di repository Settings > Environments bila memiliki
+izin admin; batasi deployment environment ke branch `main`. Workflow juga akan
+mereferensikan environment ini saat deploy pertama. Tambahkan secrets berikut
+di Settings > Secrets and variables > Actions (repository secrets), atau di
+environment `production` bila konfigurasi environment tersedia:
 
 | Secret | Isi |
 | --- | --- |
@@ -68,6 +71,8 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - Periksa hash env dan seluruh file auth WhatsApp sebelum restart.
 - Tukar source, dependencies, Prisma client, serta runtime sebagai satu promosi
   yang dapat dipulihkan. `.env*`, `storage`, dan `.git` tetap di lokasi asli.
+  Isi `public/uploads` dan `public/downloads` juga dipertahankan, dibackup,
+  dan dipindahkan kembali ke path yang sama setelah swap static assets.
 - Periksa login lokal, koneksi database, endpoint dispatch dengan autentikasi,
   HTTPS publik, dan PID proses PM2 lain. Simpan PM2 hanya setelah lulus.
 - Bila promosi/health gagal, pulihkan runtime lama dan periksa login. Bila

@@ -25,6 +25,7 @@ REVIEWED_MIGRATIONS = {
 PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment',
          'package.json', 'package-lock.json', 'next.config.js', 'next-i18next.config.js',
          'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json']
+PUBLIC_DATA = ['uploads', 'downloads']
 
 
 def validate_archive(archive, stage):
@@ -37,6 +38,8 @@ def validate_archive(archive, stage):
             raise ValueError('Archive links/special files are forbidden')
         if name.parts[0] in {'.git', 'storage', 'node_modules', '.next', 'dist', 'tmp', 'output'}:
             raise ValueError('Runtime/private files in source archive')
+        if name.parts[0] == 'public' and len(name.parts) > 1 and name.parts[1] in PUBLIC_DATA:
+            raise ValueError('User uploads/downloads in source archive')
         if any(part.startswith('.env') and part != '.env.example' for part in name.parts):
             raise ValueError('Secret environment file in source archive')
         if not (stage / name).resolve().is_relative_to(stage.resolve()):
@@ -163,6 +166,9 @@ def main():
     old = backup / 'runtime'
     old.mkdir()
     moved_old, moved_new = [], []
+    detached_public, restored_public = [], []
+    shared_public = backup / 'shared-public'
+    shared_public.mkdir()
     guard.preserve = True
     stopped = False
     try:
@@ -180,6 +186,10 @@ def main():
                     archive.add(path, arcname=path.name)
             if (APP / 'storage').exists():
                 archive.add(APP / 'storage', arcname='storage')
+            for name in PUBLIC_DATA:
+                path = APP / 'public' / name
+                if path.exists() or path.is_symlink():
+                    archive.add(path, arcname='public/' + name)
         # No reset/db push/seed, and no automatic database restore.
         run(['npx', '--no-install', 'prisma', 'migrate', 'deploy'])
         run(['npx', '--no-install', 'prisma', 'migrate', 'status'])
@@ -190,6 +200,13 @@ def main():
         if private_hashes(APP) != frozen:
             raise RuntimeError('Environment or WhatsApp session changed during deployment')
         (backup / 'database-after.json').write_text(json.dumps(after))
+        # Detach persistent public files before swapping the static asset directory.
+        # Move on the same filesystem: files remain intact and are never overwritten.
+        for name in PUBLIC_DATA:
+            path = APP / 'public' / name
+            if path.exists() or path.is_symlink():
+                path.rename(shared_public / name)
+                detached_public.append(name)
         for name in PARTS:
             if (APP / name).exists():
                 (APP / name).rename(old / name)
@@ -197,6 +214,9 @@ def main():
             if (stage / name).exists():
                 (stage / name).rename(APP / name)
                 moved_new.append(name)
+        for name in detached_public:
+            (shared_public / name).rename(APP / 'public' / name)
+            restored_public.append(name)
         pm2('startOrReload', 'ecosystem.config.js', '--only', 'doran-whatsapp', '--update-env')
         for attempt in range(30):
             try:
@@ -217,10 +237,14 @@ def main():
         if stopped:
             try:
                 pm2('stop', 'doran-whatsapp')
+                for name in restored_public:
+                    (APP / 'public' / name).rename(shared_public / name)
                 for name in reversed(moved_new):
                     (APP / name).rename(stage / name)
                 for name in reversed(moved_old):
                     (old / name).rename(APP / name)
+                for name in detached_public:
+                    (shared_public / name).rename(APP / 'public' / name)
                 pm2('startOrReload', 'ecosystem.config.js', '--only', 'doran-whatsapp', '--update-env')
                 for attempt in range(30):
                     try:

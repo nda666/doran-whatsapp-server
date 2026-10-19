@@ -31,7 +31,7 @@ class DeploymentGuards(unittest.TestCase):
 
     def test_rejects_traversal_links_and_private_files(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as root:
-            for name in ['../outside', '/etc/passwd', '.env', 'nested/.env.production', 'storage/whatsapp-auth/creds.json', '.git/config']:
+            for name in ['../outside', '/etc/passwd', '.env', 'nested/.env.production', 'storage/whatsapp-auth/creds.json', '.git/config', 'public/uploads/private.jpg', 'public/downloads/customer.csv']:
                 with self.subTest(name=name), self.archive(name) as archive:
                     with self.assertRaises(ValueError):
                         deploy.validate_archive(archive, Path(root))
