@@ -42,7 +42,7 @@ def validate_archive(archive, stage):
             raise ValueError('User uploads/downloads in source archive')
         if any(part.startswith('.env') and part != '.env.example' for part in name.parts):
             raise ValueError('Secret environment file in source archive')
-        if not (stage / name).resolve().is_relative_to(stage.resolve()):
+        if stage.resolve() not in (stage / name).resolve().parents:
             raise ValueError('Archive escapes stage')
 
 
@@ -107,12 +107,12 @@ def main():
         raise RuntimeError('Existing production checkout and .env required')
     os.umask(0o077)
     os.environ['PATH'] = str(NODE_BIN) + ':' + os.environ['PATH']
-    if subprocess.check_output(['node', '--version'], text=True).strip() != 'v24.21.0':
+    if subprocess.check_output(['node', '--version'], universal_newlines=True).strip() != 'v24.21.0':
         raise RuntimeError('Expected production Node v24.21.0')
     lock = open(APP.parent / '.doran-cd.lock', 'w')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     active_build = (APP / '.next/BUILD_ID').read_bytes()
-    stamp = str(time.time_ns())
+    stamp = str(int(time.time() * 1000000))
     stage = APP.parent / ('.doran-cd-' + stamp)
     backup = Path('/home/jeblast/backups') / ('doran-cd-' + stamp)
     stage.mkdir(mode=0o700)
@@ -227,8 +227,10 @@ def main():
                     raise
                 time.sleep(2)
         # Public proxy must also point to a healthy application before success.
-        if urllib.request.urlopen('https://dashboard.jeblast.com/signin', timeout=20).status != 200:
-            raise RuntimeError('Public HTTPS health failed')
+        # The public proxy rejects Python's default user-agent; use the same
+        # curl probe as GitHub rather than treating a WAF response as app failure.
+        run(['curl', '--fail', '--silent', '--show-error', '--max-time', '20',
+             'https://dashboard.jeblast.com/signin'], cwd=APP)
         current = json.loads(pm2('jlist'))
         if any(next((p['pid'] for p in current if p['name'] == name), None) != pid for name, pid in others.items()):
             raise RuntimeError('Unrelated PM2 process changed')
