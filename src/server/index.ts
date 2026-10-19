@@ -1,4 +1,5 @@
 import { startMessagingAlerts } from "./messaging/alerts";
+import { startDailyWarmup } from "./messaging/dailyWarmup";
 import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
@@ -21,6 +22,7 @@ import { startDeviceWebhookWorker } from "./deviceWebhook/worker";
 import { startDispatchWebhookWorker } from "./dispatchWebhook/worker";
 import { queueAccess } from "./queueAccess";
 let stopMessagingAlerts: (() => Promise<void>) | undefined;
+let stopDailyWarmup: (() => Promise<void>) | undefined;
 let stopDispatchWebhookWorker: (() => Promise<void>) | undefined;
 let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
 let stopDispatchWorker: (() => Promise<void>) | undefined;
@@ -90,6 +92,7 @@ nextApp.prepare().then(async () => {
   server.listen(port, host, async () => {
     stopDeviceWebhookWorker = startDeviceWebhookWorker();
     stopMessagingAlerts = startMessagingAlerts();
+    stopDailyWarmup = startDailyWarmup();
     stopDispatchWebhookWorker = startDispatchWebhookWorker();
     if (process.env.DISPATCH_QUEUE_ENABLED === "true" && process.env.WHATSAPP_ENABLED !== "false") stopDispatchWorker = startDispatchWorker();
     if (process.env.NODE_ENV !== "production") {
@@ -131,7 +134,7 @@ const shutdown = createGracefulShutdown({
     if (reconnectInterval) clearInterval(reconnectInterval);
     stopReconnectTimers();
   },
-  drain: [() => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
+  drain: [() => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
   close: [
     closeWaSessions,
     async () => { if (io.engine) await io.close(); else io.disconnectSockets(true); },

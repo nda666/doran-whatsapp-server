@@ -10,6 +10,7 @@ const tests = [
   'verify-messaging-improvements.cjs', 'verify-pm2-optimization.cjs',
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
   'verify-phone-last-qr-scan.cjs',
+  'verify-daily-warmup.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);
