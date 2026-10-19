@@ -10,6 +10,8 @@ Workflow: `.github/workflows/ci.yml`. Target server lama: user `jeblast`,
    dan perbandingan schema hasil migration dengan `schema.prisma`.
 3. Build Next.js + server TypeScript, suite regresi offline yang dipilih eksplisit.
 4. Baca seluruh tabel database CI dan tes create/read/update/delete user sintetis.
+   Buat dump memakai helper backup yang sama dengan produksi, restore ke database
+   CI kedua, lalu bandingkan checksum isi seluruh tabel serta record user fixture.
 5. Paket source commit yang sama dan checksum SHA-256.
 
 CI tidak menggunakan database, secret, sesi WhatsApp, atau email produksi.
@@ -88,7 +90,8 @@ operator dan `prisma migrate resolve` sesuai hasil pemeriksaan. Jangan gunakan
 Checks membuktikan build, regresi yang tercakup tes, kesesuaian schema, akses
 tabel, serta hitungan record dan file auth saat deploy. Ini bukan pemeriksaan
 kebenaran bisnis setiap isi record, bukan tes seluruh kemungkinan fitur,
-dan bukan bukti restore backup telah berhasil diuji. Tidak ada pengiriman
+dan bukan bukti setiap backup produksi telah diuji restore. Metode dump/restore
+diuji pada seluruh tabel database CI. Tidak ada pengiriman
 pesan WhatsApp sungguhan dalam CI. Uji restore berkala ke database terpisah
 tetap diperlukan untuk memastikan backup dapat digunakan.
 
