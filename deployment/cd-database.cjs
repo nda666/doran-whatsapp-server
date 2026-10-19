@@ -30,7 +30,9 @@ async function main() {
       counts[name] = String(result[0].n);
     }
     const migrations = await db.$queryRaw`SELECT migration_name, checksum, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY started_at`;
-    process.stdout.write(JSON.stringify({ counts, migrations }));
+    const legacy = await db.$queryRaw`SELECT COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'inbox_messages' AND COLUMN_NAME = 'keterangan'`;
+    const legacyInboxKeterangan = legacy.length === 1 && legacy[0].COLUMN_TYPE.toLowerCase() === 'varchar(255)' && legacy[0].IS_NULLABLE === 'YES';
+    process.stdout.write(JSON.stringify({ counts, migrations, legacyInboxKeterangan }));
     return;
   }
   if (mode === 'health') {

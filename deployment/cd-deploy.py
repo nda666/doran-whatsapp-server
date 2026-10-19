@@ -22,6 +22,15 @@ REVIEWED_MIGRATIONS = {
     '20261019100000_align_legacy_inbox_and_phone_constraint':
         '3695f8228022afc3569e7a597fd10d4d9bd3771d9c33e97964f78d7c6516565d',
 }
+# Git 5d494ea contains the exact SQL originally applied; 5e92b5d later amended
+# that migration to add keterangan. Preserve the database history unchanged.
+# Accept only this audited pair, and only if its final column already exists.
+LEGACY_MIGRATION_VERSIONS = {
+    '20231107042533_alter_add_status_column_inbox_messages': (
+        '18b4595e4712d6c583cb82fa21d3b6e23721501703434e3a671b6bd4ca651e43',
+        '31c41bdb4e2da4efd2f695f062fbd15ebd9774840c5cba1e7f50a94459d1c2d1',
+    ),
+}
 PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment',
          'package.json', 'package-lock.json', 'next.config.js', 'next-i18next.config.js',
          'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json']
@@ -58,7 +67,10 @@ def check_migrations(before, stage):
         content = path.read_bytes().replace(b'\r\n', b'\n') if path else b''
         checksums = {hashlib.sha256(content).hexdigest(), hashlib.sha256(content.replace(b'\n', b'\r\n')).hexdigest()}
         if not path or row['checksum'] not in checksums:
-            raise RuntimeError('Applied migration missing or checksum differs: ' + row['migration_name'])
+            known_pair = LEGACY_MIGRATION_VERSIONS.get(row['migration_name'])
+            pair = (row['checksum'], hashlib.sha256(content).hexdigest())
+            if not path or pair != known_pair or not before.get('legacyInboxKeterangan'):
+                raise RuntimeError('Applied migration missing or checksum differs: ' + row['migration_name'])
         applied.add(row['migration_name'])
     pending = sorted(set(migrations) - applied)
     # Conservative gate: automatically run additive DDL only. Review other SQL separately.
@@ -151,6 +163,10 @@ def main():
     before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
     pending = check_migrations(before, stage)
     (backup / 'pending-migrations.json').write_text(json.dumps(pending))
+    (backup / 'legacy-migration-reconciliation.json').write_text(json.dumps({
+        row['migration_name']: LEGACY_MIGRATION_VERSIONS[row['migration_name']]
+        for row in before['migrations'] if row['migration_name'] in LEGACY_MIGRATION_VERSIONS
+    }))
     print('BUILD_TESTS_MIGRATION_PREFLIGHT_OK', flush=True)
     if (APP / '.next/BUILD_ID').read_bytes() != active_build:
         raise RuntimeError('Another deployment changed the active build')

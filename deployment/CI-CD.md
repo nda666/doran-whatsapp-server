@@ -56,6 +56,12 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - Source diekstrak ke staging terisolasi; link/path traversal/runtime data ditolak.
 - Dependency, Prisma client, build dan tes dijalankan ulang di VPS.
 - Periksa checksum semua migration produksi; migration gagal/berubah memblokir.
+  Satu perbedaan legacy diaudit terhadap Git: migration
+  `20231107042533_alter_add_status_column_inbox_messages` diterapkan dari SQL
+  di commit `5d494ea`, lalu file historis ditambah `keterangan` pada `5e92b5d`.
+  Hanya pasangan checksum dua versi persis itu yang diterima, dengan syarat
+  kolom `keterangan VARCHAR(255) NULL` sudah ada. Catatan checksum database
+  tidak diubah. Audit disimpan di `legacy-migration-reconciliation.json`.
 - Hanya migration additive sederhana yang otomatis boleh berjalan. Migration
   penghapusan/perubahan tipe/data membutuhkan review dan penerapan terpisah.
   Pengecualian yang sudah direview dipin dengan checksum SQL: migration

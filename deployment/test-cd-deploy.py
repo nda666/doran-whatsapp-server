@@ -59,6 +59,25 @@ class DeploymentGuards(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     deploy.check_migrations({'migrations': []}, stage)
 
+    def test_legacy_exception_requires_exact_versions_and_existing_schema(self):
+        root = Path(__file__).resolve().parent.parent
+        for name, (old_checksum, source_checksum) in deploy.LEGACY_MIGRATION_VERSIONS.items():
+            data = (root / 'prisma/migrations' / name / 'migration.sql').read_bytes().replace(b'\r\n', b'\n')
+            self.assertEqual(hashlib.sha256(data).hexdigest(), source_checksum)
+            with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+                stage = Path(temp)
+                sql = stage / 'prisma/migrations' / name / 'migration.sql'
+                sql.parent.mkdir(parents=True)
+                sql.write_bytes(data)
+                before = {'migrations': [{'migration_name': name, 'checksum': old_checksum, 'finished_at': 'ok', 'rolled_back_at': None}]}
+                with self.assertRaises(RuntimeError):
+                    deploy.check_migrations(before, stage)
+                before['legacyInboxKeterangan'] = True
+                self.assertEqual(deploy.check_migrations(before, stage), [])
+                sql.write_bytes(data + b'\n-- changed\n')
+                with self.assertRaises(RuntimeError):
+                    deploy.check_migrations(before, stage)
+
     def test_no_record_loss_or_table_disappearance(self):
         before = {'counts': {'users': '5', 'phones': '20', '_prisma_migrations': '1'}}
         deploy.compare_counts(before, {'counts': {'users': '5', 'phones': '20', '_prisma_migrations': '2', 'new_table': '0'}})
