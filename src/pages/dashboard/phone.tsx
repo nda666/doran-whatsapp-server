@@ -284,10 +284,12 @@ const PhonePage = () => {
         </div>
       ),
     },
+    ...policies.columns.filter(column => column.key === "health"),
     {
       title: t("action"),
       key: "action",
       dataIndex: "id",
+      fixed: "right",
       render: (v, phone) => {
         return (
           <PhoneTableButton
@@ -321,7 +323,6 @@ const PhonePage = () => {
         );
       },
     },
-    ...policies.columns.filter(column => column.key === "health"),
   ];
 
   const onSubmit = async (data: PhoneFormData) => {
