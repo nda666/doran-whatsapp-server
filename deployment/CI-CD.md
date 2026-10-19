@@ -81,6 +81,10 @@ Branch rule tidak dibuat otomatis oleh source workflow.
   dan dipindahkan kembali ke path yang sama setelah swap static assets.
 - Periksa login lokal, koneksi database, endpoint dispatch dengan autentikasi,
   HTTPS publik, dan PID proses PM2 lain. Simpan PM2 hanya setelah lulus.
+  Sesuai persetujuan pengguna, peringatan `BACKLOG_AGE_EXCEEDED` dan
+  `SENDER_OFFLINE_WITH_BACKLOG` boleh tetap ada (termasuk respons 503).
+  Worker wajib aktif, polling dan sampling antrean harus sukses dalam 60 detik;
+  error runtime, polling macet, dan `CLAIM_STALLED` tetap memblokir deploy.
 - Bila promosi/health gagal, pulihkan runtime lama dan periksa login. Bila
   rollback gagal, staging dipertahankan untuk pemulihan operator.
 

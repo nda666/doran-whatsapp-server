@@ -45,9 +45,11 @@ async function main() {
     const response = await fetch(`http://127.0.0.1:${port}/health/dispatch`, {
       headers: { Authorization: `Bearer ${admin.token}` }, signal: AbortSignal.timeout(10000),
     });
-    if (response.status !== 200 || !(await response.json()).healthy) throw Error('Dispatch health failed');
+    const health = await response.json();
+    if (!require('./cd-readiness.cjs').dispatchReady(response.status, health)) throw Error('Dispatch readiness failed');
     await db.$queryRaw`SELECT 1`;
-    console.log('LOGIN_DATABASE_DISPATCH_HEALTH_OK');
+    console.log('LOGIN_DATABASE_DISPATCH_READY');
+    if (health.alerts.length) console.log('QUEUE_WARNINGS', health.alerts.join(','));
     return;
   }
   throw Error('Unknown database operation');
