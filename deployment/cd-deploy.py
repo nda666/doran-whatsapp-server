@@ -16,21 +16,6 @@ from stage_cleanup import StageCleanup
 APP = Path('/home/jeblast/repos/doran-whatsapp-server')
 NODE_BIN = Path('/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/bin')
 PM2 = '/usr/local/bin/pm2'
-# Reviewed metadata reconciliation: preserve legacy inbox fields; MySQL NO ACTION
-# keeps the same restriction as RESTRICT. No row data is updated or deleted.
-REVIEWED_MIGRATIONS = {
-    '20261019100000_align_legacy_inbox_and_phone_constraint':
-        '3695f8228022afc3569e7a597fd10d4d9bd3771d9c33e97964f78d7c6516565d',
-}
-# Git 5d494ea contains the exact SQL originally applied; 5e92b5d later amended
-# that migration to add keterangan. Preserve the database history unchanged.
-# Accept only this audited pair, and only if its final column already exists.
-LEGACY_MIGRATION_VERSIONS = {
-    '20231107042533_alter_add_status_column_inbox_messages': (
-        '18b4595e4712d6c583cb82fa21d3b6e23721501703434e3a671b6bd4ca651e43',
-        '31c41bdb4e2da4efd2f695f062fbd15ebd9774840c5cba1e7f50a94459d1c2d1',
-    ),
-}
 PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment',
          'package.json', 'package-lock.json', 'next.config.js', 'next-i18next.config.js',
          'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json']
@@ -55,47 +40,51 @@ def validate_archive(archive, stage):
             raise ValueError('Archive escapes stage')
 
 
-def check_migrations(before, stage):
+def migration_inventory(before, stage):
+    """Record history differences without changing _prisma_migrations or schema."""
     migrations = {p.parent.name: p for p in (stage / 'prisma/migrations').glob('*/migration.sql')}
     applied = set()
+    differences, unfinished = [], []
     for row in before['migrations']:
         if row['rolled_back_at']:
             continue
         if not row['finished_at']:
-            raise RuntimeError('Unfinished production migration; manual repair required')
+            unfinished.append(row['migration_name'])
+            continue
         path = migrations.get(row['migration_name'])
         content = path.read_bytes().replace(b'\r\n', b'\n') if path else b''
         checksums = {hashlib.sha256(content).hexdigest(), hashlib.sha256(content.replace(b'\n', b'\r\n')).hexdigest()}
         if not path or row['checksum'] not in checksums:
-            known_pair = LEGACY_MIGRATION_VERSIONS.get(row['migration_name'])
-            pair = (row['checksum'], hashlib.sha256(content).hexdigest())
-            if not path or pair != known_pair or not before.get('legacyInboxKeterangan'):
-                raise RuntimeError('Applied migration missing or checksum differs: ' + row['migration_name'])
+            differences.append({'migration': row['migration_name'], 'database_checksum': row['checksum'],
+                                'source_checksum': hashlib.sha256(content).hexdigest() if path else None})
         applied.add(row['migration_name'])
-    pending = sorted(set(migrations) - applied)
-    # Conservative gate: automatically run additive DDL only. Review other SQL separately.
-    for name in pending:
-        if name in REVIEWED_MIGRATIONS:
-            if hashlib.sha256(migrations[name].read_bytes().replace(b'\r\n', b'\n')).hexdigest() != REVIEWED_MIGRATIONS[name]:
-                raise RuntimeError('Reviewed migration checksum differs: ' + name)
-            continue
-        sql = migrations[name].read_text()
-        sql = re.sub(r'/\*.*?\*/|--[^\n]*', '', sql, flags=re.S)
-        for statement in sql.split(';'):
-            statement = statement.strip()
-            if not statement:
-                continue
-            if not re.match(r'^(CREATE\s+(TABLE|UNIQUE\s+INDEX|INDEX)\b|ALTER\s+TABLE\s+`?\w+`?\s+ADD\b)', statement, re.I):
-                raise RuntimeError('Non-additive migration requires manual review: ' + name)
-            if re.search(r'\b(DROP|TRUNCATE|DELETE|UPDATE|REPLACE|MODIFY|CHANGE|RENAME)\b', statement, re.I):
-                raise RuntimeError('Potentially destructive migration blocked: ' + name)
-    return pending
+    return {'policy': 'production-read-only', 'applied': sorted(applied),
+            'not_recorded_as_applied': sorted(set(migrations) - applied),
+            'checksum_differences': differences, 'unfinished_migrations': unfinished,
+            'history_updated': False, 'migrations_executed': False}
+
+
+def enforce_read_only_prisma(command):
+    if 'prisma' not in command:
+        return
+    operation = command[command.index('prisma') + 1:]
+    if operation[:1] not in [['generate'], ['validate']] and operation[:2] != ['migrate', 'diff']:
+        raise RuntimeError('Production database is read-only: Prisma command blocked')
 
 
 def compare_counts(before, after):
-    for table, count in before['counts'].items():
-        if table != '_prisma_migrations' and after['counts'].get(table) != count:
-            raise RuntimeError('Database row count changed while stopped: ' + table)
+    if before['counts'] != after['counts']:
+        raise RuntimeError('Database tables or row counts changed while stopped')
+    if before['migrations'] != after['migrations']:
+        raise RuntimeError('Production migration history changed while stopped')
+
+
+def file_digest(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def private_hashes(app):
@@ -104,7 +93,7 @@ def private_hashes(app):
     auth = app / 'storage/whatsapp-auth'
     if auth.exists():
         files += [p for p in auth.rglob('*') if p.is_file()]
-    return {str(p.relative_to(app)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+    return {str(p.relative_to(app)): file_digest(p) for p in files}
 
 
 def main():
@@ -146,6 +135,7 @@ def main():
                SSL_CERTBOT_ENABLED='false', NODE_OPTIONS='--max-old-space-size=4096')
     # npm ci must include build tools even under NODE_ENV=production.
     def run(command, cwd=stage, capture=False):
+        enforce_read_only_prisma(command)
         result = subprocess.run(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=1800)
         if result.returncode:
@@ -161,13 +151,14 @@ def main():
     run(['npm', 'run', 'build'])
     run(['node', 'deployment/ci-tests.cjs'])
     before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
-    pending = check_migrations(before, stage)
-    (backup / 'pending-migrations.json').write_text(json.dumps(pending))
-    (backup / 'legacy-migration-reconciliation.json').write_text(json.dumps({
-        row['migration_name']: LEGACY_MIGRATION_VERSIONS[row['migration_name']]
-        for row in before['migrations'] if row['migration_name'] in LEGACY_MIGRATION_VERSIONS
-    }))
-    print('BUILD_TESTS_MIGRATION_PREFLIGHT_OK', flush=True)
+    (backup / 'migration-inventory.json').write_text(json.dumps(migration_inventory(before, stage)))
+    # Comparison only: production already contains the authoritative schema.
+    schema_command = ['npx', '--no-install', 'prisma', 'migrate', 'diff',
+                      '--from-schema-datasource', 'prisma/schema.prisma',
+                      '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code']
+    comparison = run(schema_command, capture=True)
+    (backup / 'schema-comparison.txt').write_bytes(comparison)
+    print('BUILD_TESTS_READ_ONLY_DATABASE_PREFLIGHT_OK', flush=True)
     if (APP / '.next/BUILD_ID').read_bytes() != active_build:
         raise RuntimeError('Another deployment changed the active build')
 
@@ -193,7 +184,6 @@ def main():
         stopped = True
         frozen = private_hashes(APP)
         before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
-        check_migrations(before, stage)
         (backup / 'database-before.json').write_text(json.dumps(before))
         run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')])
         with tarfile.open(backup / 'storage-and-env.tar', 'w') as archive:
@@ -206,11 +196,8 @@ def main():
                 path = APP / 'public' / name
                 if path.exists() or path.is_symlink():
                     archive.add(path, arcname='public/' + name)
-        # No reset/db push/seed, and no automatic database restore.
-        run(['npx', '--no-install', 'prisma', 'migrate', 'deploy'])
-        run(['npx', '--no-install', 'prisma', 'migrate', 'status'])
-        run(['npx', '--no-install', 'prisma', 'migrate', 'diff', '--from-schema-datasource',
-             'prisma/schema.prisma', '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code'])
+        # Audit/backup only. Never migrate, resolve, reset, db push, seed or restore production.
+        run(schema_command)
         after = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
         compare_counts(before, after)
         if private_hashes(APP) != frozen:

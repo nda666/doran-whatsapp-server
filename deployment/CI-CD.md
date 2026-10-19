@@ -16,8 +16,9 @@ Workflow: `.github/workflows/ci.yml`. Target server lama: user `jeblast`,
 
 CI tidak menggunakan database, secret, sesi WhatsApp, atau email produksi.
 Tes `verify-*-live` sengaja tidak dijalankan. Lint warning dilaporkan; error memblokir.
-Schema drift atau migration history yang tidak bisa direplay memblokir deploy;
-perbaiki dengan migration baru yang direview, bukan mengedit migration yang sudah diterapkan.
+Schema drift atau migration history yang tidak bisa direplay pada database CI
+memblokir checks. Database produksi diperlakukan sebagai acuan terbaru dan
+tidak dimigrasikan oleh deploy.
 
 ## Konfigurasi GitHub sekali
 
@@ -55,27 +56,24 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - Antar-deploy diserialkan GitHub concurrency dan lock Linux di VPS.
 - Source diekstrak ke staging terisolasi; link/path traversal/runtime data ditolak.
 - Dependency, Prisma client, build dan tes dijalankan ulang di VPS.
-- Periksa checksum semua migration produksi; migration gagal/berubah memblokir.
-  Satu perbedaan legacy diaudit terhadap Git: migration
-  `20231107042533_alter_add_status_column_inbox_messages` diterapkan dari SQL
-  di commit `5d494ea`, lalu file historis ditambah `keterangan` pada `5e92b5d`.
-  Hanya pasangan checksum dua versi persis itu yang diterima, dengan syarat
-  kolom `keterangan VARCHAR(255) NULL` sudah ada. Catatan checksum database
-  tidak diubah. Audit disimpan di `legacy-migration-reconciliation.json`.
-- Hanya migration additive sederhana yang otomatis boleh berjalan. Migration
-  penghapusan/perubahan tipe/data membutuhkan review dan penerapan terpisah.
-  Pengecualian yang sudah direview dipin dengan checksum SQL: migration
-  `20261019100000_align_legacy_inbox_and_phone_constraint` mempertahankan
-  kolom legacy `retry`, membuat `sentAt` nullable seperti produksi, dan memakai
-  metadata FK `NO ACTION` (pembatasan yang setara dengan `RESTRICT` di MySQL).
-  Tidak ada isi record dihapus atau ditimpa. Default Text webhook di schema
-  juga disesuaikan dengan migration/produksi yang memang tanpa default database.
+- Database produksi hanya dibaca dan dicatat. Tidak ada `migrate deploy`,
+  `migrate resolve`, reset, `db push`, seed, atau penulisan riwayat migration.
+  Guard command menolak perintah Prisma yang dapat mengubah database.
+- Simpan nama/checksum migration yang sudah diterapkan, perbedaan checksum,
+  migration yang belum tercatat, dan migration belum selesai dalam
+  `migration-inventory.json`. Perbedaan riwayat bersifat catatan; tidak dieksekusi
+  atau ditandai applied secara otomatis. Termasuk migration penyelarasan legacy
+  dalam source: hanya untuk replay database CI/install baru.
+- `prisma migrate diff` hanya membandingkan schema secara read-only. Schema
+  aktual harus sesuai kebutuhan kode sebelum aplikasi dihentikan. Bila berbeda,
+  hentikan deploy dan sesuaikan source dengan database produksi yang menjadi acuan.
 - Stop hanya `doran-whatsapp` setelah build lulus. Ada jeda layanan selama
-  backup, migration, dan promosi; durasinya tergantung ukuran database/storage.
+  backup dan promosi; durasinya tergantung ukuran database/storage.
 - Backup database penuh (`mysqldump --single-transaction`), env dan storage
   ke direktori privat `/home/jeblast/backups/doran-cd-*`.
-- Simpan hitungan record seluruh tabel sebelum/sesudah migration; perbedaan
-  pada tabel lama (selain tabel riwayat migration) memblokir promosi.
+- Simpan hitungan record seluruh tabel sebelum/sesudah persiapan deploy.
+  Seluruh tabel, jumlah record, dan isi catatan `_prisma_migrations` wajib tetap
+  sama sebelum aplikasi dijalankan kembali; perubahan memblokir promosi.
 - Periksa hash env dan seluruh file auth WhatsApp sebelum restart.
 - Tukar source, dependencies, Prisma client, serta runtime sebagai satu promosi
   yang dapat dipulihkan. `.env*`, `storage`, dan `.git` tetap di lokasi asli.
@@ -87,9 +85,9 @@ Branch rule tidak dibuat otomatis oleh source workflow.
   rollback gagal, staging dipertahankan untuk pemulihan operator.
 
 Backup database tidak otomatis direstore: restore otomatis dapat menghapus pesan
-baru. DDL MySQL tidak bersifat transaksional; migration gagal perlu pemeriksaan
-operator dan `prisma migrate resolve` sesuai hasil pemeriksaan. Jangan gunakan
-`migrate reset`, `db push`, atau seed di produksi.
+baru. Deploy aplikasi mempertahankan schema, isi record, dan riwayat migration
+produksi. Pengujian migration dan restore yang menulis database hanya berjalan
+pada database CI sementara.
 
 ## Apa yang dibuktikan
 
