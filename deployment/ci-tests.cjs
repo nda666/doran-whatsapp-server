@@ -11,6 +11,7 @@ const tests = [
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
   'verify-phone-last-qr-scan.cjs',
   'verify-daily-warmup.cjs',
+  'verify-quota-recovery.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);

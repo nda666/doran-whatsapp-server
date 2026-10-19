@@ -18,6 +18,7 @@ import { randomDispatchDelay } from "./timing";
 import { ACK_TIMEOUT_MS, acknowledgementFailure, retryEligible } from "./retry";
 import { recordDispatchReceipt } from "./receipts";
 import { waitForDispatchAcknowledgement, AckObservation } from "./acknowledgement";
+import { recoverQuotaDispatches } from "./quotaRecovery";
 
 const runnable = () => ({ OR: [{ campaignId: null }, { campaign: { status: { in: ["WAITING", "PROCESSING"] as ("WAITING" | "PROCESSING")[] }, scheduledAt: { lte: new Date() } } }] });
 // A future campaign must not expire merely because its queue rows were created early.
@@ -77,6 +78,7 @@ export async function recoverDispatches() {
     data: { status: "FAILED", lastError: "QUEUE_MAX_AGE_EXCEEDED" } });
   await updateDispatches({ where: { status: "QUEUED", expiresAt: { lte: new Date() }, campaignId: { not: null }, ...runnable() }, data: { status: "FAILED", lastError: "CAMPAIGN_EXPIRED" } });
   await prisma.campaign.updateMany({ where: { status: { in: ["WAITING", "PROCESSING"] }, dispatches: { none: { status: { in: ["QUEUED", "PROCESSING"] } } } }, data: { status: "COMPLETED" } });
+  await recoverQuotaDispatches();
 }
 
 export async function processPhone(phoneId: string) {

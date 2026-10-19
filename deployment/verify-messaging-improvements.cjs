@@ -36,8 +36,8 @@ async function safetyTests() {
     $queryRaw: async () => [],
     $transaction: fn => { const next = chain.then(() => fn(db)); chain = next.catch(() => {}); return next; },
   };
-  let globalSeconds = 0;
-  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
+  let globalSeconds = 0, globalQuota = 200;
+  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => globalQuota, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
   const safety = load('src/server/messaging/safety.ts');
   assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'STOP'), false);
   enabled = true;
@@ -73,6 +73,13 @@ async function safetyTests() {
   const quota = load('src/lib/deviceQuota.ts');
   for (const value of ['', '0', '-1', '1.5', '100001', 'abc']) assert.equal(quota.parseDeviceDailyQuota(value), null);
   assert.equal(quota.parseDeviceDailyQuota('200'), 200);
+  usage.attempts = 45; policy.useGlobalQuota = true; globalQuota = 45;
+  await assert.rejects(safety.reserveSend('b', 'p', '6281234567890@s.whatsapp.net'), e => e.code === 'DEVICE_DAILY_LIMIT');
+  globalQuota = 50;
+  const increased = await Promise.allSettled(Array.from({ length: 10 }, () => safety.reserveSend('b', 'p', '6281234567890@s.whatsapp.net')));
+  assert.equal(increased.filter(result => result.status === 'fulfilled').length, 5);
+  assert.equal(usage.attempts, 50, '45 -> 50 permits exactly five additional attempts, including concurrent admission');
+  globalQuota = 200;
   policy.nextAllowedAt = new Date(0); policy.paused = true;
   await assert.rejects(safety.reserveSend('b', 'p', '6281234567890@s.whatsapp.net'), e => e.code === 'DEVICE_SAFETY_PAUSED');
   assert.equal(safety.usageDay(new Date('2026-10-17T16:59:59Z')), '2026-10-17');
@@ -214,7 +221,10 @@ async function futureScheduleTests() {
     'src/server/dispatch/settings.ts': { getDispatchAgeCutoff: async () => new Date(now - day) },
     'src/server/dispatch/receipts.ts': {}, 'src/server/dispatch/acknowledgement.ts': {},
   };
+  let quotaRecoveries = 0;
+  stubs['src/server/dispatch/quotaRecovery.ts'] = { recoverQuotaDispatches: async () => { quotaRecoveries++; } };
   await loader(stubs)('src/server/dispatch/worker.ts').recoverDispatches();
+  assert.equal(quotaRecoveries, 1, 'Periodic/startup recovery must revisit daily-limit sleeps');
   assert.equal(jobs[0].status, 'QUEUED'); assert.equal(jobs[1].status, 'FAILED'); assert.equal(jobs[2].status, 'FAILED');
   console.log('PASS future campaigns survive queue recovery while expired API/campaign ages remain enforced');
 }
