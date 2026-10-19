@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import io
+import shutil
 from pathlib import Path
 import tarfile
 import tempfile
@@ -12,6 +13,26 @@ spec.loader.exec_module(deploy)
 
 
 class DeploymentGuards(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('tar'), 'tar executable required')
+    def test_private_backup_preserves_env_auth_and_public_uploads(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            root = Path(temp)
+            app = root / 'app'
+            (app / 'storage/whatsapp-auth/device').mkdir(parents=True)
+            (app / 'public/uploads').mkdir(parents=True)
+            (app / '.env').write_bytes(b'FIXTURE_SECRET=private-test\n')
+            (app / 'storage/whatsapp-auth/device/creds.json').write_bytes(b'{"fixture":true}')
+            (app / 'public/uploads/photo.txt').write_bytes(b'user-upload-fixture')
+            snapshot = deploy.private_hashes(app)
+            self.assertEqual(len(snapshot), 2)
+            archive_path = root / 'private.tar'
+            deploy.backup_private_files(app, archive_path)
+            with tarfile.open(archive_path) as archive:
+                self.assertEqual(archive.extractfile('.env').read(), b'FIXTURE_SECRET=private-test\n')
+                self.assertEqual(archive.extractfile('storage/whatsapp-auth/device/creds.json').read(), b'{"fixture":true}')
+                self.assertEqual(archive.extractfile('public/uploads/photo.txt').read(), b'user-upload-fixture')
+            self.assertEqual(deploy.private_hashes(app), snapshot)
+
     def test_streamed_digest_matches_full_content(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
             path = Path(temp) / 'large-auth-fixture'

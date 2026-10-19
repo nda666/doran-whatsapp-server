@@ -89,11 +89,30 @@ def file_digest(path):
 
 def private_hashes(app):
     # Env + WhatsApp credentials must remain byte-identical until restart.
-    files = [p for p in app.glob('.env*') if p.is_file()]
+    result = {p.name: file_digest(p) for p in app.glob('.env*') if p.is_file()}
     auth = app / 'storage/whatsapp-auth'
     if auth.exists():
-        files += [p for p in auth.rglob('*') if p.is_file()]
-    return {str(p.relative_to(app)): file_digest(p) for p in files}
+        # scandir-based walk avoids building hundreds of thousands of Path objects
+        # and repeated stats before the first file is hashed.
+        for folder, _directories, files in os.walk(str(auth)):
+            for name in files:
+                path = Path(folder) / name
+                if path.is_file():
+                    result[str(path.relative_to(app))] = file_digest(path)
+    return result
+
+
+def backup_private_files(app, destination):
+    entries = [p.name for p in app.glob('.env*') if p.is_file()]
+    if (app / 'storage').exists():
+        entries.append('storage')
+    for name in PUBLIC_DATA:
+        path = app / 'public' / name
+        if path.exists() or path.is_symlink():
+            entries.append('public/' + name)
+    # Native tar streams large storage trees; no Python member list is retained.
+    subprocess.run(['tar', '-cf', str(destination), '-C', str(app), '--'] + entries,
+                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def main():
@@ -182,27 +201,24 @@ def main():
         # Stop only this application to obtain stable counts and WhatsApp credentials.
         pm2('stop', 'doran-whatsapp')
         stopped = True
+        print('AUTH_ENV_INTEGRITY_SNAPSHOT_STARTED', flush=True)
         frozen = private_hashes(APP)
+        print('AUTH_ENV_INTEGRITY_SNAPSHOT_DONE', len(frozen), flush=True)
         before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
         (backup / 'database-before.json').write_text(json.dumps(before))
         run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')])
-        with tarfile.open(backup / 'storage-and-env.tar', 'w') as archive:
-            for path in APP.glob('.env*'):
-                if path.is_file():
-                    archive.add(path, arcname=path.name)
-            if (APP / 'storage').exists():
-                archive.add(APP / 'storage', arcname='storage')
-            for name in PUBLIC_DATA:
-                path = APP / 'public' / name
-                if path.exists() or path.is_symlink():
-                    archive.add(path, arcname='public/' + name)
+        print('DATABASE_BACKUP_DONE_STORAGE_BACKUP_STARTED', flush=True)
+        backup_private_files(APP, backup / 'storage-and-env.tar')
+        print('STORAGE_BACKUP_DONE', flush=True)
         # Audit/backup only. Never migrate, resolve, reset, db push, seed or restore production.
         run(schema_command)
         after = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
         compare_counts(before, after)
+        print('DATABASE_AUDIT_UNCHANGED_AUTH_ENV_RECHECK_STARTED', flush=True)
         if private_hashes(APP) != frozen:
             raise RuntimeError('Environment or WhatsApp session changed during deployment')
         (backup / 'database-after.json').write_text(json.dumps(after))
+        print('DATA_INTEGRITY_CHECKS_PASSED_PROMOTING_RUNTIME', flush=True)
         # Detach persistent public files before swapping the static asset directory.
         # Move on the same filesystem: files remain intact and are never overwritten.
         for name in PUBLIC_DATA:
