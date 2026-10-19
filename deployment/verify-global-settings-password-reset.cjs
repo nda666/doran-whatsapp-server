@@ -21,6 +21,7 @@ let user = { id: 'user-a', name: '<img src=x onerror=alert(1)>', email: 'user@ex
 let actor = admin, rows = [], resetRows = new Map(), rateRows = new Map(), attempts = 0n, writes = 0, sessionDeletes = 0, disconnects = 0, sends = [], providerFails = false;
 const db = {
   globalSetting: {
+    createMany: async ({ data }) => { for (const item of data) if (!rows.some(row => row.key === item.key)) rows.push({ id: require('node:crypto').randomUUID(), ...item }); return { count: data.length }; },
     findMany: async () => rows,
     findUnique: async ({ where }) => rows.find(row => where.id ? row.id === where.id : row.key === where.key) || null,
     create: async ({ data }) => { if (rows.some(row => row.key === data.key)) throw { code: 'P2002' }; const row = { id, ...data }; rows.push(row); return row; },
@@ -57,7 +58,7 @@ global.fetch = async (url, options) => {
   sends.push(JSON.parse(options.body));
   return { ok: !providerFails, json: async () => ({ ErrorCode: providerFails ? 422 : 0 }) };
 };
-const reset = load('src/server/passwordReset.ts', { '@/lib/prisma': { prisma: db }, '@/lib/globalSettings': settings });
+const reset = load('src/server/passwordReset.ts', { '../lib/prisma': { prisma: db }, '../lib/globalSettings': settings, '@/lib/prisma': { prisma: db }, '@/lib/globalSettings': settings });
 const auth = load('src/middleware/apiAuthMiddleware.ts', { '../lib/prisma': { prisma: db }, '../lib/access': access, 'next-auth/jwt': { getToken: async () => null } }).default;
 const guard = load('src/middleware/apiSuperAdminMiddleware.ts', { '../lib/access': access, './apiAuthMiddleware': defaults(auth) }).default;
 const settingApi = load('src/pages/api/admin/global-settings.ts', { '@/lib/prisma': { prisma: db }, '@/lib/globalSettings': settings, '@/middleware/apiSuperAdminMiddleware': defaults(guard) }).default;
@@ -148,7 +149,7 @@ const validReset = token => ({ token, password: 'abc123', passwordConfirm: 'abc1
   assert.equal(decisions.filter(Boolean).length, 3, 'Concurrent requests share a persistent limiter');
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
-  const GlobalSettings = load('src/components/GlobalSettings.tsx', { '@/lib/useDashboardApi': { useDashboardApi: () => ({ data: [{ id, key: 'sample', label: 'Sample', value: '<script>alert(1)</script>', secret: false }], headers: {}, reload() {} }) } }).default;
+  const GlobalSettings = load('src/components/GlobalSettings.tsx', { '@/lib/uiTranslation': { useUiTranslation: () => value => value }, '@/lib/useDashboardApi': { useDashboardApi: () => ({ data: [{ id, key: 'sample', label: 'Sample', value: '<script>alert(1)</script>', secret: false }], headers: {}, reload() {} }) } }).default;
   const html = renderToStaticMarkup(React.createElement(GlobalSettings));
   assert(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
   assert(!html.includes('<script>alert(1)</script>'), 'Setting markup must render as plain text');

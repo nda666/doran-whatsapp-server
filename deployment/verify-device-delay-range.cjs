@@ -77,7 +77,7 @@ async function main() {
   };
   const safety = loader({
     'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatchWebhook/events.ts': {},
-    'src/server/dispatch/settings.ts': { getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
+    'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
   })('src/server/messaging/safety.ts');
   async function gap(min, max, rng, attempts = 0, failures = 0, adaptive = true) {
     Object.assign(policy, { minIntervalSeconds: min, maxIntervalSeconds: max, nextAllowedAt: new Date(0), adaptiveEnabled: adaptive });

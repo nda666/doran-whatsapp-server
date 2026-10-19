@@ -1,5 +1,9 @@
 # Deploy aplikasi
 
+CI/CD GitHub Actions tersedia di `.github/workflows/ci.yml`.
+Lihat [CI-CD.md](CI-CD.md) untuk checks, aktivasi SSH, backup, rollback,
+dan batas pemeriksaan data. Gunakan jalur ini untuk deploy seluruh commit.
+
 Gunakan pola deploy terisolasi terbaru pada `deploy-reset-preset-20261015.py` dan helper `stage_cleanup.py` serta `backup_retention.py` sebagai acuan deploy berikutnya.
 
 - Bangun di staging yang dibuat sendiri di bawah `/home/jeblast/repos/.doran-*`.

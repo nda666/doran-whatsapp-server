@@ -17,6 +17,7 @@ const initialPhone = { id: '11111111-1111-4111-8111-111111111111', userId: 'owne
 let config, phone, jobs, requests, failDelivery, dispatches;
 const matches = (row, where) => Object.entries(where || {}).every(([key, value]) => {
   if (key === 'AND') return value.every(w => matches(row,w));
+  if (key === 'OR') return value.some(w => matches(row,w));
   if (value && typeof value === 'object' && !(value instanceof Date)) {
     if (value.gt !== undefined) return row[key] > value.gt;
     if (value.not !== undefined) return row[key] !== value.not;
@@ -31,6 +32,7 @@ function reset() {
   dispatches = []; phone = { ...initialPhone }; jobs = []; requests = []; failDelivery = false;
 }
 const tx = {
+  recipientSuppression: { findMany: async () => [] },
   $queryRaw: async (strings, id) => strings.join('').includes('SELECT status') ? (dispatches.filter(j => j.id === id).map(j => ({status:j.status}))) : [],
   waDispatch: {
     findMany: async ({where}) => dispatches.filter(j=>matches(j,where)).map(j=>({...j})),

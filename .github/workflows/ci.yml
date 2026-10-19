@@ -1,45 +1,133 @@
-name: CI - Build
+name: CI / CD
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  checks:
+    name: Code, tests, build and database
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: doran_ci
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-password"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    env:
+      DATABASE_URL: mysql://root:ci-only-password@127.0.0.1:3306/doran_ci
+      NEXTAUTH_SECRET: ci-only-not-a-production-secret
+      SETTINGS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      AI_SECRET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      APP_URL: http://127.0.0.1:3000
+      WHATSAPP_ENABLED: 'false'
+      QUEUE_ENABLED: 'false'
+      DISPATCH_QUEUE_ENABLED: 'false'
+      SSL_CERTBOT_ENABLED: 'false'
+      WHATSAPP_AUTH_FOLDER: ./storage/whatsapp-auth
+      WHATSAPP_LOG: ./storage/logs/whatsapp-logs
+      WEBSITE_LOG: ./storage/logs/website
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
-      # Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Set up Node.js
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
         with:
-          node-version: "18.x"
-
-      # Cache Node.js modules
-      - name: Cache Node.js modules
-        uses: actions/cache@v3
+          persist-credentials: false
+      - uses: actions/setup-node@v4
         with:
+          node-version: '24.21.0'
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install prisma validate
+      - run: npx --no-install prisma generate
+      - run: npm run lint
+      - name: Replay migrations on disposable database
+        run: |
+          npx --no-install prisma migrate deploy
+          npx --no-install prisma migrate status
+          npx --no-install prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run: npm run build
+      - name: Offline regression suite
+        run: node deployment/ci-tests.cjs
+      - name: Database read and write smoke test
+        run: node deployment/ci-database.cjs
+      - name: Package the checked commit
+        if: github.event_name != 'pull_request'
+        run: |
+          git archive --format=tar.gz -o source.tar.gz HEAD
+          sha256sum source.tar.gz > source.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: source-${{ github.sha }}
           path: |
-            node_modules
-            **/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+            source.tar.gz
+            source.tar.gz.sha256
+          retention-days: 7
 
-      # Install dependencies
-      - name: Install dependencies
-        run: npm install
-
-      - name: Generate prisma client
-        run: npm run prisma generate
-
-      # Run the build script
-      - name: Run build
-        run: npm run build
-
-    # Optionally, you can add more steps like testing, linting, etc.
+  deploy:
+    name: Deploy dashboard.jeblast.com
+    needs: checks
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://dashboard.jeblast.com
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-${{ github.sha }}
+      - name: Set up verified SSH access
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST" && test -n "$DEPLOY_USER"
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-zA-Z0-9_-]+$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Upload and deploy exact checked source
+        run: |
+          set -euo pipefail
+          sha256sum -c source.tar.gz.sha256
+          REMOTE="/home/jeblast/.doran-incoming-$DEPLOY_SHA"
+          SSH=(ssh -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "umask 077; mkdir '$REMOTE'"
+          scp -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes source.tar.gz source.tar.gz.sha256 "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE/"
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$REMOTE' && sha256sum -c source.tar.gz.sha256 && tar -xzf source.tar.gz deployment/cd-deploy.py deployment/cd-database.cjs deployment/stage_cleanup.py && python3 deployment/cd-deploy.py --archive '$REMOTE/source.tar.gz' --sha '$DEPLOY_SHA'"
+      - name: Check public HTTPS
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --max-time 20 https://dashboard.jeblast.com/signin -o /dev/null
+      - name: Remove runner SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

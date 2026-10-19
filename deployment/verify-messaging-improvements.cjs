@@ -37,7 +37,7 @@ async function safetyTests() {
     $transaction: fn => { const next = chain.then(() => fn(db)); chain = next.catch(() => {}); return next; },
   };
   let globalSeconds = 0;
-  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
+  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
   const safety = load('src/server/messaging/safety.ts');
   assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'STOP'), false);
   enabled = true;
