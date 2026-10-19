@@ -53,6 +53,12 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - Periksa checksum semua migration produksi; migration gagal/berubah memblokir.
 - Hanya migration additive sederhana yang otomatis boleh berjalan. Migration
   penghapusan/perubahan tipe/data membutuhkan review dan penerapan terpisah.
+  Pengecualian yang sudah direview dipin dengan checksum SQL: migration
+  `20261019100000_align_legacy_inbox_and_phone_constraint` mempertahankan
+  kolom legacy `retry`, membuat `sentAt` nullable seperti produksi, dan memakai
+  metadata FK `NO ACTION` (pembatasan yang setara dengan `RESTRICT` di MySQL).
+  Tidak ada isi record dihapus atau ditimpa. Default Text webhook di schema
+  juga disesuaikan dengan migration/produksi yang memang tanpa default database.
 - Stop hanya `doran-whatsapp` setelah build lulus. Ada jeda layanan selama
   backup, migration, dan promosi; durasinya tergantung ukuran database/storage.
 - Backup database penuh (`mysqldump --single-transaction`), env dan storage

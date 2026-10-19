@@ -261,7 +261,7 @@ model Phone {
   status               PhoneStatus?       @default(value: CLOSE)
   isOnline             Boolean            @default(value: false) @map("is_online")
   token                String             @unique @default(uuid())
-  user                 User               @relation(fields: [userId], references: [id])
+  user                 User               @relation(fields: [userId], references: [id], onDelete: NoAction)
   userId               String
   auto_replies         AutoReply[]
   is_save_group        Boolean            @default(value: false) @map("is_save_group")
@@ -532,8 +532,8 @@ model ServerSetting {
 model DeviceWebhookSetting {
   id        Int      @id @default(1)
   enabled   Boolean  @default(false)
-  url       String   @default("") @db.Text
-  secret    String   @default("") @db.Text
+  url       String   @db.Text
+  secret    String   @db.Text
   revision  String   @db.VarChar(36)
   updatedAt DateTime @updatedAt
 
@@ -564,8 +564,8 @@ model DeviceWebhookEvent {
 model DispatchWebhookSetting {
   id        Int      @id @default(1)
   enabled   Boolean  @default(false)
-  url       String   @default("") @db.Text
-  secret    String   @default("") @db.Text
+  url       String   @db.Text
+  secret    String   @db.Text
   revision  String   @db.VarChar(36)
   updatedAt DateTime @updatedAt
 
@@ -614,7 +614,8 @@ model InboxMessage {
   status         Int?         @map(name: "status") @db.TinyInt
   sender         String
   recipient      String
-  sentAt         DateTime     @default(now()) @map(name: "sentAt")
+  sentAt         DateTime?    @map(name: "sentAt")
+  retry          Int?         @default(0) @db.TinyInt
   receivedAt     DateTime     @default(now()) @map(name: "receivedAt")
   isSent         Boolean      @default(value: false) @map("is_sent")
   isRead         Boolean      @default(value: true) @map("is_read")

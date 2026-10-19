@@ -123,7 +123,7 @@ jobs:
           sha256sum -c source.tar.gz.sha256
           REMOTE="/home/jeblast/.doran-incoming-$DEPLOY_SHA"
           SSH=(ssh -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
-          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "umask 077; mkdir '$REMOTE'"
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "umask 077; mkdir -p '$REMOTE'"
           scp -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes source.tar.gz source.tar.gz.sha256 "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE/"
           "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$REMOTE' && sha256sum -c source.tar.gz.sha256 && tar -xzf source.tar.gz deployment/cd-deploy.py deployment/cd-database.cjs deployment/stage_cleanup.py && python3 deployment/cd-deploy.py --archive '$REMOTE/source.tar.gz' --sha '$DEPLOY_SHA'"
       - name: Check public HTTPS

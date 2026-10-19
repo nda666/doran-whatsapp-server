@@ -12,6 +12,12 @@ spec.loader.exec_module(deploy)
 
 
 class DeploymentGuards(unittest.TestCase):
+    def test_reviewed_migration_is_pinned_to_exact_sql(self):
+        root = Path(__file__).resolve().parent.parent
+        for name, digest in deploy.REVIEWED_MIGRATIONS.items():
+            sql = (root / 'prisma/migrations' / name / 'migration.sql').read_bytes().replace(b'\r\n', b'\n')
+            self.assertEqual(hashlib.sha256(sql).hexdigest(), digest)
+
     def archive(self, name, kind=tarfile.REGTYPE):
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode='w') as archive:

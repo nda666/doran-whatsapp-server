@@ -16,6 +16,12 @@ from stage_cleanup import StageCleanup
 APP = Path('/home/jeblast/repos/doran-whatsapp-server')
 NODE_BIN = Path('/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/bin')
 PM2 = '/usr/local/bin/pm2'
+# Reviewed metadata reconciliation: preserve legacy inbox fields; MySQL NO ACTION
+# keeps the same restriction as RESTRICT. No row data is updated or deleted.
+REVIEWED_MIGRATIONS = {
+    '20261019100000_align_legacy_inbox_and_phone_constraint':
+        '3695f8228022afc3569e7a597fd10d4d9bd3771d9c33e97964f78d7c6516565d',
+}
 PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment',
          'package.json', 'package-lock.json', 'next.config.js', 'next-i18next.config.js',
          'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json']
@@ -46,12 +52,18 @@ def check_migrations(before, stage):
         if not row['finished_at']:
             raise RuntimeError('Unfinished production migration; manual repair required')
         path = migrations.get(row['migration_name'])
-        if not path or hashlib.sha256(path.read_bytes()).hexdigest() != row['checksum']:
+        content = path.read_bytes().replace(b'\r\n', b'\n') if path else b''
+        checksums = {hashlib.sha256(content).hexdigest(), hashlib.sha256(content.replace(b'\n', b'\r\n')).hexdigest()}
+        if not path or row['checksum'] not in checksums:
             raise RuntimeError('Applied migration missing or checksum differs: ' + row['migration_name'])
         applied.add(row['migration_name'])
     pending = sorted(set(migrations) - applied)
     # Conservative gate: automatically run additive DDL only. Review other SQL separately.
     for name in pending:
+        if name in REVIEWED_MIGRATIONS:
+            if hashlib.sha256(migrations[name].read_bytes().replace(b'\r\n', b'\n')).hexdigest() != REVIEWED_MIGRATIONS[name]:
+                raise RuntimeError('Reviewed migration checksum differs: ' + name)
+            continue
         sql = migrations[name].read_text()
         sql = re.sub(r'/\*.*?\*/|--[^\n]*', '', sql, flags=re.S)
         for statement in sql.split(';'):
@@ -162,7 +174,7 @@ def main():
         check_migrations(before, stage)
         (backup / 'database-before.json').write_text(json.dumps(before))
         run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')])
-        with tarfile.open(backup / 'private-data.tar', 'w') as archive:
+        with tarfile.open(backup / 'storage-and-env.tar', 'w') as archive:
             for path in APP.glob('.env*'):
                 if path.is_file():
                     archive.add(path, arcname=path.name)
