@@ -9,6 +9,7 @@ const tests = [
   'verify-global-settings-password-reset.cjs', 'verify-dispatch-webhook.cjs',
   'verify-messaging-improvements.cjs', 'verify-pm2-optimization.cjs',
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
+  'verify-phone-last-qr-scan.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);

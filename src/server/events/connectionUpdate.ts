@@ -37,6 +37,17 @@ export default async function connectionUpdate(
   const current = getAllSession().get(phoneId);
   if (current && current !== waSock) return;
   const io = getSocketIO;
+  // Baileys emits isNewLogin after successful QR pairing, before the required
+  // socket restart. Ordinary reconnects and QR generation must not change it.
+  if (update.isNewLogin) {
+    const lastQrScanAt = new Date();
+    try {
+      await prisma.phone.update({ where: { id: phoneId }, data: { lastQrScanAt } });
+      io?.to(userId).to(SUPER_ADMIN_ROOM).emit("qrScanned", { phoneId, lastQrScanAt: lastQrScanAt.toISOString() });
+    } catch (error) {
+      console.error("WA_QR_SCAN_PERSIST_FAILED", phoneId, error instanceof Error ? error.message : "Unknown error");
+    }
+  }
   const phase = recordPairingProgress(phoneId, update);
   if (phase && phase !== "qr") io?.to(userId).to(SUPER_ADMIN_ROOM).emit("connectionState", {
     phoneId,
@@ -94,11 +105,6 @@ export default async function connectionUpdate(
       number: waUser.id.split(":")[0].split("@")[0], account_name: waUser.name,
     }));
   }
-  if (update.isNewLogin) {
-    // waSock.ev.flush(true);
-    // whatsappSocket(io, userId, phoneId);
-  }
-
   if (connection === "close") {
     const status = (lastDisconnect?.error as any)?.output?.statusCode;
     waRecovery.disconnects?.set(phoneId, { code: status, at: Date.now() });

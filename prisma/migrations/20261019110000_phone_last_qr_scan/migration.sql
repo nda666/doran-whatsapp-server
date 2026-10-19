@@ -1,0 +1,1 @@
+ALTER TABLE `phones` ADD COLUMN `lastQrScanAt` DATETIME(3) NULL;

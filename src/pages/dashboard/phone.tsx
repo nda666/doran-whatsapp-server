@@ -156,6 +156,10 @@ const PhonePage = () => {
       name: `waUser`,
       handler: () => refreshPhones.current(),
     });
+    events.push({
+      name: "qrScanned",
+      handler: () => refreshPhones.current(),
+    });
 
     events.push({
       name: "connect",
@@ -194,6 +198,16 @@ const PhonePage = () => {
       key: "isOnline",
       dataIndex: "isOnline",
       render: (_v, phone) => <Space size={8} style={{ whiteSpace: "nowrap" }}><PhoneConnectionStatus connection={phone.connection} />{phone.connection?.action === "scan_qr" && <Button size="small" onClick={() => onGetQrCodeClick(phone)}>{uiText("Scan QR")}</Button>}</Space>,
+    },
+    {
+      title: uiText("Terakhir Scan QR"),
+      key: "lastQrScanAt",
+      dataIndex: "lastQrScanAt",
+      render: (v) => (
+        <div style={{ whiteSpace: "nowrap" }}>
+          {v ? `${uiText.date(v)} WIB` : uiText("Belum tercatat")}
+        </div>
+      ),
     },
     {
       title: uiText("Status Perangkat"),
