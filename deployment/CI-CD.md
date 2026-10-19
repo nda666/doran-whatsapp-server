@@ -81,6 +81,10 @@ Branch rule tidak dibuat otomatis oleh source workflow.
   dan dipindahkan kembali ke path yang sama setelah swap static assets.
 - Periksa login lokal, koneksi database, endpoint dispatch dengan autentikasi,
   HTTPS publik, dan PID proses PM2 lain. Simpan PM2 hanya setelah lulus.
+  Restart mandiri `backendsms` boleh lewat hanya jika kembali online, PID positif
+  berubah, penghitung restart meningkat, dan identitas serta konfigurasi proses
+  tetap sama. Perubahan proses lain tetap memblokir deploy. Snapshot PM2 sebelum
+  dan sesudah disimpan tanpa environment rahasia untuk audit.
   Sesuai persetujuan pengguna, peringatan `BACKLOG_AGE_EXCEEDED` dan
   `SENDER_OFFLINE_WITH_BACKLOG` boleh tetap ada (termasuk respons 503).
   Worker wajib aktif, polling dan sampling antrean harus sukses dalam 60 detik;

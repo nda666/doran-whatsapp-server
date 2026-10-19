@@ -22,6 +22,40 @@ PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment
 PUBLIC_DATA = ['uploads', 'downloads']
 
 
+def unrelated_processes(processes):
+    """Keep only non-secret identity/configuration fields for deployment audits."""
+    fields = ['status', 'restart_time', 'pm_id', 'created_at', 'pm_exec_path',
+              'pm_cwd', 'exec_interpreter', 'exec_mode', 'args', 'node_args']
+    return {p['name']: dict({'pid': p['pid']}, **{
+        key: p['pm2_env'].get(key) for key in fields
+    }) for p in processes if p['name'] != 'doran-whatsapp'}
+
+
+def check_unrelated_processes(before, after):
+    if set(before) != set(after):
+        raise RuntimeError('Unrelated PM2 process inventory changed')
+    restarted = []
+    for name, previous in before.items():
+        current = after[name]
+        if current == previous:
+            continue
+        # backendsms independently restarts every ~30 minutes on this host.
+        # Accept only an observed restart with unchanged identity/configuration
+        # and recovered health; all other process changes still block promotion.
+        stable = set(previous) - {'pid', 'restart_time'}
+        if (name == 'backendsms' and previous['status'] == current['status'] == 'online'
+                and previous['pid'] > 0 and current['pid'] > 0
+                and previous['pid'] != current['pid']
+                and isinstance(previous['restart_time'], int)
+                and isinstance(current['restart_time'], int)
+                and current['restart_time'] > previous['restart_time']
+                and all(previous[key] == current[key] for key in stable)):
+            restarted.append(name)
+            continue
+        raise RuntimeError('Unrelated PM2 process changed: ' + name)
+    return restarted
+
+
 def validate_archive(archive, stage):
     """Reject links/traversal/private runtime data before extracting anything."""
     for item in archive.getmembers():
@@ -188,7 +222,8 @@ def main():
     target = next((p for p in processes if p['name'] == 'doran-whatsapp'), None)
     if not target or target['pm2_env']['status'] != 'online':
         raise RuntimeError('Expected existing online doran-whatsapp process')
-    others = {p['name']: p['pid'] for p in processes if p['name'] != 'doran-whatsapp'}
+    others = unrelated_processes(processes)
+    (backup / 'pm2-unrelated-before.json').write_text(json.dumps(others))
     old = backup / 'runtime'
     old.mkdir()
     moved_old, moved_new = [], []
@@ -251,8 +286,10 @@ def main():
         run(['curl', '--fail', '--silent', '--show-error', '--max-time', '20',
              'https://dashboard.jeblast.com/signin'], cwd=APP)
         current = json.loads(pm2('jlist'))
-        if any(next((p['pid'] for p in current if p['name'] == name), None) != pid for name, pid in others.items()):
-            raise RuntimeError('Unrelated PM2 process changed')
+        observed = unrelated_processes(current)
+        (backup / 'pm2-unrelated-after.json').write_text(json.dumps(observed))
+        for name in check_unrelated_processes(others, observed):
+            print('UNRELATED_SERVICE_RECOVERED_AFTER_RESTART', name, flush=True)
         pm2('save')
     except BaseException:
         if stopped:

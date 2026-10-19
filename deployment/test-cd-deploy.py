@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+import copy
 
 spec = importlib.util.spec_from_file_location('cd_deploy', Path(__file__).with_name('cd-deploy.py'))
 deploy = importlib.util.module_from_spec(spec)
@@ -13,6 +14,36 @@ spec.loader.exec_module(deploy)
 
 
 class DeploymentGuards(unittest.TestCase):
+    def test_unrelated_process_guard_handles_only_recovered_sms_restart(self):
+        def process(name, pid):
+            return {'name': name, 'pid': pid, 'pm2_env': {
+                'status': 'online', 'restart_time': 4, 'pm_id': pid,
+                'created_at': 100, 'pm_exec_path': '/apps/' + name,
+                'pm_cwd': '/apps', 'exec_interpreter': 'node',
+                'exec_mode': 'fork_mode', 'args': [], 'node_args': []}}
+        before = deploy.unrelated_processes([
+            process('backendsms', 10), process('telegram-sender', 20),
+            process('doran-whatsapp', 30)])
+        self.assertNotIn('doran-whatsapp', before)
+        self.assertEqual(deploy.check_unrelated_processes(before, before), [])
+        after = copy.deepcopy(before)
+        after['backendsms'].update(pid=11, restart_time=5)
+        self.assertEqual(deploy.check_unrelated_processes(before, after), ['backendsms'])
+        for key, value in [('status', 'errored'), ('pid', 0), ('restart_time', 4),
+                           ('pm_exec_path', '/other'), ('pm_id', 99),
+                           ('created_at', 101), ('node_args', ['--inspect'])]:
+            changed = copy.deepcopy(after)
+            changed['backendsms'][key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                deploy.check_unrelated_processes(before, changed)
+        changed = copy.deepcopy(before)
+        changed['telegram-sender'].update(pid=21, restart_time=5)
+        with self.assertRaises(RuntimeError):
+            deploy.check_unrelated_processes(before, changed)
+        for changed in [{}, dict(after, unexpected=after['backendsms'])]:
+            with self.assertRaises(RuntimeError):
+                deploy.check_unrelated_processes(before, changed)
+
     @unittest.skipUnless(shutil.which('tar'), 'tar executable required')
     def test_private_backup_preserves_env_auth_and_public_uploads(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
