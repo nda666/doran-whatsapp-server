@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { startMessagingAlerts } from "./messaging/alerts";
 import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
@@ -7,19 +7,38 @@ import next from "next";
 import { createBullBoard } from "@bull-board/api";
 import { BullAdapter } from "@bull-board/api/bullAdapter";
 import { ExpressAdapter } from "@bull-board/express";
-import { fetchLatestWaWebVersion } from "@whiskeysockets/baileys";
 
 import { prisma } from "../lib/prisma";
 import sendWaQueue from "../lib/queues/sendWaQueue";
 import { logger } from "./libs/logger";
-import makeWASocket from "./libs/makeWASocket";
+import { closeWaSessions } from "./libs/makeWASocket";
+import { recoverWaConnections, WA_RECOVERY_INTERVAL_MS } from "./waRecovery";
+import { stopReconnectTimers } from "./events/connectionUpdate";
+import { createGracefulShutdown } from "./gracefulShutdown";
 import { getSocketIO } from "./libs/socket";
+import { startDispatchWorker, getDispatchHealth } from "./dispatch/worker";
+import { startDeviceWebhookWorker } from "./deviceWebhook/worker";
+import { startDispatchWebhookWorker } from "./dispatchWebhook/worker";
+import { queueAccess } from "./queueAccess";
+let stopMessagingAlerts: (() => Promise<void>) | undefined;
+let stopDispatchWebhookWorker: (() => Promise<void>) | undefined;
+let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
+let stopDispatchWorker: (() => Promise<void>) | undefined;
+let httpServer: Server | undefined;
+let reconnectInterval: NodeJS.Timeout | undefined;
 
-const hostname = "localhost";
+const hostname = process.env.HOST || "127.0.0.1";
 const port = parseInt(process.env.PORT || "3000", 10);
 const dev = process.env.NODE_ENV !== "production";
 
 const app = express();
+app.use((_req, res, next) => {
+  if (process.env.DORAN_SHUTTING_DOWN === "true") {
+    res.setHeader("Retry-After", "5");
+    return res.status(503).json({ message: "Server sedang memulai ulang. Silakan coba lagi." });
+  }
+  next();
+});
 app.use(compression());
 // app.use(
 //   pinoHttp({
@@ -35,17 +54,20 @@ const io = getSocketIO;
 
 const bullExpress = new ExpressAdapter();
 
-createBullBoard({
+if (sendWaQueue) createBullBoard({
   queues: [new BullAdapter(sendWaQueue)],
   serverAdapter: bullExpress,
 });
 
 bullExpress.setBasePath("/queues");
-app.use("/queues", bullExpress.getRouter());
+if (sendWaQueue) app.use("/queues", queueAccess, bullExpress.getRouter());
+app.get("/health/dispatch", queueAccess, (_req, res) => {
+  const health = getDispatchHealth();
+  res.setHeader("Cache-Control", "no-store");
+  res.status(health.healthy ? 200 : 503).json(health);
+});
 
 nextApp.prepare().then(async () => {
-  const webVersion = await fetchLatestWaWebVersion({});
-  console.log("webVersion", webVersion);
   const appLogger = logger(`${process.env.WEBSITE_LOG}/website.log`);
   // const server = http.createServer(app);
 
@@ -56,71 +78,71 @@ nextApp.prepare().then(async () => {
 
     nextHandler(req, res).catch((err) => {
       appLogger.error(err);
-      res.status(500).send("Internal Server Error");
+      if (!res.headersSent) res.status(500).send("Internal Server Error");
     });
   });
   io?.on("connection", async (socket) => {});
 
   const server: Server = createServer(app);
+  httpServer = server;
   io.attach(server);
-  const isDevelopment = process.env.NODE_ENV == "development" ? true : false;
-  const host = isDevelopment ? "0.0.0.0" : "0.0.0.0";
+  const host = hostname;
   server.listen(port, host, async () => {
+    stopDeviceWebhookWorker = startDeviceWebhookWorker();
+    stopMessagingAlerts = startMessagingAlerts();
+    stopDispatchWebhookWorker = startDispatchWebhookWorker();
+    if (process.env.DISPATCH_QUEUE_ENABLED === "true" && process.env.WHATSAPP_ENABLED !== "false") stopDispatchWorker = startDispatchWorker();
     if (process.env.NODE_ENV !== "production") {
       console.info(
         `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`
       );
     }
-    connectAllWa();
+    if (process.env.WHATSAPP_ENABLED !== "false") {
+      recoverWaConnections().catch(error => console.error("WhatsApp startup failed:", error.message));
+    } else {
+      console.info("Dashboard ready; WhatsApp connections are disabled.");
+    }
   });
 
   let intervalConnectRun = false;
-  setInterval(() => {
-    if (intervalConnectRun) {
+  reconnectInterval = setInterval(() => {
+    if (process.env.WHATSAPP_ENABLED === "false" || intervalConnectRun) {
       return;
     }
 
     intervalConnectRun = true;
-    connectAllWa(true)
+    recoverWaConnections()
       .then(() => {
         intervalConnectRun = false;
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error("WhatsApp periodic connection failed:", error.message);
         intervalConnectRun = false;
       });
-  }, 30 * 60 * 1000); // 30 minutes interval
+  }, WA_RECOVERY_INTERVAL_MS);
+}).catch(error => {
+  console.error("Dashboard startup failed:", error.message);
+  process.exit(1);
 });
 
-const connectAllWa = async (replaceSession = false) => {
-  const phones = await prisma.phone.findMany({
-    where: {
-      active: 1,
-    },
-  });
-  phones?.forEach(async (phone) => {
-    if (phone.userId && phone.id) {
-      const createdWaSock = await makeWASocket(
-        phone.userId,
-        phone.id,
-        replaceSession
-      );
-      if (process.env.NODE_ENV == "development") {
-        console.log(`${chalk.green(phone.number)}: ${createdWaSock.user?.id}`);
-      }
-    }
-  });
-};
-
-process.on("SIGINT", async function () {
-  await nextApp.close();
-  await io.close();
-  await prisma.$disconnect();
-  process.exit();
+const shutdown = createGracefulShutdown({
+  stopIntake: () => {
+    process.env.DORAN_SHUTTING_DOWN = "true";
+    if (reconnectInterval) clearInterval(reconnectInterval);
+    stopReconnectTimers();
+  },
+  drain: [() => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
+  close: [
+    closeWaSessions,
+    async () => { if (io.engine) await io.close(); else io.disconnectSockets(true); },
+    () => new Promise<void>((resolve, reject) => {
+      if (!httpServer?.listening) return resolve();
+      httpServer.close(error => error ? reject(error) : resolve());
+      httpServer.closeIdleConnections();
+    }),
+    () => nextApp.close(),
+    () => prisma.$disconnect(),
+  ],
 });
-
-// process.on("SIGKILL", async function () {
-//   await nextApp.close();
-//   await io.close();
-//   await prisma.$disconnect();
-//   process.exit();
-// });
+process.on("SIGINT", () => { void shutdown("SIGINT"); });
+process.on("SIGTERM", () => { void shutdown("SIGTERM"); });

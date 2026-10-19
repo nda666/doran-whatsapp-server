@@ -1,0 +1,75 @@
+--- live/src/pages/dashboard/phone.tsx
++++ new/src/pages/dashboard/phone.tsx
+@@ -410,8 +410,8 @@
+         {summary.error && <Alert type="error" showIcon message={uiText(summary.error)} />}
+         {policies.error && <Alert type="warning" showIcon message={uiText("Kesehatan dan kebijakan pengiriman belum dapat diperbarui")} description={uiText(policies.error)} />}
+         {phoneData.connectionStatusError && <Alert type="warning" showIcon message={uiText("Status koneksi belum dapat diperbarui")} description={uiText("Sambungan ke server bermasalah. Tunggu pembaruan berikutnya atau muat ulang. Jangan scan QR sebelum status sesi berhasil diperiksa.")} />}
+-        {/* Hierarki aksi: primary solid, secondary outline, dan aksi netral. */}
+-        <Flex className="phone-actions" gap="middle" wrap="wrap">
++        {/* Tombol sejajar dengan gap 12px; aksi netral memakai ghost berborder. */}
++        <Flex className="phone-actions" gap={12} wrap="wrap">
+           <Button
+             className="phone-action-primary"
+             type="primary"
+@@ -419,15 +419,15 @@
+           >
+             {t("add_devices")}
+           </Button>
+-          <Button type="text" onClick={() => replaceSearch({ ...searchState, showSearch: !showSearch })}>
++          <Button className="phone-action-ghost" onClick={() => replaceSearch({ ...searchState, showSearch: !showSearch })}>
+             {showSearch ? t("hide_search") : t("show_search")}
+           </Button>
+-          <Button type="text" disabled={!selectedPhoneIds.length || generatingTokens} onClick={() => confirmGenerateTokens(selectedPhoneIds.map(String))}>
++          <Button className="phone-action-ghost" disabled={!selectedPhoneIds.length || generatingTokens} onClick={() => confirmGenerateTokens(selectedPhoneIds.map(String))}>
+             {uiText("Buat token Terpilih (")}{selectedPhoneIds.length})
+           </Button>
+           <Button className="phone-action-secondary" disabled={generatingTokens} onClick={() => confirmGenerateTokens()}>
+             {uiText("Buat token untuk semua perangkat")}</Button>
+-          {!!selectedPhoneIds.length && <Button type="text" disabled={generatingTokens} onClick={() => setSelectedPhoneIds([])}>{uiText("Hapus Pilihan")}</Button>}
++          {!!selectedPhoneIds.length && <Button className="phone-action-ghost" disabled={generatingTokens} onClick={() => setSelectedPhoneIds([])}>{uiText("Hapus Pilihan")}</Button>}
+         </Flex>
+         <PhoneFormModal
+           ref={form}
+@@ -453,7 +453,9 @@
+             replaceSearch({ ...searchState, filters: { name: data.name || "", number: data.number || "", is_online: data.is_online || "", active: data.active || "" }, table: { ...searchState.table, page: 1 } });
+           }}
+         />
++        {/* Border tema membedakan info Save Group dari latar halaman. */}
+         <Alert
++          className="phone-save-group-info"
+           type="info"
+           showIcon
+           message={uiText("Tentang Save Group")}
+--- live/src/styles/globals.css
++++ new/src/styles/globals.css
+@@ -323,15 +323,27 @@
+ .dashboard-color-current { background: var(--ui-color, var(--ui-accent)); }
+ @media (max-width: 380px) { .dashboard-header-actions { gap: 4px !important; } }
+ 
+-/* Aksi perangkat mengikuti variabel tema, termasuk hover dan disabled. */
+-.phone-actions .ant-btn { height: auto; min-height: 38px; white-space: normal; text-align: center; }
++/* Ukuran seragam untuk semua aksi; warna tetap mengikuti tema aktif. */
++.phone-actions .ant-btn { height: 40px; padding: 0 16px; border-radius: 10px; border-width: 1px; white-space: nowrap; text-align: center; }
++.phone-actions .phone-action-ghost:not(:disabled) { color: var(--ui-text); background: transparent; border: 1px solid var(--ui-border); }
++.phone-actions .phone-action-ghost:not(:disabled):hover,
++.phone-actions .phone-action-ghost:not(:disabled):active { color: var(--ui-accent); background: var(--ui-selected); border-color: var(--ui-accent); }
+ .phone-actions .phone-action-primary:not(:disabled) { background: var(--ui-color); color: var(--ui-on-color); border: 1px solid var(--ui-accent); }
+ .phone-actions .phone-action-secondary:not(:disabled) { background: var(--ui-surface); color: var(--ui-accent); border: 1px solid var(--ui-accent); }
+ .phone-actions .phone-action-primary:not(:disabled):hover,
+ .phone-actions .phone-action-primary:not(:disabled):active { background: var(--ui-accent); color: var(--ui-surface); border-color: var(--ui-accent); }
+ .phone-actions .phone-action-secondary:not(:disabled):hover,
+ .phone-actions .phone-action-secondary:not(:disabled):active { background: var(--ui-selected); color: var(--ui-accent); border-color: var(--ui-accent); }
+-.phone-actions .ant-btn:disabled { color: var(--ui-muted); background: var(--ui-soft); border: 1px dashed var(--ui-border); opacity: .6; cursor: not-allowed; box-shadow: none; }
++/* Disabled tetap pudar dan tidak berubah saat hover maupun ditekan. */
++.phone-actions .ant-btn:disabled,
++.phone-actions .ant-btn:disabled:hover,
++.phone-actions .ant-btn:disabled:active { color: var(--ui-muted); background: var(--ui-soft); border: 1px solid var(--ui-border); opacity: .45; cursor: not-allowed; box-shadow: none; }
++
++/* Pertahankan latar info Ant Design; border dan teks mengikuti tema terang/gelap. */
++.phone-save-group-info.ant-alert { border: 1px solid color-mix(in srgb, var(--ui-accent) 35%, var(--ui-border)); border-radius: 16px; }
++.phone-save-group-info .ant-alert-message { color: var(--ui-text); }
++.phone-save-group-info .ant-alert-description { color: var(--ui-muted); }
++.phone-save-group-info .ant-alert-icon { color: var(--ui-accent); }
+ 
+ /* Device settings: one readable row per setting and a separate action footer. */
+ .device-settings-modal .ant-modal-content { padding: 0; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 18px; }

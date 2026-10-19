@@ -1,0 +1,19 @@
+Doran WA Local
+==============
+1. Klik shortcut untuk membuka Laragon otomatis jika database belum aktif.
+2. Gunakan shortcut Desktop "Doran WA Local" atau file "Jalankan Lokal.cmd".
+3. Browser membuka http://localhost:3000/signin setelah server siap.
+4. Biarkan jendela server terbuka. Tekan Ctrl+C untuk berhenti.
+
+Email/password lokal tersimpan di storage/local/LOGIN-LOCAL.txt.
+Database: wa_local (127.0.0.1:3306).
+Konfigurasi: .env.development.local.
+Runtime Node.js lokal: storage/local/runtime/node.exe.
+Koneksi WhatsApp dinonaktifkan untuk percobaan dashboard lokal.
+Menu www Laragon tidak otomatis menjalankan proses Node.js.
+
+Jika database belum aktif setelah satu menit, buka Laragon dan klik Start All.
+Klik shortcut berulang saat startup tidak menjalankan server kedua.
+Cache kompilasi lokal berada di .next-local.
+Membuka URL saja tidak menyalakan server; gunakan shortcut lebih dahulu.
+

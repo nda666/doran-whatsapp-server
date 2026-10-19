@@ -1,5 +1,6 @@
+import { useUiTranslation } from "@/lib/uiTranslation";
 import { Form, Input, Button, FormInstance } from "antd";
-import { useTranslation } from "next-i18next";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 export type SigninData = {
   email: string;
   password: string;
@@ -11,7 +12,8 @@ type SigninFormProps = {
   form: FormInstance<SigninData> | undefined;
 };
 const SigninForm = ({ onSubmit, loading, form }: SigninFormProps) => {
-  const { t } = useTranslation(["translation", "common"]);
+  const uiText = useUiTranslation();
+  const { t } = useTranslation("common");
   const _onSubmit = (data: SigninData) => {
     onSubmit(data);
   };
@@ -25,17 +27,17 @@ const SigninForm = ({ onSubmit, loading, form }: SigninFormProps) => {
       onFinish={_onSubmit}
     >
       <Form.Item
-        label="Email"
+        label={uiText("Email")}
         name="email"
         rules={[
           {
             required: true,
-            message: "Please enter your email!",
+            message: uiText("Please enter your email!"),
           },
           {
             required: true,
             type: "email",
-            message: "Please enter valid E-mail!",
+            message: uiText("Please enter valid E-mail!"),
           },
         ]}
       >
@@ -48,17 +50,17 @@ const SigninForm = ({ onSubmit, loading, form }: SigninFormProps) => {
         rules={[
           {
             required: true,
-            message: t("required", {
+            message: t("validation.required", {
               field: t("password", { ns: "common" }),
-              ns: "form",
+              ns: "common",
             }).toString(),
           },
           {
             min: 6,
-            message: t("min", {
+            message: t("validation.min", {
               field: t("password", { ns: "common" }),
               value: 6,
-              ns: "form",
+              ns: "common",
             }).toString(),
           },
         ]}

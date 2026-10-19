@@ -1,239 +1,145 @@
-import React, { ReactNode, useState } from "react";
-
-import {
-  Button,
-  Layout as AntdLayout,
-  Menu,
-  Popover,
-  Space,
-  theme,
-  Typography,
-} from "antd";
-import { i18n, useTranslation } from "next-i18next";
-import Image from "next/image";
+import { useUiTranslation } from "@/lib/uiTranslation";
+import React, { ReactNode, useRef, useState } from "react";
+import { Alert, Avatar, Button, Dropdown, Layout as AntdLayout, Menu, Space, Input, Breadcrumb, Spin, message } from "antd";
+import type { MenuProps } from "antd";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import Link from "next/link";
+import Head from "next/head";
 import { useRouter } from "next/router";
-
+import { useDashboardPreferences } from "@/lib/DashboardPreferences";
+import { dashboardColors, isDashboardColor } from "@/lib/dashboardColors";
+import { signOut, useSession } from "next-auth/react";
+import { isSuperAdmin, isSuperAdminPage } from "@/lib/access";
+import ApprovalNotifications from "@/components/ApprovalNotifications";
+import LanguageSelect from "@/components/LanguageSelect";
+import { localizedPath } from "@/lib/localizedPath";
 import {
-  DashboardOutlined,
-  HistoryOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  SettingOutlined,
-  WhatsAppOutlined,
+  DashboardOutlined, HistoryOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  WhatsAppOutlined, ContactsOutlined, FolderOpenOutlined, SendOutlined,
+  OrderedListOutlined, BarChartOutlined, ApiOutlined, SettingOutlined, CalendarOutlined,
+  LogoutOutlined, SunOutlined, MoonOutlined, UserOutlined, KeyOutlined, DownOutlined, MessageOutlined, SearchOutlined,
 } from "@ant-design/icons";
 
 const { Header, Sider, Content } = AntdLayout;
-const { Text, Title } = Typography;
-const langMenuSelected = undefined;
-export default function Layout({
-  children,
-  title,
-}: {
-  title?: string;
-  children: ReactNode;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [collapsedWidth, setCollapsedWidth] = useState(80);
-  const { t } = useTranslation("common");
 
+export default function Layout({ children, title }: { title?: string; children: ReactNode }) {
+  const uiText = useUiTranslation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const logoutPending = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = async () => {
+    if (logoutPending.current) return;
+    logoutPending.current = true; setLoggingOut(true);
+    try { await signOut({ callbackUrl: localizedPath("/signin", router.locale), redirect: true }); }
+    catch { logoutPending.current = false; setLoggingOut(false); message.error(uiText("Keluar belum berhasil. Silakan coba lagi.")); }
+  };
+  const { t } = useTranslation("common");
+  const { t: ui } = useTranslation("upgrade");
+  const preferences = useDashboardPreferences();
+  const { data: session, status } = useSession();
   const router = useRouter();
-  const {
-    token: { colorWhite },
-  } = theme.useToken();
+  const superAdmin = !!session?.user && isSuperAdmin(session.user);
+  const restrictedPage = isSuperAdminPage(router.pathname);
+  const navigation = [
+    // Frequent operations first; related message resources stay together.
+    { href: "/dashboard", label: t("dashboard"), icon: <DashboardOutlined /> },
+    { href: "/dashboard/conversations", label: uiText("Percakapan"), icon: <MessageOutlined /> },
+    { href: "/dashboard/phone", label: t("phone_devices"), icon: <WhatsAppOutlined /> },
+    { href: "/dashboard/campaigns", label: uiText("Kampanye pesan"), icon: <SendOutlined /> },
+    { href: "/dashboard/calendar", label: uiText("Kalender pengiriman"), icon: <CalendarOutlined /> },
+    { href: "/dashboard/dispatch", label: uiText("Antrean pengiriman"), icon: <OrderedListOutlined /> },
+    { href: "/dashboard/contacts", label: ui("Kontak"), icon: <ContactsOutlined />, dividerBefore: true },
+    { href: "/dashboard/message-templates", label: uiText("Templat pesan"), icon: <MessageOutlined /> },
+    { href: "/dashboard/media", label: uiText("Pengelola berkas"), icon: <FolderOpenOutlined /> },
+    { href: "/dashboard/reports", label: ui("Laporan"), icon: <BarChartOutlined />, dividerBefore: true },
+    { href: "/dashboard/log", label: t("log"), icon: <HistoryOutlined /> },
+    { href: "/dashboard/ai-plugins", label: uiText("Plugin AI"), icon: <SettingOutlined />, dividerBefore: true },
+    { href: "/dashboard/api-docs", label: uiText("Dokumentasi API"), icon: <ApiOutlined /> },
+    { href: "/dashboard/admin", label: uiText("Administrasi"), icon: <SettingOutlined />, dividerBefore: true },
+    { href: "/dashboard/plans", label: uiText("Master paket"), icon: <FolderOpenOutlined /> },
+  ];
+  const menuItems: MenuProps["items"] = navigation
+    .filter(item => !isSuperAdminPage(item.href) || superAdmin)
+    .flatMap(({ href, label, icon, dividerBefore }) => {
+      const item = { key: href, icon, title: label, label: <Link href={href}>{label}</Link> };
+      return dividerBefore ? [{ type: "divider" as const, key: `${href}-divider` }, item] : [item];
+    });
+  // Auto reply is reached from a device, so keep that device menu highlighted.
+  const selectedKey = router.pathname === "/dashboard/auto-reply" ? "/dashboard/phone" : router.pathname;
+  const pageTitle = navigation.find(item => item.href === router.pathname)?.label || uiText(title || "Dasbor");
+
   return (
-    <AntdLayout className="layout" style={{ minHeight: "100%" }}>
-      <Sider
-        trigger={null}
-        collapsible
-        collapsed={collapsed}
-        collapsedWidth={collapsedWidth}
-        breakpoint="sm"
-        onBreakpoint={(broken) => {
-          setCollapsed(broken);
-          broken ? setCollapsedWidth(0) : setCollapsedWidth(90);
-        }}
-        theme="dark"
-        style={{
-          overflow: "auto",
-          height: "100vh",
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 1,
-          paddingTop: collapsedWidth == 0 ? 60 : 0,
-        }}
-      >
-        <Space
-          style={{
-            padding: "10px 5px",
-            width: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Image
-            style={{ flex: 0 }}
-            src="/troll-face.gif"
-            width={"50"}
-            height={"40"}
-            alt="logo"
-          />
-          {!collapsed && (
-            <Title
-              style={{
-                fontSize: "1.5em",
-                color: "white",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Doran WA
-            </Title>
-          )}
-        </Space>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[router.asPath]}
-          // items={[
-          //   {
-          //     key: "dashboard",
-          //     icon: <DashboardOutlined />,
-          //     label: t("dashboard"),
-          //   },
-          //   {
-          //     key: "dashboard/phones",
-          //     icon: <WhatsAppOutlined />,
-          //     label: t("phone_devices"),
-          //   },
-          // ]}
-        >
-          <Menu.Item key={"/dashboard"} title={t("dashboard")}>
-            <Link href={"/dashboard"}>
-              <Space size={"middle"}>
-                <DashboardOutlined />
-                {!collapsed && t("dashboard")}
-              </Space>
-            </Link>
-          </Menu.Item>
-          <Menu.Item key={"/dashboard/phone"} title={t("phone_devices")}>
-            <Link href={"/dashboard/phone"}>
-              <Space size={"middle"}>
-                <WhatsAppOutlined />
-                {!collapsed && t("phone_devices")}
-              </Space>
-            </Link>
-          </Menu.Item>
-          <Menu.Item key={"/dashboard/log"} title={t("log")}>
-            <Link href={"/dashboard/log"}>
-              <Space size={"middle"}>
-                <HistoryOutlined />
-                {!collapsed && t("log")}
-              </Space>
-            </Link>
-          </Menu.Item>
-          <Menu.Item key={"/dashboard/setting"} title={t("setting") || "Pengaturan"}>
-            <Link href={"/dashboard/setting"}>
-              <Space size={"middle"}>
-                <SettingOutlined />
-                {!collapsed && (t("setting") || "Pengaturan")}
-              </Space>
-            </Link>
-          </Menu.Item>
-          {/* <Menu.Item key={"/dashboard/auto-reply"} title={t("auto_reply")}>
-              <Link href={"/dashboard/auto-reply"}>
-                <Space size={"middle"}>
-                  <WechatFilled/>
-                  {!collapsed && t("auto_reply")}
-                </Space>
-              </Link>
-          </Menu.Item> */}
-        </Menu>
+    <AntdLayout className="dashboard-shell"><a className="dashboard-skip-link" href="#dashboard-content">{uiText("Langsung ke konten")}</a>
+      <Head>
+        <title>{`${pageTitle} · Doran WA`}</title>
+        <meta name="description" content={`${pageTitle} · Doran WA. ${uiText("Kelola perangkat WhatsApp dan pengiriman pesan Anda.")}`} key="description" />
+      </Head>
+      {mobile && !collapsed && <button className="sidebar-backdrop" aria-label={uiText("Tutup menu")} onClick={() => setCollapsed(true)} />}
+      <Sider className="dashboard-sidebar" width={248} trigger={null} collapsible collapsed={collapsed}
+        collapsedWidth={mobile ? 0 : 80} breakpoint="lg" theme="light"
+        onBreakpoint={broken => { setMobile(broken); setCollapsed(broken); }}>
+        <Link className="dashboard-brand" href="/dashboard" aria-label={uiText("Doran WA")}>
+          <span className="dashboard-brand-icon"><WhatsAppOutlined /></span>
+          {!collapsed && <span><strong>{uiText("Doran WA")}</strong><small>{uiText("WhatsApp Server")}</small></span>}
+        </Link>
+        <Menu theme="light" mode="inline" selectedKeys={[selectedKey]}
+          onClick={() => { if (mobile) setCollapsed(true); }}
+          items={menuItems} />
       </Sider>
-      <AntdLayout
-        className="layout"
-        style={{
-          minHeight: "100%",
-          transition: "all 0.2s,background 0s",
-          marginLeft: collapsed
-            ? collapsedWidth
-            : collapsedWidth == 0
-            ? 0
-            : "200px",
-        }}
-      >
-        <Header
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 3,
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            paddingLeft: 10,
-            paddingRight: 10,
-            justifyContent: "space-between",
-            color: colorWhite,
-          }}
-        >
-          <Space style={{ flex: 1 }}>
-            <Button
-              type="text"
-              style={{ color: colorWhite }}
-              onClick={() => setCollapsed(!collapsed)}
-            >
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </Button>
-            <div style={{ fontWeight: "bold", fontSize: "1.1em" }}>{title}</div>
+      <AntdLayout className="dashboard-main" style={{ marginInlineStart: mobile ? 0 : collapsed ? 80 : 248 }}>
+        <Header className="dashboard-header">
+          <Space className="dashboard-heading">
+            <Button type="text" aria-label={collapsed ? uiText("Buka menu") : uiText("Tutup menu")} aria-expanded={!collapsed}
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} />
+            <span className="dashboard-page-title">{uiText(title)}</span>
           </Space>
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            selectable={false}
-            style={{ width: 200, display: "flex", justifyContent: "flex-end" }}
-          >
-            <Menu.Item
-              key="menu-lang"
-              onClick={() => {
-                const { pathname, asPath, query } = router;
-                router.push({ pathname, query }, asPath, {
-                  locale: i18n?.language == "id" ? "en" : "id",
-                });
-              }}
-            >
-              <Popover
-                content={
-                  <div>
-                    {i18n?.language == "id" ? (
-                      <>
-                        <b>Indonesia/</b>English
-                      </>
-                    ) : (
-                      <>
-                        Indonesia<b>/English</b>
-                      </>
-                    )}
-                  </div>
-                }
-              >
-                {i18n?.language.toUpperCase()}
-              </Popover>
-            </Menu.Item>
-            <Menu.Item key="menu-signout">
-              <Link href={"/signout"}>{t("signout")}</Link>
-            </Menu.Item>
-          </Menu>
+          <Space wrap className="dashboard-header-actions">
+            {superAdmin && <ApprovalNotifications />}
+            <Input.Search className="dashboard-search" placeholder={ui("Pencarian global")} aria-label={ui("Pencarian global")}
+              onSearch={q => void router.push(`/dashboard/search?q=${encodeURIComponent(q)}`)} />
+            <Button className="dashboard-mobile-search" type="text" aria-label={ui("Pencarian global")} icon={<SearchOutlined />} onClick={() => void router.push("/dashboard/search")} />
+            <Dropdown trigger={["click"]} menu={{
+              selectable: true,
+              selectedKeys: [preferences.color],
+              onClick: ({ key }) => { if (isDashboardColor(key)) preferences.setColor(key); },
+              items: dashboardColors.map(color => ({
+                key: color.value,
+                label: <span className="dashboard-color-option"><span className="dashboard-color-swatch" style={{ backgroundColor: preferences.dark ? color.dark : color.primary }} aria-hidden="true" />{uiText(color.label)}</span>,
+              })),
+            }}>
+              <Button aria-label={uiText("Tema warna: {{v0}}", { v0: uiText(dashboardColors.find(color => color.value === preferences.color)?.label) })} aria-haspopup="menu" title={uiText("Tema warna")}>
+                <span className="dashboard-color-swatch dashboard-color-current" aria-hidden="true" />
+                <span className="theme-toggle-label">{uiText("Tema warna")}</span><DownOutlined />
+              </Button>
+            </Dropdown>
+            <Button aria-label={preferences.dark ? ui("Mode terang") : ui("Mode gelap")} icon={preferences.dark ? <SunOutlined /> : <MoonOutlined />} onClick={preferences.toggleDark}>
+              <span className="theme-toggle-label">{preferences.dark ? ui("Mode terang") : ui("Mode gelap")}</span>
+            </Button>
+            <LanguageSelect />
+            {session?.user && <Dropdown trigger={["click"]} menu={{ items: [
+              { key: "profile", icon: <UserOutlined />, label: <Link href="/dashboard/profile">{uiText("Edit profil")}</Link> },
+              { key: "password", icon: <KeyOutlined />, label: <Link href="/dashboard/change-password">{uiText("Ganti kata sandi")}</Link> },
+              { key: "token", icon: <KeyOutlined />, label: <Link href="/dashboard/profile#token-user">{uiText("Token user")}</Link> },
+              { type: "divider" },
+              { key: "signout", icon: <LogoutOutlined />, label: loggingOut ? uiText("Sedang keluar...") : t("signout"), disabled: loggingOut, onClick: () => void logout() },
+            ] }}>
+              <button type="button" className="dashboard-user" aria-label={uiText("Menu akun pengguna")} aria-haspopup="menu" title={uiText("Masuk sebagai {{v0}}", { v0: session.user.email })}>
+                <Avatar size={36}>{(session.user.name || session.user.email || "U").slice(0, 1).toUpperCase()}</Avatar>
+                <div><strong>{session.user.name || uiText("Pengguna")}</strong><small>{session.user.email}</small></div><DownOutlined />
+              </button>
+            </Dropdown>}
+          </Space>
         </Header>
-        <Content
-          style={{
-            padding: "0 20px",
-            marginTop: "10px",
-          }}
-        >
-          {children}
+        <Content id="dashboard-content" className="dashboard-content">
+          <Breadcrumb className="dashboard-breadcrumb" items={[{ title: <Link href="/dashboard">{ui("Dasbor")}</Link> },
+            ...(router.pathname === "/dashboard" ? [] : [{ title: uiText(title || "") }])]} />
+          {restrictedPage && !superAdmin
+            ? status === "loading" ? <Spin /> : <Alert type="error" showIcon message={uiText("Akses hanya untuk super admin.")} />
+            : children}
         </Content>
       </AntdLayout>
     </AntdLayout>
   );
 }
+

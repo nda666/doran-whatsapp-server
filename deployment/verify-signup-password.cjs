@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { z } = require('zod');
+const api = fs.readFileSync('src/pages/api/signup.ts', 'utf8');
+const expression = api.match(/const input = ([\s\S]*?);\r?\nconst attempts/)[1];
+const schema = new Function('z', 'Buffer', 'return ' + expression)(z, Buffer);
+const data = { name: 'Validation', email: 'validation@example.com', password: '123456', passwordConfirm: '123456' };
+assert(schema.safeParse(data).success);
+assert(!schema.safeParse({ ...data, password: '12345', passwordConfirm: '12345' }).success);
+assert(!schema.safeParse({ ...data, passwordConfirm: '654321' }).success);
+assert(!schema.safeParse({ ...data, password: 'a'.repeat(73), passwordConfirm: 'a'.repeat(73) }).success);
+const form = fs.readFileSync('src/components/auth/SignupForm.tsx', 'utf8');
+assert(form.includes('min: 6,'));
+assert(form.includes('t("validation.min"'));
+assert.equal(JSON.parse(fs.readFileSync('public/locales/id/common.json', 'utf8')).validation.min, '{{field}} minimal {{value}} karakter');
+console.log('SIGNUP_PASSWORD_VALIDATION_PASSED');

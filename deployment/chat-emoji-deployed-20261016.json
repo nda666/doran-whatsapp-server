@@ -1,0 +1,56 @@
+{
+  "build": "edkd6rIvcppSC9Ae5csSn",
+  "processes": [
+    {
+      "name": "pm2-logrotate",
+      "pid": 72279,
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "doran-whatsapp",
+      "pid": 1804108,
+      "status": "online",
+      "restarts": 44
+    },
+    {
+      "name": "telegram-sender",
+      "pid": 310531,
+      "status": "online",
+      "restarts": 0
+    },
+    {
+      "name": "backendsms",
+      "pid": 1729636,
+      "status": "online",
+      "restarts": 6
+    }
+  ],
+  "encryption_configured": true,
+  "staging_removed": true,
+  "success": {
+    "active_build": "edkd6rIvcppSC9Ae5csSn",
+    "previous_build": "lDA1CXFTR1p5XHmWFZG5k"
+  },
+  "unicode_database_roundtrip": true,
+  "public_http": [
+    {
+      "route": "/signin",
+      "status": 200,
+      "final_url": "https://dashboard.jeblast.com/signin?deploy=chat-emoji-20261016",
+      "build": "edkd6rIvcppSC9Ae5csSn"
+    },
+    {
+      "route": "/dashboard/conversations",
+      "status": 200,
+      "final_url": "https://dashboard.jeblast.com/signin?callbackUrl=%2Fdashboard%2Fconversations%3Fdeploy%3Dchat-emoji-20261016",
+      "build": "edkd6rIvcppSC9Ae5csSn"
+    },
+    {
+      "route": "/dashboard/ai-plugins",
+      "status": 200,
+      "final_url": "https://dashboard.jeblast.com/signin?callbackUrl=%2Fdashboard%2Fai-plugins%3Fdeploy%3Dchat-emoji-20261016",
+      "build": "edkd6rIvcppSC9Ae5csSn"
+    }
+  ]
+}

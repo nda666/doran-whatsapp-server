@@ -1,3 +1,4 @@
+import { mediaUrl } from "../utils/mediaUrl";
 import { Phone } from "@prisma/client";
 import { WAMessage, WASocket } from "@whiskeysockets/baileys";
 
@@ -16,6 +17,9 @@ import {
   insertWebhookToInboxMessage,
 } from "../../services/inboxMessage";
 import toBase64 from "../libs/toBase64";
+import { sendAutoReply } from "../campaigns/autoReply";
+import { webhookSender } from "../utils/webhookSender";
+import { sendAiAutoReply } from "../ai/service";
 
 type HandleMessageInEventProps = {
   phone: Phone;
@@ -23,6 +27,7 @@ type HandleMessageInEventProps = {
   messageIn: string;
   messages: WAMessage[];
   userId: string;
+  allowAi?: boolean;
 };
 
 export const handleMessageInEvent = async (
@@ -34,20 +39,26 @@ export const handleMessageInEvent = async (
     await saveToGrup(messages, _waSocket);
   }
 
+  if (!phone.autoReplyEnabled) return;
   const phoneReplies = await getAutoReplyByPhoneId(phone.id);
   // insert inbox moved to top;
   // let phones = await phone();
   let phone_number = phone && phone.number;
 
-  phoneReplies.forEach(async (item) => {
+  for (const item of phoneReplies) {
+    try {
     const replyText = JSON.parse(JSON.stringify(item.reply));
 
     if (
       !messageKeywordTypeChecker(messageIn, item.keyword, item.type_keyword)
     ) {
-      return;
+      continue;
     }
-    if (item.type == "text" && messages[0]) {
+    if (item.type === "ai") {
+      if (props.allowAi && messages[0]) await sendAiAutoReply(item, phone, _waSocket, messages[0], messageIn);
+      continue;
+    }
+    if (item.type !== "webhook" && messages[0]) {
       if (item.is_save_inbox) {
         insertToInboxMessage({
           message: messageIn!,
@@ -56,22 +67,7 @@ export const handleMessageInEvent = async (
           userId,
         });
       }
-      const res = await _waSocket.sendMessage(
-        messages[0]?.key?.remoteJid!,
-        replyText
-      );
-      console.log(res);
-    }
-
-    if (item.type == "image") {
-      const image64 = await toBase64("./storage/" + replyText.image.url);
-      // replyText.image.url = process.env.APP_URL + '/' + replyText.image.url;
-      replyText.image = Buffer.from(image64);
-      messageKeywordTypeChecker(
-        messageIn ?? "",
-        item.keyword,
-        item.type_keyword
-      ) && _waSocket.sendMessage(messages[0]?.key?.remoteJid!, replyText);
+      await sendAutoReply(item, phone, _waSocket, messages);
     }
 
     if (
@@ -104,20 +100,20 @@ export const handleMessageInEvent = async (
         item.type_keyword
       );
       if (!itHasKeyword) {
-        return;
+        continue;
       }
 
       let data = {
         image_in: finalFilePath,
         message: messageIn!,
-        sender: messages[0]?.key?.remoteJid!.split("@")[0]!,
+        sender: await webhookSender(messages[0].key, _waSocket),
         recipient: phone_number,
         userId,
         // auto_reply_id: item.id.toString(),
       } as InserttWebhookToInboxMessageProps;
 
       if (!item.url) {
-        return;
+        continue;
       }
 
       let objParamProp: string[] = [];
@@ -179,9 +175,9 @@ export const handleMessageInEvent = async (
           params[propName] = propValue;
         });
       }
-      params["phone"] = params["phone"] = data.sender ?? null;
+      params["phone"] = data.sender ?? null;
       params["recipient"] = data.recipient ?? "";
-      params["image"] = `${process.env.APP_URL}/api/image/${finalFilePath}`;
+      params["image"] = mediaUrl(finalFilePath, userId);
       params["message"] = data.message;
 
       // params["detail"] = JSON.stringify(messages[0]);
@@ -213,5 +209,7 @@ export const handleMessageInEvent = async (
         const resultSave = await insertWebhookToInboxMessage(data);
       }
     }
-  });
+    } catch { console.error("AUTO_REPLY_FAILED", item.id); }
+  }
 };
+

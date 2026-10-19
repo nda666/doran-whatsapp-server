@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const db = new PrismaClient();
+(async () => {
+  const owner = await db.user.findFirst({ where: { role: 'ADMIN', email: 'admin@gmail.com' } }); assert(owner);
+  const base = 'https://dashboard.jeblast.com';
+  const res = await fetch(base + '/api/phones?number=6281234485011', { headers: { Authorization: 'Bearer ' + owner.token } });
+  assert.equal(res.status, 200);
+  const phones = await res.json(); assert(phones.length > 0);
+  for (const phone of phones) assert.match(phone.userId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: owner.id, token: owner.token, name: owner.name, email: owner.email }, secret: process.env.NEXTAUTH_SECRET });
+  const page = await fetch(base + '/dashboard/phone', { headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } }); assert.equal(page.status, 200);
+  const html = await page.text();
+  const chunks = [...html.matchAll(/<script[^>]*src="([^"]+\.js)"/g)].map(match => match[1]); assert(chunks.length);
+  const js = (await Promise.all(chunks.map(async path => { const asset = await fetch(new URL(path, base)); assert.equal(asset.status, 200); return asset.text(); }))).join('\n');
+  for (const text of ['Tentang Save Group', 'penyimpanan data grup otomatis dinonaktifkan', 'Penyimpanan dipicu oleh pesan masuk dari grup']) assert(html.includes(text), text);
+  assert(js.includes('Tentang Save Group'));
+  console.log('SAVE_GROUP_INFO_AUTHENTICATED_PAGE_AND_BUNDLE_VERIFIED');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

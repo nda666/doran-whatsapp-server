@@ -1,0 +1,87 @@
+--- live/src/lib/dashboardColors.ts
++++ new/src/lib/dashboardColors.ts
+@@ -1,6 +1,6 @@
+ export const dashboardColors = [
+   { value: "green", label: "Hijau", primary: "#34d399", dark: "#6ee7b7" },
+-  { value: "blue", label: "Biru", primary: "#60b5fa", dark: "#93c5fd" },
++  { value: "blue", label: "Biru", primary: "#0875bd", dark: "#65baff" },
+   { value: "orange", label: "Oranye", primary: "#ffb547", dark: "#ffd18a" },
+   { value: "purple", label: "Ungu", primary: "#b394f8", dark: "#d0baff" },
+   { value: "rose", label: "Rose", primary: "#fb91b5", dark: "#ffb4d0" },
+@@ -21,9 +21,22 @@
+   return `#${channels.join("")}`;
+ }
+ 
+-export function dashboardPalette(dark: boolean, color: DashboardColor = "green") {
+-  const selected = dashboardColors.find(option => option.value === color) || dashboardColors[0];
++export function dashboardPalette(dark: boolean, color: DashboardColor = "blue") {
++  const selected = dashboardColors.find(option => option.value === color) || dashboardColors[1];
+   const primary = dark ? selected.dark : selected.primary;
++  // Restore the original blue workspace palette from before the redesign.
++  if (selected.value === "blue") return {
++    primary,
++    emphasis: dark ? "#91d1ff" : "#075c96",
++    onPrimary: dark ? "#16313d" : "#ffffff",
++    surface: dark ? "#152b40" : "#ffffff",
++    layout: dark ? "#0e2031" : "#f2f9ff",
++    soft: dark ? "#1b354d" : "#edf7ff",
++    selected: dark ? "#234b6a" : "#d9efff",
++    border: dark ? "#35516b" : "#c9deee",
++    text: dark ? "#e7f2fc" : "#193b56",
++    secondary: dark ? "#aac4da" : "#4c687d",
++  };
+   return {
+     primary,
+     emphasis: dark ? primary : mix(primary, "#142c36", 0.46),
+--- live/src/lib/DashboardPreferences.tsx
++++ new/src/lib/DashboardPreferences.tsx
+@@ -1,19 +1,21 @@
+ import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+ import { DashboardColor, isDashboardColor } from "./dashboardColors";
+-const Context = createContext({ dark: false, toggleDark: () => {}, color: "green" as DashboardColor, setColor: (_color: DashboardColor) => {} });
++// A new preference key restores original blue for the earlier experimental palettes.
++const COLOR_STORAGE_KEY = "doran-color-v2";
++const Context = createContext({ dark: false, toggleDark: () => {}, color: "blue" as DashboardColor, setColor: (_color: DashboardColor) => {} });
+ export function DashboardPreferences({ children }: { children: ReactNode }) {
+   const [dark, setDark] = useState(false);
+-  const [color, setColorState] = useState<DashboardColor>("green");
++  const [color, setColorState] = useState<DashboardColor>("blue");
+   useEffect(() => {
+     try {
+       setDark(localStorage.getItem("doran-dark") === "true");
+-      const saved = localStorage.getItem("doran-color");
++      const saved = localStorage.getItem(COLOR_STORAGE_KEY);
+       if (isDashboardColor(saved)) setColorState(saved);
+     } catch { /* Preferences still work when browser storage is unavailable. */ }
+   }, []);
+   const setColor = (value: DashboardColor) => {
+     setColorState(value);
+-    try { localStorage.setItem("doran-color", value); } catch {}
++    try { localStorage.setItem(COLOR_STORAGE_KEY, value); } catch {}
+   };
+   const toggleDark = () => {
+     const next = !dark;
+--- live/src/lib/dashboardTheme.ts
++++ new/src/lib/dashboardTheme.ts
+@@ -2,7 +2,7 @@
+ import { theme } from "antd";
+ import { DashboardColor, dashboardPalette } from "./dashboardColors";
+ 
+-export function dashboardTheme(dark: boolean, color: DashboardColor = "green"): ThemeConfig {
++export function dashboardTheme(dark: boolean, color: DashboardColor = "blue"): ThemeConfig {
+   const { primary, emphasis, onPrimary, surface, soft, border, text, secondary, layout, selected } = dashboardPalette(dark, color);
+   return {
+     algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+--- live/src/styles/globals.css
++++ new/src/styles/globals.css
+@@ -266,8 +266,8 @@
+ .dashboard-user small { font-size: 11px; color: var(--ui-muted); }
+ 
+ /* JeBlast workspace: quiet surfaces and a clear navigation hierarchy. */
+-:root { --ui-text: #223a35; --ui-muted: #62736a; --ui-surface: #fff; --ui-soft: #f5f7f6; --ui-border: #e3e9e5; --ui-accent: #147d68; --ui-sort-arrow: #718079; --ui-sort-active: #147d68; --ui-sort-header: #e9f4ed; --ui-shadow: 0 2px 6px rgba(25, 55, 40, .025); }
+-:root[data-theme="dark"] { --ui-text: #e5eeeb; --ui-muted: #a5bbb3; --ui-surface: #172b2a; --ui-soft: #10201e; --ui-border: #344e48; --ui-accent: #90d8bb; --ui-sort-arrow: #a5bbb3; --ui-sort-active: #90d8bb; --ui-sort-header: #24483c; --ui-shadow: 0 2px 6px rgba(0, 0, 0, .08); }
++:root { --ui-text: #193b56; --ui-muted: #4c687d; --ui-surface: #fff; --ui-soft: #f2f9ff; --ui-border: #c9deee; --ui-accent: #075c96; --ui-color: #0875bd; --ui-on-color: #fff; --ui-sort-arrow: #52677c; --ui-sort-active: #075c96; --ui-sort-header: #d9efff; --ui-shadow: 0 6px 24px rgba(26, 85, 128, .07); }
++:root[data-theme="dark"] { --ui-text: #e7f2fc; --ui-muted: #aac4da; --ui-surface: #152b40; --ui-soft: #0e2031; --ui-border: #35516b; --ui-accent: #91d1ff; --ui-color: #65baff; --ui-on-color: #16313d; --ui-sort-arrow: #bdcee0; --ui-sort-active: #91d1ff; --ui-sort-header: #234b6a; --ui-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+ .dashboard-sidebar.ant-layout-sider { box-shadow: none; }
+ .dashboard-brand { justify-content: flex-start; padding: 24px; min-height: 88px; box-sizing: border-box; }
+ .dashboard-brand strong { font-size: 25px; letter-spacing: -1.2px; color: var(--ui-text); }

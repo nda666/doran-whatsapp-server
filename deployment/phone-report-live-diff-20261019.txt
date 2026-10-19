@@ -1,0 +1,359 @@
+--- live/src/components/PhoneReport.tsx
++++ new/src/components/PhoneReport.tsx
+@@ -0,0 +1,79 @@
++import { useEffect, useState } from "react";
++import { Alert, Button, Card, DatePicker, Form, Space, Typography, message } from "antd";
++import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SendOutlined } from "@ant-design/icons";
++import dayjs from "dayjs";
++import axios from "axios";
++import { useRouter } from "next/router";
++import { useUiTranslation } from "@/lib/uiTranslation";
++import { useDashboardApi } from "@/lib/useDashboardApi";
++import { useTableState } from "@/lib/useTableState";
++import { defaultDispatchDates } from "@/lib/dispatchDateFilter";
++import type { PhoneReportRow } from "@/lib/phoneReport";
++import Table from "@/components/DashboardTable";
++import SummaryCards from "@/components/SummaryCards";
++import FilterSelect from "@/components/FilterSelect";
++
++type Filters = { start: string; end: string; phoneId: string };
++export default function PhoneReport() {
++  const uiText = useUiTranslation();
++  const router = useRouter();
++  const table = useTableState();
++  const [form] = Form.useForm();
++  const [applied, setApplied] = useState<Filters>();
++  const linkedPhone = typeof router.query.phoneId === "string" ? router.query.phoneId : "";
++  useEffect(() => {
++    if (!router.isReady) return;
++    const dates = defaultDispatchDates();
++    const next = { start: dates.start_date, end: dates.end_date, phoneId: linkedPhone };
++    setApplied(next);
++    form.setFieldsValue({ period: [dayjs(next.start), dayjs(next.end)], phoneId: next.phoneId });
++    table.reset();
++    // Only a navigation to a different device resets the applied period.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [router.isReady, linkedPhone, form]);
++  const url = applied ? `/api/reports?view=phones&${new URLSearchParams(applied)}` : "";
++  const api = useDashboardApi<{ data: PhoneReportRow[]; total: number; counts: Pick<PhoneReportRow, "total" | "sent" | "failed" | "waiting"> }>(url ? `${url}&${table.params}` : "", 30000);
++  const phones = useDashboardApi<Array<{ id: string; name: string; number: string | null }>>("/api/phones?options=1");
++  const [exporting, setExporting] = useState(false);
++  const exportCsv = async () => {
++    setExporting(true);
++    try {
++      const result = await axios.get(`${url}&${table.params}&export=csv`, { headers: api.headers, responseType: "blob" });
++      const downloadUrl = URL.createObjectURL(result.data);
++      const link = document.createElement("a");
++      link.href = downloadUrl; link.download = `rekap-per-nomor-${applied!.start}-${applied!.end}.csv`;
++      document.body.appendChild(link); link.click(); link.remove();
++      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
++    } catch { message.error(uiText("Ekspor gagal. Coba kembali atau pilih perangkat tertentu.")); }
++    finally { setExporting(false); }
++  };
++  return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
++    <Card title={uiText("Rekap per Nomor WA")}>
++      <Form form={form} layout="vertical" colon={false} className="dashboard-filter-grid" onFinish={values => {
++        setApplied({ start: values.period[0].format("YYYY-MM-DD"), end: values.period[1].format("YYYY-MM-DD"), phoneId: values.phoneId || "" });
++        table.reset();
++      }}>
++        <Form.Item name="period" label={uiText("Periode laporan (WIB)")} rules={[{ required: true, message: uiText("Pilih tanggal mulai dan selesai.") }]}>
++          <DatePicker.RangePicker format="DD/MM/YYYY" allowClear={false} />
++        </Form.Item>
++        <Form.Item name="phoneId" label={uiText("Nomor WA / perangkat")}>
++          <FilterSelect showSearch allLabel={uiText("Semua perangkat")} options={(phones.data || []).map(phone => ({ value: phone.id, label: `${phone.number || "—"} · ${phone.name}` }))} />
++        </Form.Item>
++        <div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">{uiText("Proses")}</Button><Button disabled={!api.data || !!api.error} loading={exporting} onClick={exportCsv}>{uiText("Ekspor CSV")}</Button><Button onClick={api.reload} disabled={!url}>{uiText("Muat ulang")}</Button></div>
++      </Form>
++    </Card>
++    <Alert type="info" showIcon message={uiText("Terkirim mencakup pesan berstatus terkirim, diterima, dan dibaca; dihitung berdasarkan waktu kirim. Status lainnya berdasarkan waktu dibuat. Setiap pesan dihitung satu kali, bukan jumlah penerima unik.")} description={uiText("Tanggal mulai dan selesai mencakup satu hari penuh dalam WIB. Rekap memakai seluruh riwayat pengiriman yang masih tersimpan, tanpa batas usia tampilan antrean. Status mencerminkan kondisi terbaru; pengiriman melalui antrean aplikasi yang tercatat akan dihitung.")} />
++    {api.error && <Alert type="error" showIcon message={uiText(api.error)} />}
++    <SummaryCards title={uiText("Ringkasan pengiriman")} caption={applied ? `${dayjs(applied.start).format("DD/MM/YYYY")} – ${dayjs(applied.end).format("DD/MM/YYYY")} (WIB)` : undefined} items={[
++      { key: "total", label: uiText("Total pesan"), value: api.data?.counts.total, color: "#1677ff", icon: <SendOutlined />, unit: "pesan" },
++      { key: "sent", label: uiText("Berhasil terkirim"), value: api.data?.counts.sent, color: "#389e0d", icon: <CheckCircleOutlined />, unit: "pesan" },
++      { key: "failed", label: uiText("Gagal"), value: api.data?.counts.failed, color: "#cf1322", icon: <CloseCircleOutlined />, unit: "pesan" },
++      { key: "waiting", label: uiText("Menunggu / diproses"), value: api.data?.counts.waiting, color: "#d48806", icon: <ClockCircleOutlined />, unit: "pesan" },
++    ]} />
++    <Table<PhoneReportRow> table={table} total={api.data?.total} loading={!!url && !api.data && !api.error} rowKey="phoneId" scroll={{ x: 1000 }} dataSource={api.error ? [] : api.data?.data || []} columns={[
++      { title: uiText("Nomor WA"), dataIndex: "number", render: (value, row) => value || <Typography.Text type="secondary" title={row.phoneId}>—</Typography.Text> },
++      { title: uiText("Perangkat"), dataIndex: "name", render: (value, row) => <span title={row.phoneId}>{uiText(value)}</span> },
++      ...([ ["total", "Total pesan"], ["sent", "Berhasil terkirim"], ["failed", "Gagal"], ["waiting", "Menunggu / diproses"], ["uncertain", "Belum pasti"], ["suppressed", "Diblokir"] ] as const).map(([key, label]) => ({ title: uiText(label), dataIndex: key, align: "right" as const, render: (value: number) => value.toLocaleString(uiText.locale) })),
++    ]} />
++  </Space>;
++}
+--- live/src/lib/phoneReport.ts
++++ new/src/lib/phoneReport.ts
+@@ -0,0 +1,18 @@
++import type { WaDispatchStatus } from "@prisma/client";
++
++export type PhoneReportRow = {
++  phoneId: string; number: string; name: string;
++  total: number; sent: number; failed: number; waiting: number; uncertain: number; suppressed: number;
++};
++export const reportMetrics = ["total", "sent", "failed", "waiting", "uncertain", "suppressed"] as const;
++export function emptyReportCounts() {
++  return { total: 0, sent: 0, failed: 0, waiting: 0, uncertain: 0, suppressed: 0 };
++}
++export const successfulStatuses: WaDispatchStatus[] = ["SENT", "DELIVERED", "READ"];
++export function reportMetric(status: WaDispatchStatus): Exclude<typeof reportMetrics[number], "total"> {
++  if (successfulStatuses.includes(status)) return "sent";
++  if (status === "FAILED") return "failed";
++  if (status === "UNCERTAIN") return "uncertain";
++  if (status === "SUPPRESSED") return "suppressed";
++  return "waiting";
++}
+--- live/src/server/phoneReport.ts
++++ new/src/server/phoneReport.ts
+@@ -0,0 +1,59 @@
++import type { Prisma } from "@prisma/client";
++import type { NextApiResponse } from "next";
++import type { AuthNextApiRequest } from "@/types/global";
++import { ownerScope } from "@/lib/access";
++import { defaultDispatchDates, dispatchDateFilter } from "@/lib/dispatchDateFilter";
++import { emptyReportCounts, PhoneReportRow, reportMetric, reportMetrics, successfulStatuses } from "@/lib/phoneReport";
++import { prisma } from "@/lib/prisma";
++import { csv } from "@/server/campaigns/csv";
++import { tableQuery } from "@/lib/tableQuery";
++
++export async function phoneReport(req: AuthNextApiRequest, res: NextApiResponse) {
++  const defaults = defaultDispatchDates();
++  const hasPeriod = req.query.start !== undefined || req.query.end !== undefined;
++  const start = hasPeriod ? req.query.start : defaults.start_date;
++  const end = hasPeriod ? req.query.end : defaults.end_date;
++  let period: ReturnType<typeof dispatchDateFilter>;
++  try { period = dispatchDateFilter(start, end); }
++  catch (error) { return res.status(400).json({ message: (error as Error).message }); }
++  if (req.query.phoneId !== undefined && typeof req.query.phoneId !== "string") return res.status(400).json({ message: "Perangkat tidak valid." });
++  const scope = ownerScope(req.user!);
++  const device = req.query.phoneId ? { phoneId: req.query.phoneId as string } : {};
++  const where: Prisma.WaDispatchWhereInput = { ...scope, ...device, OR: [
++    { status: { in: successfulStatuses }, sentAt: period },
++    { status: { notIn: successfulStatuses }, createdAt: period },
++  ] };
++  // Aggregate in the database: exports and totals never depend on message pagination.
++  const [groups, phones] = await Promise.all([
++    prisma.waDispatch.groupBy({ by: ["phoneId", "status"], where, _count: { _all: true } }),
++    prisma.phone.findMany({ where: { ...scope, ...(req.query.phoneId ? { id: req.query.phoneId as string } : {}) }, select: { id: true, number: true, name: true } }),
++  ]);
++  const rows = new Map<string, PhoneReportRow>(phones.map(phone => [phone.id, { phoneId: phone.id, number: phone.number || "", name: phone.name, ...emptyReportCounts() }]));
++  for (const group of groups) {
++    // Preserve historical dispatches even if the device has since been deleted.
++    const row = rows.get(group.phoneId) || { phoneId: group.phoneId, number: "", name: "Perangkat dihapus", ...emptyReportCounts() };
++    row[reportMetric(group.status)] += group._count._all;
++    row.total += group._count._all;
++    rows.set(group.phoneId, row);
++  }
++  const data = Array.from(rows.values());
++  const counts = emptyReportCounts();
++  for (const row of data) for (const metric of reportMetrics) counts[metric] += row[metric];
++  const fields = ["number", "name", ...reportMetrics];
++  const sort = typeof req.query.sort === "string" && fields.includes(req.query.sort) ? req.query.sort as keyof PhoneReportRow : "sent";
++  const direction = req.query.order === "asc" ? 1 : -1;
++  data.sort((a, b) => {
++    const first = a[sort], second = b[sort];
++    const compared = typeof first === "number" && typeof second === "number" ? first - second : String(first).localeCompare(String(second), "id", { numeric: true });
++    return compared * direction || a.phoneId.localeCompare(b.phoneId);
++  });
++  if (req.query.export === "csv") {
++    if (data.length > 10000) return res.status(400).json({ message: "Ekspor maksimal 10.000 perangkat. Pilih perangkat tertentu." });
++    res.setHeader("Content-Type", "text/csv; charset=utf-8");
++    res.setHeader("Content-Disposition", 'attachment; filename="rekap-per-nomor.csv"');
++    return res.send(csv([["mulai_wib", "selesai_wib", "device_id", "nomor_wa", "perangkat", "total", "terkirim", "gagal", "menunggu", "belum_pasti", "diblokir"],
++      ...data.map(row => [start, end, row.phoneId, row.number, row.name, ...reportMetrics.map(metric => row[metric])])]));
++  }
++  const { page, limit, skip } = tableQuery(req.query, fields, "sent");
++  return res.json({ data: data.slice(skip, skip + limit), total: data.length, counts, page, period: { start, end } });
++}
+--- live/src/pages/api/reports.ts
++++ new/src/pages/api/reports.ts
+@@ -8,10 +8,12 @@
+ import { AuthNextApiRequest } from "@/types/global";
+ import { prisma } from "@/lib/prisma";
+ import { csv } from "@/server/campaigns/csv";
++import { phoneReport } from "@/server/phoneReport";
+ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v);
+ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
+   if (req.method !== "GET") return res.status(405).end();
+   res.setHeader("Cache-Control", "no-store");
++  if (req.query.view === "phones") return phoneReport(req, res);
+   const window = await getDispatchDisplayWindow();
+   const start = date.safeParse(req.query.start), end = date.safeParse(req.query.end);
+   const hasPeriod = req.query.start !== undefined || req.query.end !== undefined;
+--- live/src/pages/dashboard/reports.tsx
++++ new/src/pages/dashboard/reports.tsx
+@@ -3,7 +3,9 @@
+ import DispatchWindowNotice from "@/components/DispatchWindowNotice";
+ import FilterSelect from "@/components/FilterSelect";
+ import { ReactElement, useEffect, useState } from "react";
+-import { Alert, Button, Card, DatePicker, Form, Space, Tag, message } from "antd";
++import { Alert, Button, Card, DatePicker, Form, Space, Tabs, Tag, message } from "antd";
++import { useRouter } from "next/router";
++import PhoneReport from "@/components/PhoneReport";
+ import dayjs from "dayjs";
+ import axios from "axios";
+ import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+@@ -12,6 +14,15 @@
+ import { useTableState } from "@/lib/useTableState";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+ export default function Reports() {
++  const uiText = useUiTranslation();
++  const router = useRouter();
++  const activeKey = router.query.view === "details" ? "details" : "phones";
++  return <Tabs activeKey={activeKey} onChange={view => { void router.replace({ pathname: router.pathname, query: { ...router.query, view } }, undefined, { shallow: true }); }} items={[
++    { key: "phones", label: uiText("Rekap per Nomor WA"), children: <PhoneReport /> },
++    { key: "details", label: uiText("Detail pengiriman"), children: <DispatchReports /> },
++  ]} />;
++}
++function DispatchReports() {
+   const uiText = useUiTranslation();
+   const table = useTableState();
+   const [applied, setApplied] = useState<{ start: string; end: string; phoneId: string }>();
+--- live/src/components/phone/PhoneTableButton.tsx
++++ new/src/components/phone/PhoneTableButton.tsx
+@@ -12,6 +12,7 @@
+   SendOutlined,
+   UserOutlined,
+   SettingOutlined,
++  BarChartOutlined,
+ } from "@ant-design/icons";
+ import { Phone } from "@prisma/client";
+ import { MenuProps, Modal, Typography } from "antd";
+@@ -65,6 +66,7 @@
+       onClick: (e) => onGetQrCodeClick && onGetQrCodeClick(phone, e),
+     },
+     { label: uiText("Lihat Percakapan"), icon: <WechatFilled />, key: `${phone.id}-conversations`, onClick: () => { void router.push({ pathname: "/dashboard/conversations", query: { phone_id: phone.id } }); } },
++    { label: uiText("Lihat laporan"), icon: <BarChartOutlined />, key: `${phone.id}-reports`, onClick: () => { void router.push({ pathname: "/dashboard/reports", query: { view: "phones", phoneId: phone.id } }); } },
+     {
+       label: uiText("Test Kirim"),
+       key: `${phone.id}-test-send`,
+--- live/deployment/verify-phone-report.cjs
++++ new/deployment/verify-phone-report.cjs
+@@ -0,0 +1,73 @@
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const ts = require('typescript');
++const root = path.resolve(__dirname, '..');
++const fixtures = [
++  { phoneId: 'a', userId: 'owner', status: 'SENT', createdAt: '2026-10-01T00:00:00Z', sentAt: '2026-10-17T17:00:00Z' },
++  { phoneId: 'a', userId: 'owner', status: 'DELIVERED', createdAt: '2026-10-18T00:00:00Z', sentAt: '2026-10-18T16:59:59.999Z' },
++  { phoneId: 'a', userId: 'owner', status: 'READ', createdAt: '2026-10-18T00:00:00Z', sentAt: '2026-10-18T17:00:00Z' },
++  ...['FAILED', 'QUEUED', 'PROCESSING', 'UNCERTAIN', 'SUPPRESSED'].map(status => ({ phoneId: 'a', userId: 'owner', status, createdAt: '2026-10-18T00:00:00Z' })),
++  { phoneId: 'deleted', userId: 'owner', status: 'FAILED', createdAt: '2026-10-18T00:00:00Z' },
++  { phoneId: 'private', userId: 'other', status: 'SENT', createdAt: '2026-10-18T00:00:00Z', sentAt: '2026-10-18T00:00:00Z' },
++];
++const devices = [{ id: 'a', name: '=Device', number: '628123', userId: 'owner' }, { id: 'zero', name: 'No activity', number: '628456', userId: 'owner' }, { id: 'private', name: 'Private', number: '629999', userId: 'other' }];
++function matches(row, where) {
++  return Object.entries(where).every(([key, value]) => {
++    if (key === 'OR') return value.some(branch => matches(row, branch));
++    if (value && typeof value === 'object') {
++      if (value.in) return value.in.includes(row[key]);
++      if (value.notIn) return !value.notIn.includes(row[key]);
++      return row[key] && (!value.gte || new Date(row[key]) >= value.gte) && (!value.lt || new Date(row[key]) < value.lt);
++    }
++    return row[key] === value;
++  });
++}
++const prisma = {
++  waDispatch: { groupBy: async ({ where }) => {
++    const groups = new Map();
++    for (const row of fixtures.filter(row => matches(row, where))) {
++      const key = `${row.phoneId}:${row.status}`;
++      if (!groups.has(key)) groups.set(key, { phoneId: row.phoneId, status: row.status, _count: { _all: 0 } });
++      groups.get(key)._count._all++;
++    }
++    return Array.from(groups.values());
++  } },
++  phone: { findMany: async ({ where }) => devices.filter(row => matches(row, where)) },
++};
++const cache = new Map();
++function load(file) {
++  if (file === '@/lib/prisma') return { prisma };
++  if (!file.startsWith('@/')) return require(file);
++  const filename = path.join(root, 'src', file.slice(2) + '.ts');
++  if (cache.has(filename)) return cache.get(filename).exports;
++  const module = { exports: {} }; cache.set(filename, module);
++  const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } });
++  vm.runInThisContext(`(function(require,module,exports){${compiled.outputText}\n})`, { filename })(load, module, module.exports);
++  return module.exports;
++}
++const { phoneReport } = load('@/server/phoneReport');
++async function run(query = {}, admin = false) {
++  const res = { code: 200, headers: {}, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, json(data) { this.body = data; return this; }, send(data) { this.body = data; return this; } };
++  await phoneReport({ user: { id: 'owner', email: admin ? 'admin@gmail.com' : 'owner@example.com', role: admin ? 'ADMIN' : 'USER', approvalStatus: 'APPROVED' }, query: { start: '2026-10-18', end: '2026-10-18', ...query } }, res);
++  return res;
++}
++(async () => {
++  const result = (await run({ limit: '1' })).body;
++  assert.equal(result.total, 3, 'Includes zero activity and deleted device, excludes other owner');
++  assert.equal(result.data.length, 1);
++  assert.deepEqual(result.counts, { total: 8, sent: 2, failed: 2, waiting: 2, uncertain: 1, suppressed: 1 });
++  assert.equal(result.data[0].phoneId, 'a');
++  assert.equal(result.data[0].sent, 2, 'Includes old createdAt with in-period sentAt, excludes next midnight WIB');
++  assert.equal((await run({ phoneId: 'private' })).body.total, 0, 'Cannot select another owner');
++  assert.equal((await run({ phoneId: 'a' })).body.counts.total, 7);
++  assert.equal((await run({ phoneId: 'zero' })).body.data[0].total, 0);
++  assert.equal((await run({}, true)).body.counts.sent, 3, 'Admin can see across owners');
++  for (const query of [{ start: '2026-02-30' }, { start: '2026-10-19' }, { end: undefined }, { phoneId: ['a', 'private'] }]) assert.equal((await run(query)).code, 400);
++  const exported = await run({ export: 'csv', limit: '1' });
++  assert.equal(exported.body.split('\r\n').length, 4, 'Exports every row regardless of page');
++  assert.ok(exported.body.includes("'=Device"), 'CSV formula is escaped');
++  assert.equal((await run({ sort: 'number', order: 'asc', page: '2', limit: '1' })).body.data[0].phoneId, 'a');
++  console.log('Phone report: WIB boundaries, send date, all statuses, owner isolation, admin, zero/deleted devices, validation, pagination, sorting and CSV passed.');
++})().catch(error => { console.error(error); process.exitCode = 1; });
+--- live/deployment/verify-phone-report-live.cjs
++++ new/deployment/verify-phone-report-live.cjs
+@@ -0,0 +1,53 @@
++// Read-only validation against built HTTP endpoints and the existing database.
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const app = path.resolve(__dirname, '..');
++require('@next/env').loadEnvConfig(app, false, { info() {}, error() {} });
++const db = new (require('@prisma/client').PrismaClient)();
++const base = process.env.REPORT_TEST_BASE || 'https://dashboard.jeblast.com';
++(async () => {
++  const actor = await db.user.findUniqueOrThrow({ where: { email: 'admin@gmail.com' } });
++  const jwt = await require('next-auth/jwt').encode({ token: { id: actor.id, email: actor.email, sessionVersion: actor.sessionVersion }, secret: process.env.NEXTAUTH_SECRET, maxAge: 300 });
++  const cookieName = (process.env.NEXTAUTH_URL || base).startsWith('https:') ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
++  const headers = { Cookie: `${cookieName}=${jwt}` };
++  const query = '/api/reports?view=phones&start=2026-10-18&end=2026-10-18&limit=100';
++  const date = { gte: new Date('2026-10-18T00:00:00+07:00'), lt: new Date('2026-10-19T00:00:00+07:00') };
++  const sentWhere = { status: { in: ['SENT', 'DELIVERED', 'READ'] }, sentAt: date };
++  const sentBefore = await db.waDispatch.count({ where: sentWhere });
++  const reportResponse = await fetch(base + query, { headers });
++  assert.equal(reportResponse.status, 200, 'Authenticated report API');
++  const report = await reportResponse.json();
++  const sentAfter = await db.waDispatch.count({ where: sentWhere });
++  assert(report.counts.sent >= Math.min(sentBefore, sentAfter) && report.counts.sent <= Math.max(sentBefore, sentAfter), 'Report sent count matches stored send times');
++  assert.deepEqual(report.period, { start: '2026-10-18', end: '2026-10-18' });
++  for (const row of report.data) assert.equal(row.total, row.sent + row.failed + row.waiting + row.uncertain + row.suppressed);
++  assert.equal(report.counts.total, report.counts.sent + report.counts.failed + report.counts.waiting + report.counts.uncertain + report.counts.suppressed);
++  if (report.total <= 100) for (const key of ['total', 'sent', 'failed', 'waiting', 'uncertain', 'suppressed']) assert.equal(report.counts[key], report.data.reduce((sum, row) => sum + row[key], 0));
++  const exported = await fetch(base + query + '&export=csv&limit=1', { headers });
++  assert.equal(exported.status, 200, 'CSV export');
++  assert(exported.headers.get('content-type').includes('text/csv'));
++  const csv = await exported.text();
++  assert(csv.includes('"nomor_wa"') && csv.includes('"terkirim"'));
++  assert.equal((await fetch(base + query.replace('start=2026-10-18', 'start=2026-02-30'), { headers })).status, 400, 'Invalid date');
++  assert.equal((await fetch(base + query)).status, 401, 'Unauthenticated access denied');
++  if (report.data.length) {
++    const selected = report.data[0];
++    const response = await fetch(base + query + '&phoneId=' + encodeURIComponent(selected.phoneId), { headers });
++    assert.equal(response.status, 200);
++    const single = await response.json();
++    assert.equal(single.total, 1);
++    assert.equal(single.data[0].phoneId, selected.phoneId);
++  }
++  const detail = await fetch(base + '/api/reports?start=2026-10-18&end=2026-10-18&limit=1', { headers });
++  assert.equal(detail.status, 200, 'Existing detail API preserved');
++  assert('display_window' in await detail.json());
++  const page = await fetch(base + '/dashboard/reports?view=phones', { headers, redirect: 'manual' });
++  assert.equal(page.status, 200, 'Report page');
++  const html = await page.text();
++  assert(html.includes('Rekap per Nomor WA') && html.includes('Detail pengiriman'));
++  const build = fs.readFileSync(path.join(app, '.next/BUILD_ID'), 'utf8').trim();
++  assert(html.includes('"buildId":"' + build + '"'), 'Served build matches deployed build');
++  for (const url of new Set(Array.from(html.matchAll(/src="([^"]+\.js(?:\?[^"]*)?)"/g), match => match[1]))) assert.equal((await fetch(new URL(url, base))).status, 200, 'Production JS asset available');
++  console.log('REPORT_HTTP_DB_CSV_VALIDATION_PASSED', JSON.stringify({ base, build, devices: report.total, sent: report.counts.sent, period: report.period }));
++})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

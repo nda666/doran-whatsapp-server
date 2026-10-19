@@ -1,5 +1,5 @@
 import { getToken } from 'next-auth/jwt';
-import withAuth from 'next-auth/middleware';
+import { localizedPath } from './lib/localizedPath';
 import {
   NextFetchEvent,
   NextRequest,
@@ -12,29 +12,23 @@ export default async function middleware(
 ) {
   const token = await getToken({ req });
   const isAuthenticated = !!token;
+  const baseUrl = process.env.NEXTAUTH_URL || req.nextUrl.origin;
 
-  if (req.nextUrl.pathname === "/signup") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  const guestUrl = ["/", "/signin"];
+  const guestUrl = ["/", "/signin", "/signup"];
   if (guestUrl.includes(req.nextUrl.pathname) && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL(localizedPath("/dashboard", req.nextUrl.locale), baseUrl));
   }
 
   if (guestUrl.includes(req.nextUrl.pathname) && !isAuthenticated) {
     return NextResponse.next();
   }
 
-  const authMiddleware = await withAuth({
-    pages: {
-      signIn: `/signin`,
-      newUser: `/signup`,
-    },
-  });
-
-  // @ts-expect-error
-  return authMiddleware(req, event);
+  if (!isAuthenticated) {
+    const signinUrl = new URL(localizedPath("/signin", req.nextUrl.locale), baseUrl);
+    signinUrl.searchParams.set("callbackUrl", localizedPath(req.nextUrl.pathname, req.nextUrl.locale) + req.nextUrl.search);
+    return NextResponse.redirect(signinUrl);
+  }
+  return NextResponse.next();
 }
 
 export const config = {

@@ -1,7 +1,7 @@
-import { proto, WAMessage } from "@whiskeysockets/baileys";
+import { proto, WAMessage, normalizeMessageContent } from "@whiskeysockets/baileys";
 
 export const getWaMesage = (messages: WAMessage[]) => {
-  const m = messages[0]?.message;
+  const m = normalizeMessageContent(messages[0]?.message);
   if (!m) {
     return { messageIn: null, quotedMessage: null, messageType: null };
   }

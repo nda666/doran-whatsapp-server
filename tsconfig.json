@@ -22,5 +22,5 @@
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "prisma/seeds/seeder.js"],
   // "exclude": ["node_modules"]
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "tmp", "output", "deployment"]
 }

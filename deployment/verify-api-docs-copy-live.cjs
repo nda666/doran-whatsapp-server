@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  const owner = await p.user.findFirst({ where: { role: 'ADMIN' } });
+  assert(owner);
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: owner.id, token: owner.token, name: owner.name, email: owner.email }, secret: process.env.NEXTAUTH_SECRET });
+  const base = 'https://dashboard.jeblast.com';
+  const response = await fetch(base + '/dashboard/api-docs', { redirect: 'manual', headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert(html.includes('Pesan dengan tombol atau daftar pilihan mungkin tidak tampil di semua versi WhatsApp penerima.'));
+  assert(html.includes('Authorization: Bearer TOKEN_DEVICE'));
+  assert(html.includes('token bisa tersimpan dalam catatan akses server (log).'));
+  assert(!html.includes('Tombol/list bergantung pada dukungan klien WhatsApp.'));
+  const data = JSON.parse(html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)[1]);
+  assert.equal(data.buildId, require('node:fs').readFileSync('.next/BUILD_ID', 'utf8').trim());
+  const chunk = html.match(/src="([^"]*\/pages\/dashboard\/api-docs-[^"]+\.js)"/);
+  assert(chunk, 'API docs chunk missing');
+  const asset = await fetch(new URL(chunk[1], base));
+  assert.equal(asset.status, 200);
+  assert((await asset.text()).includes('Pesan dengan tombol atau daftar pilihan'));
+  console.log('API_DOCS_PUBLIC_AUTHENTICATED_HTML_AND_JS_COPY_VERIFIED', data.buildId);
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => p.$disconnect());

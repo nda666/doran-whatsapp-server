@@ -1,0 +1,159 @@
+--- live/src/pages/dashboard/phone.tsx
++++ new/src/pages/dashboard/phone.tsx
+@@ -15,7 +15,7 @@
+   useState,
+ } from "react";
+ 
+-import { Alert, Button, Flex, Modal, notification, Space, Switch, Tag } from "antd";
++import { Alert, Button, Flex, Modal, notification, Space, Switch, Tag, theme } from "antd";
+ import { ColumnsType } from "antd/es/table";
+ import dayjs from "dayjs";
+ import { useSession } from "next-auth/react";
+@@ -45,6 +45,9 @@
+ 
+ const PhonePage = () => {
+   const uiText = useUiTranslation();
++  // Warna status berasal dari token dan ikut berubah bersama aksen tema.
++  const { token } = theme.useToken();
++  const statusColor = (color: string) => `color-mix(in srgb, ${color} 80%, var(--ui-accent))`;
+   const router = useRouter();
+   const searchState = readPhoneSearchState(router.query);
+   const replaceSearch = (next: typeof searchState) => {
+@@ -398,31 +401,33 @@
+     <>
+       <Flex gap="middle" vertical>
+         <SummaryCards title={uiText("Ringkasan perangkat")} caption={uiText("Seluruh perangkat yang dapat diakses akun Anda • diperbarui otomatis setiap 10 detik")} items={[
+-          { key: "total", label: uiText("Jumlah perangkat"), value: summary.data?.total, color: "#1684d6", icon: <MobileOutlined /> },
+-          { key: "online", label: uiText("Online"), value: summary.data?.online, color: "#20a66a", icon: <WifiOutlined /> },
+-          { key: "offline", label: uiText("Offline"), value: summary.data?.offline, color: "#8b94a5", icon: <DisconnectOutlined /> },
+-          { key: "active", label: uiText("Aktif"), value: summary.data?.active, color: "#7464d9", icon: <CheckCircleOutlined /> },
+-          { key: "inactive", label: uiText("Tidak aktif"), value: summary.data?.inactive, color: "#df8a26", icon: <StopOutlined /> },
++          { key: "total", label: uiText("Jumlah perangkat"), value: summary.data?.total, color: statusColor(token.colorInfoText), icon: <MobileOutlined /> },
++          { key: "online", label: uiText("Online"), value: summary.data?.online, color: statusColor(token.colorSuccessText), icon: <WifiOutlined /> },
++          { key: "offline", label: uiText("Offline"), value: summary.data?.offline, color: statusColor(token.colorTextSecondary), icon: <DisconnectOutlined /> },
++          { key: "active", label: uiText("Aktif"), value: summary.data?.active, color: statusColor(token.purple6), icon: <CheckCircleOutlined /> },
++          { key: "inactive", label: uiText("Tidak aktif"), value: summary.data?.inactive, color: statusColor(token.colorWarningText), icon: <StopOutlined /> },
+         ]} />
+         {summary.error && <Alert type="error" showIcon message={uiText(summary.error)} />}
+         {policies.error && <Alert type="warning" showIcon message={uiText("Kesehatan dan kebijakan pengiriman belum dapat diperbarui")} description={uiText(policies.error)} />}
+         {phoneData.connectionStatusError && <Alert type="warning" showIcon message={uiText("Status koneksi belum dapat diperbarui")} description={uiText("Sambungan ke server bermasalah. Tunggu pembaruan berikutnya atau muat ulang. Jangan scan QR sebelum status sesi berhasil diperiksa.")} />}
+-        <Flex gap="middle" wrap="wrap">
++        {/* Hierarki aksi: primary solid, secondary outline, dan aksi netral. */}
++        <Flex className="phone-actions" gap="middle" wrap="wrap">
+           <Button
++            className="phone-action-primary"
+             type="primary"
+             onClick={() => setState({ ...state, openForm: true })}
+           >
+             {t("add_devices")}
+           </Button>
+-          <Button onClick={() => replaceSearch({ ...searchState, showSearch: !showSearch })}>
++          <Button type="text" onClick={() => replaceSearch({ ...searchState, showSearch: !showSearch })}>
+             {showSearch ? t("hide_search") : t("show_search")}
+           </Button>
+-          <Button disabled={!selectedPhoneIds.length || generatingTokens} onClick={() => confirmGenerateTokens(selectedPhoneIds.map(String))}>
++          <Button type="text" disabled={!selectedPhoneIds.length || generatingTokens} onClick={() => confirmGenerateTokens(selectedPhoneIds.map(String))}>
+             {uiText("Buat token Terpilih (")}{selectedPhoneIds.length})
+           </Button>
+-          <Button disabled={generatingTokens} onClick={() => confirmGenerateTokens()}>
++          <Button className="phone-action-secondary" disabled={generatingTokens} onClick={() => confirmGenerateTokens()}>
+             {uiText("Buat token untuk semua perangkat")}</Button>
+-          {!!selectedPhoneIds.length && <Button disabled={generatingTokens} onClick={() => setSelectedPhoneIds([])}>{uiText("Hapus Pilihan")}</Button>}
++          {!!selectedPhoneIds.length && <Button type="text" disabled={generatingTokens} onClick={() => setSelectedPhoneIds([])}>{uiText("Hapus Pilihan")}</Button>}
+         </Flex>
+         <PhoneFormModal
+           ref={form}
+--- live/src/styles/SummaryCards.module.css
++++ new/src/styles/SummaryCards.module.css
+@@ -7,7 +7,8 @@
+ .card { position: relative; overflow: hidden; min-width: 0; padding: 14px 18px; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); box-shadow: var(--ui-shadow); border-top: 3px solid var(--summary-color); }
+ .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; }
+ .label { color: var(--ui-text); font-size: 14px; font-weight: 600; line-height: 1.5; }
+-.icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; color: var(--summary-color); background: var(--ui-soft); font-size: 18px; }
++/* Lingkaran lembut memakai warna status, tanpa warna latar statis. */
++.icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; color: var(--summary-color); background: color-mix(in srgb, var(--summary-color) 14%, transparent); font-size: 18px; }
+ .value { margin: 8px 0 3px; color: var(--ui-text); font-size: 36px; line-height: 1.15; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; letter-spacing: -1px; }
+ .unit { display: flex; align-items: baseline; gap: 7px; color: var(--ui-muted); font-size: 12px; line-height: 1.6; }
+ .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--summary-color); }
+@@ -18,7 +19,7 @@
+   .grid, .grid[data-count="5"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+   .card { padding: 10px 12px; border-radius: 12px; }
+   .top { align-items: flex-start; }
+-  .icon { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
++  .icon { width: 30px; height: 30px; font-size: 17px; }
+   .label { font-size: 13px; }
+   .value { font-size: 30px; margin: 6px 0 2px; }
+ }
+--- live/src/styles/globals.css
++++ new/src/styles/globals.css
+@@ -243,7 +243,7 @@
+   .dashboard-content { padding: 16px 12px 24px; }
+   .dashboard-header-actions { width: 100%; }
+   .dashboard-search { width: min(220px, 45vw); }
+-  .theme-toggle-label, .dashboard-signout span:not(.anticon) { display: none; }
++  .dashboard-signout span:not(.anticon) { display: none; }
+   .dashboard-page-title { font-size: 15px; }
+ }
+ @media (prefers-reduced-motion: reduce) {
+@@ -281,15 +281,19 @@
+ .dashboard-sidebar.ant-layout-sider-collapsed .dashboard-brand { padding-inline: 20px; }
+ .dashboard-sidebar.ant-layout-sider-collapsed .ant-menu { padding-inline: 4px; }
+ .dashboard-header.ant-layout-header { min-height: 76px; padding: 12px 32px; box-shadow: none; }
+-.dashboard-page-title { font-size: 14px; font-weight: 600; letter-spacing: 0; }
++/* Judul dan breadcrumb mempertahankan kapitalisasi teks terjemahan. */
++.dashboard-page-title { font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; }
++.dashboard-breadcrumb { text-transform: none; }
+ .dashboard-header-actions { gap: 12px !important; }
+ .dashboard-header-actions > .ant-space-item { min-width: 0; }
+-.dashboard-header-actions .theme-toggle-label { display: none; }
++/* Label tema tetap terlihat berdampingan dengan pemilih warna. */
++.dashboard-header-actions .theme-toggle-label { display: inline; }
+ .dashboard-header-actions .ant-btn { box-shadow: none; }
+ .dashboard-search { width: 230px; }
+ .dashboard-user { border: 0; background: transparent; padding: 3px 0 3px 12px; border-inline-start: 1px solid var(--ui-border); border-radius: 0; }
+ .dashboard-user .ant-avatar { background: var(--ui-selected, #e7f2eb); color: var(--ui-accent); font-weight: 600; }
+-.dashboard-user small { display: none; }
++/* Nama dan email ditampilkan bertingkat di samping avatar. */
++.dashboard-user small { display: block; max-width: 160px; line-height: 1.5; }
+ .dashboard-user strong { max-width: 140px; font-weight: 500; font-size: 12px; }
+ .dashboard-user > .anticon { font-size: 9px; color: var(--ui-muted); }
+ .dashboard-content { padding: 28px 32px 40px; }
+@@ -300,24 +304,34 @@
+ @media (min-width: 768px) and (max-width: 1250px) { .dashboard-search { width: 180px; } .dashboard-header.ant-layout-header { padding-inline: 24px; } .dashboard-user strong { max-width: 100px; } }
+ @media (max-width: 767px) {
+   .dashboard-content { padding: 16px 16px 28px; }
+-  .dashboard-header.ant-layout-header { min-height: 64px; padding: 12px 16px; flex-wrap: nowrap; gap: 8px; }
+-  .dashboard-header-actions { width: auto; flex-wrap: nowrap !important; gap: 8px !important; }
++  .dashboard-header.ant-layout-header { min-height: 64px; padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
++  .dashboard-header-actions { width: 100%; flex-wrap: wrap !important; gap: 8px !important; }
+   .dashboard-search { display: none; }
+   .dashboard-user { padding: 0; border: 0; }
+-  .dashboard-user > div, .dashboard-user > .anticon { display: none; }
++  .dashboard-user > div { display: block; }
++  .dashboard-user > .anticon { display: none; }
+   .dashboard-user .ant-avatar { width: 32px; height: 32px; line-height: 32px; }
+   .dashboard-breadcrumb { margin-bottom: 16px; }
+   .dashboard-page-title { font-size: 13px; }
+ }
+ 
+ @media (max-width: 767px) { .dashboard-mobile-search { display: inline-flex; } }
+-@media (max-width: 380px) { .dashboard-heading .dashboard-page-title { display: none; } }
++@media (max-width: 380px) { .dashboard-heading .dashboard-page-title { display: inline; } }
+ 
+ .dashboard-color-option { display: inline-flex; align-items: center; gap: 10px; min-width: 110px; padding-block: 3px; }
+ .dashboard-color-swatch { display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; border: 1px solid rgba(127, 127, 127, .25); }
+ .dashboard-color-current { background: var(--ui-color, var(--ui-accent)); }
+ @media (max-width: 380px) { .dashboard-header-actions { gap: 4px !important; } }
+ 
++/* Aksi perangkat mengikuti variabel tema, termasuk hover dan disabled. */
++.phone-actions .ant-btn { height: auto; min-height: 38px; white-space: normal; text-align: center; }
++.phone-actions .phone-action-primary:not(:disabled) { background: var(--ui-color); color: var(--ui-on-color); border: 1px solid var(--ui-accent); }
++.phone-actions .phone-action-secondary:not(:disabled) { background: var(--ui-surface); color: var(--ui-accent); border: 1px solid var(--ui-accent); }
++.phone-actions .phone-action-primary:not(:disabled):hover,
++.phone-actions .phone-action-primary:not(:disabled):active { background: var(--ui-accent); color: var(--ui-surface); border-color: var(--ui-accent); }
++.phone-actions .phone-action-secondary:not(:disabled):hover,
++.phone-actions .phone-action-secondary:not(:disabled):active { background: var(--ui-selected); color: var(--ui-accent); border-color: var(--ui-accent); }
++.phone-actions .ant-btn:disabled { color: var(--ui-muted); background: var(--ui-soft); border: 1px dashed var(--ui-border); opacity: .6; cursor: not-allowed; box-shadow: none; }
+ 
+ /* Device settings: one readable row per setting and a separate action footer. */
+ .device-settings-modal .ant-modal-content { padding: 0; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 18px; }

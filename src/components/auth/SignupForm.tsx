@@ -1,5 +1,6 @@
+import { useUiTranslation } from "@/lib/uiTranslation";
 import { Form, Input, Button, FormInstance } from "antd";
-import { useTranslation } from "next-i18next";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 export type SignupData = {
   name: string;
   email: string;
@@ -12,7 +13,8 @@ type SignupFormProps = {
   form: FormInstance<SignupData> | undefined;
 };
 const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
-  const { t } = useTranslation(["translation", "common"]);
+  const uiText = useUiTranslation();
+  const { t } = useTranslation("common");
   const _onSubmit = (data: SignupData) => {
     onSubmit(data);
   };
@@ -31,9 +33,9 @@ const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
         rules={[
           {
             required: true,
-            message: t("required", {
+            message: t("validation.required", {
               field: t("name", { ns: "common" }),
-              ns: "form",
+              ns: "common",
             }).toString(),
           },
         ]}
@@ -41,17 +43,17 @@ const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Email"
+        label={uiText("Email")}
         name="email"
         rules={[
           {
             required: true,
-            message: "Please enter your email!",
+            message: uiText("Please enter your email!"),
           },
           {
             required: true,
             type: "email",
-            message: "Please enter valid E-mail!",
+            message: uiText("Please enter valid E-mail!"),
           },
         ]}
       >
@@ -64,18 +66,22 @@ const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
         rules={[
           {
             required: true,
-            message: t("required", {
+            message: t("validation.required", {
               field: t("password", { ns: "common" }),
-              ns: "form",
+              ns: "common",
             }).toString(),
           },
           {
             min: 6,
-            message: t("min", {
+            message: t("validation.min", {
               field: t("password", { ns: "common" }),
               value: 6,
-              ns: "form",
+              ns: "common",
             }).toString(),
+          },
+          {
+            max: 72,
+            message: uiText("Kata sandi maksimal 72 karakter."),
           },
         ]}
       >
@@ -88,7 +94,7 @@ const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
         rules={[
           {
             required: true,
-            message: t("password_confirm", { ns: "form" }).toString(),
+            message: t("validation.password_confirm", { ns: "common" }).toString(),
           },
           ({ getFieldValue }) => ({
             validator(_, value) {
@@ -96,7 +102,7 @@ const SignupForm = ({ onSubmit, loading, form }: SignupFormProps) => {
                 return Promise.resolve();
               }
               return Promise.reject(
-                new Error(t("password_not_match", { ns: "form" }).toString())
+                new Error(t("validation.password_not_match", { ns: "common", defaultValue: "Konfirmasi kata sandi tidak sama." }).toString())
               );
             },
           }),

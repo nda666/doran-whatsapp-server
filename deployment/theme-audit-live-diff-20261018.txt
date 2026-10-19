@@ -1,0 +1,398 @@
+--- live/src/components/Layout.tsx
++++ local/src/components/Layout.tsx
+@@ -4,6 +4,7 @@
+ import type { MenuProps } from "antd";
+ import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
+ import Link from "next/link";
++import Head from "next/head";
+ import { useRouter } from "next/router";
+ import { useDashboardPreferences } from "@/lib/DashboardPreferences";
+ import { dashboardColors, isDashboardColor } from "@/lib/dashboardColors";
+@@ -47,7 +48,7 @@
+     { href: "/dashboard/phone", label: t("phone_devices"), icon: <WhatsAppOutlined /> },
+     { href: "/dashboard/campaigns", label: uiText("Kampanye pesan"), icon: <SendOutlined /> },
+     { href: "/dashboard/calendar", label: uiText("Kalender pengiriman"), icon: <CalendarOutlined /> },
+-    { href: "/dashboard/dispatch", label: uiText("Antrean Pengiriman"), icon: <OrderedListOutlined /> },
++    { href: "/dashboard/dispatch", label: uiText("Antrean pengiriman"), icon: <OrderedListOutlined /> },
+     { href: "/dashboard/contacts", label: ui("Kontak"), icon: <ContactsOutlined />, dividerBefore: true },
+     { href: "/dashboard/message-templates", label: uiText("Templat pesan"), icon: <MessageOutlined /> },
+     { href: "/dashboard/media", label: uiText("Pengelola berkas"), icon: <FolderOpenOutlined /> },
+@@ -56,7 +57,7 @@
+     { href: "/dashboard/ai-plugins", label: uiText("Plugin AI"), icon: <SettingOutlined />, dividerBefore: true },
+     { href: "/dashboard/api-docs", label: uiText("Dokumentasi API"), icon: <ApiOutlined /> },
+     { href: "/dashboard/admin", label: uiText("Administrasi"), icon: <SettingOutlined />, dividerBefore: true },
+-    { href: "/dashboard/plans", label: uiText("Master Paket"), icon: <FolderOpenOutlined /> },
++    { href: "/dashboard/plans", label: uiText("Master paket"), icon: <FolderOpenOutlined /> },
+   ];
+   const menuItems: MenuProps["items"] = navigation
+     .filter(item => !isSuperAdminPage(item.href) || superAdmin)
+@@ -66,9 +67,14 @@
+     });
+   // Auto reply is reached from a device, so keep that device menu highlighted.
+   const selectedKey = router.pathname === "/dashboard/auto-reply" ? "/dashboard/phone" : router.pathname;
++  const pageTitle = navigation.find(item => item.href === router.pathname)?.label || uiText(title || "Dasbor");
+ 
+   return (
+     <AntdLayout className="dashboard-shell"><a className="dashboard-skip-link" href="#dashboard-content">{uiText("Langsung ke konten")}</a>
++      <Head>
++        <title>{`${pageTitle} · Doran WA`}</title>
++        <meta name="description" content={`${pageTitle} · Doran WA. ${uiText("Kelola perangkat WhatsApp dan pengiriman pesan Anda.")}`} key="description" />
++      </Head>
+       {mobile && !collapsed && <button className="sidebar-backdrop" aria-label={uiText("Tutup menu")} onClick={() => setCollapsed(true)} />}
+       <Sider className="dashboard-sidebar" width={248} trigger={null} collapsible collapsed={collapsed}
+         collapsedWidth={mobile ? 0 : 80} breakpoint="lg" theme="light"
+--- live/src/components/DashboardCharts.tsx
++++ local/src/components/DashboardCharts.tsx
+@@ -1,5 +1,6 @@
+ import { useUiTranslation, type UiTranslator } from "@/lib/uiTranslation";
+ import { Empty, Space, Typography, theme } from "antd";
++import { countAxis } from "@/lib/chartScale";
+ 
+ export type ChartItem = { label: string; count: number; color: string; detail?: string };
+ const number = (uiText: UiTranslator, value: number) => value.toLocaleString(uiText.locale);
+@@ -48,13 +49,15 @@
+   const uiText = useUiTranslation();
+   const { token } = theme.useToken();
+   const max = Math.max(1, ...items.map(item => item.count));
++  const axis = countAxis(max);
+   if (!items.some(item => item.count)) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={uiText("Belum ada pesan terkirim pada periode ini")} />;
+   const slot = showValues ? Math.max(64, number(uiText, max).length * 8 + 16) : 18;
+-  const width = Math.max(420, items.length * slot + 58), plot = width - 58;
++  const left = Math.max(44, number(uiText, axis.max).length * 7 + 12);
++  const width = Math.max(420, items.length * slot + left + 14), plot = width - left - 14;
+   return <div style={{ overflowX: "auto" }}>
+     <svg role="img" aria-label={label} viewBox={`0 0 ${width} 220`} style={{ display: "block", width: "100%", minWidth: width, height: 220 }}>
+-      {[0, 0.5, 1].map(ratio => <g key={ratio}><line x1="44" x2={width - 10} y1={175 - ratio * 145} y2={175 - ratio * 145} stroke={token.colorBorderSecondary} /><text x="37" y={179 - ratio * 145} textAnchor="end" fontSize="10" fill={token.colorTextSecondary}>{number(uiText, Math.ceil(max * ratio))}</text></g>)}
+-      {items.map((item, i) => { const x = 48 + i * plot / items.length, barWidth = plot / items.length * 0.65, height = item.count / max * 145; return <g key={item.label}>
++      {axis.ticks.map(tick => { const y = 175 - tick / axis.max * 145; return <g key={tick}><line x1={left} x2={width - 10} y1={y} y2={y} stroke={token.colorBorderSecondary} /><text x={left - 7} y={y + 4} textAnchor="end" fontSize="10" fill={token.colorTextSecondary}>{number(uiText, tick)}</text></g>; })}
++      {items.map((item, i) => { const x = left + 4 + i * plot / items.length, barWidth = plot / items.length * 0.65, height = item.count / axis.max * 145; return <g key={item.label}>
+         <title>{uiText("{{v0}}: {{v1}} pesan", { v0: item.label, v1: number(uiText, item.count) })}</title>
+         <rect x={x} y={175 - height} width={barWidth} height={height} fill={item.color} rx="3" />
+         {showValues && <text data-chart-value={item.count} x={x + barWidth / 2} y={175 - height - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill={token.colorText}>{number(uiText, item.count)}</text>}
+--- live/src/lib/chartScale.ts
++++ local/src/lib/chartScale.ts
+@@ -0,0 +1,10 @@
++/** Integer count axis with 1/2/5 intervals and enough room for the largest value. */
++export function countAxis(maximum: number) {
++  const max = Number.isFinite(maximum) ? Math.max(1, maximum) : 1;
++  const targetStep = max / 3;
++  const magnitude = 10 ** Math.floor(Math.log10(targetStep));
++  const fraction = targetStep / magnitude;
++  const step = Math.max(1, (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude);
++  const intervals = Math.ceil(max / step);
++  return { max: intervals * step, ticks: Array.from({ length: intervals + 1 }, (_, index) => index * step) };
++}
+--- live/src/pages/dashboard/index.tsx
++++ local/src/pages/dashboard/index.tsx
+@@ -11,6 +11,7 @@
+ import Layout from "@/components/Layout";
+ import { ActivityChart, DistributionChart, RankingChart } from "@/components/DashboardCharts";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
++import { version } from "../../../package.json";
+ 
+ type DashboardData = {
+   devices: number; online: number; unrestricted: boolean; deviceLimit: number; plan: string; subscriptionExpiresAt?: string;
+@@ -21,14 +22,14 @@
+   topDevices: { phoneId: string; name: string; number: string; count: number }[];
+ };
+ const statuses = (uiText: UiTranslator) => ([
+-  { key: "QUEUED", label: uiText("Menunggu"), color: "#f4cc83" },
+-  { key: "PROCESSING", label: uiText("Diproses"), color: "#89deda" },
+-  { key: "SENT", label: uiText("Terkirim"), color: "#83c9f4" },
+-  { key: "DELIVERED", label: uiText("Diterima"), color: "#79dfbb" },
+-  { key: "READ", label: uiText("Dibaca"), color: "#c5aff1" },
+-  { key: "FAILED", label: uiText("Gagal"), color: "#f3a0b0" },
+-  { key: "SUPPRESSED", label: uiText("Diblokir"), color: "#b5c8d6" },
+-  { key: "UNCERTAIN", label: uiText("Perlu diperiksa"), color: "#f3b98d" },
++  { key: "QUEUED", label: uiText("Menunggu"), color: "var(--chart-queued, #f4cc83)" },
++  { key: "PROCESSING", label: uiText("Diproses"), color: "var(--chart-processing, #89deda)" },
++  { key: "SENT", label: uiText("Terkirim"), color: "var(--chart-sent, #83c9f4)" },
++  { key: "DELIVERED", label: uiText("Diterima"), color: "var(--chart-delivered, #79dfbb)" },
++  { key: "READ", label: uiText("Dibaca"), color: "var(--chart-read, #c5aff1)" },
++  { key: "FAILED", label: uiText("Gagal"), color: "var(--chart-failed, #f3a0b0)" },
++  { key: "SUPPRESSED", label: uiText("Diblokir"), color: "var(--chart-suppressed, #b5c8d6)" },
++  { key: "UNCERTAIN", label: uiText("Perlu diperiksa"), color: "var(--chart-uncertain, #f3b98d)" },
+ ]);
+ const number = (uiText: UiTranslator, value: number) => value.toLocaleString(uiText.locale);
+ 
+@@ -58,14 +59,14 @@
+     <Row gutter={[20, 20]}>
+       <Col xs={24} xl={16}><Card className={styles.panel} title={uiText("Aktivitas pengiriman")} loading={loading} extra={<Tooltip title={period}><span className={styles.period}>{days ? uiText("{{v0}} hari terakhir", { v0: days }) : uiText("Periode pengiriman")} <InfoCircleOutlined /></span></Tooltip>}>
+         <div className={styles.chartSummary}><strong>{number(uiText, d?.series.reduce((sum, r) => sum + r.count, 0) || 0)}</strong><span>{uiText("pesan terkirim dalam periode ini")}</span><span className={styles.legend}><i />  {uiText("Terkirim")}</span></div>
+-        <ActivityChart showValues label={uiText("Grafik pesan terkirim {{v0}} hari (WIB)", { v0: days || "" })} items={(d?.series || []).map(r => ({ label: dayjs(r.day).format("DD/MM"), count: r.count, color: "#79dfbb" }))} />
++        <ActivityChart showValues label={uiText("Grafik pesan terkirim {{v0}} hari (WIB)", { v0: days || "" })} items={(d?.series || []).map(r => ({ label: dayjs(r.day).format("DD/MM"), count: r.count, color: "var(--chart-delivered, #79dfbb)" }))} />
+         <p className={styles.caption}>{period}  {uiText("· Berdasarkan tanggal terkirim (WIB).")}</p>
+       </Card></Col>
+       <Col xs={24} xl={8}><Card className={styles.panel} title={uiText("Kondisi perangkat")} loading={loading} extra={<Link href="/dashboard/phone" aria-label={uiText("Lihat semua perangkat")}><ArrowRightOutlined /></Link>}>
+         <DistributionChart label={uiText("Kondisi perangkat saat ini")} items={[
+-          { label: uiText("Aktif & online"), count: d?.deviceHealth.online || 0, color: "#79dfbb" },
+-          { label: uiText("Aktif & offline"), count: d?.deviceHealth.offline || 0, color: "#f4cc83" },
+-          { label: uiText("Nonaktif"), count: d?.deviceHealth.inactive || 0, color: "#b5c8d6" },
++          { label: uiText("Aktif & online"), count: d?.deviceHealth.online || 0, color: "var(--chart-delivered, #79dfbb)" },
++          { label: uiText("Aktif & offline"), count: d?.deviceHealth.offline || 0, color: "var(--chart-queued, #f4cc83)" },
++          { label: uiText("Nonaktif"), count: d?.deviceHealth.inactive || 0, color: "var(--chart-suppressed, #b5c8d6)" },
+         ]} />
+         <Link className={styles.shortcut} href="/dashboard/phone"><span>{d?.deviceHealth.offline ? uiText("{{v0}} perangkat offline perlu diperiksa", { v0: number(uiText, d.deviceHealth.offline) }) : uiText("Kelola koneksi perangkat")}</span><ArrowRightOutlined /></Link>
+       </Card></Col>
+@@ -73,20 +74,21 @@
+     <MessagingAnalytics />
+     <div className={styles.sectionHeading}><div><h2>{uiText("Lebih dekat dengan pengiriman Anda")}</h2><p>{uiText("Distribusi status, waktu pengiriman, dan perangkat teratas.")}</p></div><Link href="/dashboard/reports" className={styles.textLink}>{uiText("Laporan lengkap")} <ArrowRightOutlined /></Link></div>
+     <Row gutter={[20, 20]}>
+-      <Col xs={24} xl={12}><Card className={styles.panel} title={uiText("Status pengiriman")} loading={loading} extra={<Link href="/dashboard/dispatch">{uiText("Lihat antrean")} <ArrowRightOutlined /></Link>}>
++      <Col xs={24} xl={12}><Card className={`${styles.panel} ${styles.contentPanel}`} title={uiText("Status pengiriman")} loading={loading} extra={<Link href="/dashboard/dispatch">{uiText("Lihat antrean")} <ArrowRightOutlined /></Link>}>
+         <DistributionChart label={uiText("Distribusi status pesan dalam periode pengiriman")} items={statuses(uiText).map(s => ({ ...s, count: d?.periodCounts[s.key] || 0 }))} />
+         <p className={styles.caption}>{uiText("Status terkini pesan yang masuk antrean pada periode ini. Diterima dan dibaca mengikuti laporan WhatsApp.")}</p>
+       </Card></Col>
+       <Col xs={24} xl={12}><Card className={styles.panel} title={uiText("Perangkat paling aktif")} loading={loading} extra={<span className={styles.period}>{uiText("TOP 5")}</span>}>
+-        <RankingChart items={(d?.topDevices || []).map(r => ({ label: r.name, detail: r.number || r.phoneId, count: r.count, color: "#79dfbb" }))} />
++        <RankingChart items={(d?.topDevices || []).map(r => ({ label: r.name, detail: r.number || r.phoneId, count: r.count, color: "var(--chart-delivered, #79dfbb)" }))} />
+         <p className={styles.caption}>{uiText("Berdasarkan jumlah pesan terkirim dalam periode pengiriman.")}</p>
+       </Card></Col>
+       <Col xs={24}><Card className={styles.panel} title={uiText("Waktu pengiriman")} loading={loading} extra={<span className={styles.period}>{uiText("Zona waktu WIB")}</span>}>
+-        <ActivityChart label={uiText("Jumlah pesan terkirim menurut jam WIB")} items={(d?.hourly || []).map(r => ({ label: String(r.hour).padStart(2, "0"), count: r.count, color: "#89deda" }))} />
++        <ActivityChart label={uiText("Jumlah pesan terkirim menurut jam WIB")} items={(d?.hourly || []).map(r => ({ label: String(r.hour).padStart(2, "0"), count: r.count, color: "var(--chart-processing, #89deda)" }))} />
+         <p className={styles.caption}>{uiText("Total pesan terkirim pada setiap jam dari seluruh tanggal dalam periode ini, bukan rata-rata harian. Hari pertama dan terakhir dapat mencakup sebagian hari.")}</p>
+       </Card></Col>
+     </Row>
+-    <footer className={styles.note}><InfoCircleOutlined />  {uiText("Data pengiriman mengikuti pengaturan maksimal usia antrean (1 hari = 24 jam). Kondisi perangkat menunjukkan keadaan saat ini.")}</footer>
++    <div className={styles.note}><InfoCircleOutlined />  {uiText("Data pengiriman mengikuti pengaturan maksimal usia antrean (1 hari = 24 jam). Kondisi perangkat menunjukkan keadaan saat ini.")}</div>
++    <footer className={styles.footer}>Doran WA v{version} · © 2026</footer>
+   </div>;
+ }
+ Dashboard.getLayout = (page: ReactElement) => <Layout title="Dasbor">{page}</Layout>;
+--- live/src/styles/DashboardSummary.module.css
++++ local/src/styles/DashboardSummary.module.css
+@@ -1,28 +1,30 @@
+ .dashboard { display: flex; flex-direction: column; gap: 24px; max-width: 1600px; margin: 0 auto; }
+-.welcome { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 32px 36px; border: 1px solid var(--ui-border); border-radius: 18px; background: var(--ui-surface); background-image: radial-gradient(ellipse at 100% 0%, rgba(131,206,250,.18), transparent 65%); }
++.welcome { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 32px 36px; border: 1px solid var(--ui-border); border-radius: 18px; background: var(--ui-surface); background-image: radial-gradient(ellipse at 100% 0%, var(--welcome-glow, rgba(131,206,250,.18)), transparent 65%); }
+ .eyebrow { color: var(--ui-accent); font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }
+ .welcome h1 { margin: 10px 0 8px; font-size: clamp(24px, 2.3vw, 34px); line-height: 1.25; letter-spacing: -1.1px; font-weight: 650; }
+ .welcome p, .sectionHeading p { color: var(--ui-muted); margin: 0; font-size: 13px; line-height: 1.7; }
+-.primaryAction { display: inline-flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0; color: var(--ui-on-color); background: var(--ui-color); border: 1px solid var(--ui-color); padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px #83cefa25; }
+-.primaryAction:hover { color: var(--ui-on-color); background: var(--ui-selected); border-color: var(--ui-color); }
++.primaryAction { display: inline-flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0; color: var(--ui-on-color); background: var(--ui-color); border: 1px solid var(--ui-color); padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--action-shadow, 0 4px 12px #83cefa25); }
++.primaryAction:hover { color: var(--ui-on-color); background: var(--action-hover, var(--ui-selected)); border-color: var(--ui-color); }
+ .sectionHeading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+ .sectionHeading h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -.4px; }
+ .live { display: inline-flex; align-items: center; gap: 7px; color: var(--ui-muted); font-size: 11px; white-space: nowrap; }
+-.live > span { width: 6px; height: 6px; border-radius: 50%; background: #79dfbb; }
++.live > span { width: 6px; height: 6px; border-radius: 50%; background: var(--chart-delivered, #79dfbb); }
+ .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+ .metric { min-width: 0; display: flex; flex-direction: column; gap: 12px; color: var(--ui-text); background: var(--ui-surface); padding: 20px; border: 1px solid var(--ui-border); border-radius: 14px; box-shadow: var(--ui-shadow); transition: border-color .15s, transform .15s; }
+ .metric:hover { color: var(--ui-text); border-color: var(--ui-accent); transform: translateY(-2px); }
+ .metricTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ui-muted); }
+ .metricIcon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
+-.green { background: #e2faf0; color: #218368; }
+-.blue { background: #e9f6ff; color: #277fae; }
+-.amber { background: #fff4de; color: #986917; }
+-.purple { background: #f2ebff; color: #8560ba; }
++.green { background: var(--metric-green-bg, #e2faf0); color: var(--metric-green-fg, #218368); }
++.blue { background: var(--metric-blue-bg, #e9f6ff); color: var(--metric-blue-fg, #277fae); }
++.amber { background: var(--metric-amber-bg, #fff4de); color: var(--metric-amber-fg, #986917); }
++.purple { background: var(--metric-purple-bg, #f2ebff); color: var(--metric-purple-fg, #8560ba); }
+ .metricValue { font-size: 34px; letter-spacing: -1px; line-height: 1.2; font-weight: 650; font-variant-numeric: tabular-nums; }
+ .metricBottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ui-muted); font-size: 11px; line-height: 1.6; margin-top: auto; }
+ .metricDetail { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 8px 12px; box-sizing: border-box; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-soft); color: var(--ui-accent); font-size: 12px; font-weight: 600; transition: border-color .15s, background .15s; }
+ .metricDetail:hover { color: var(--ui-accent); background: var(--ui-surface); border-color: var(--ui-accent); }
+ .panel { height: 100%; border-radius: 14px; }
++.contentPanel { height: auto; }
++.footer { color: var(--ui-muted); font-size: 11px; line-height: 1.8; text-align: center; overflow-wrap: anywhere; }
+ .panel :global(.ant-card-head) { min-height: 62px; padding-inline: 24px; font-size: 14px; }
+ .panel :global(.ant-card-extra) { font-size: 12px; }
+ .panel :global(.ant-card-body) { padding: 24px; }
+@@ -30,7 +32,7 @@
+ .chartSummary > strong { font-size: 30px; font-weight: 650; letter-spacing: -.8px; }
+ .chartSummary > span { color: var(--ui-muted); font-size: 12px; }
+ .legend { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; }
+-.legend i { background: #79dfbb; width: 7px; height: 7px; border-radius: 50%; }
++.legend i { background: var(--chart-delivered, #79dfbb); width: 7px; height: 7px; border-radius: 50%; }
+ .period { font-size: 11px; color: var(--ui-muted); font-weight: 500; }
+ .caption { font-size: 11px; line-height: 1.8; color: var(--ui-muted); margin: 18px 0 0; }
+ .shortcut { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; margin-top: 20px; color: var(--ui-accent); background: var(--ui-soft); border-radius: 8px; font-size: 12px; }
+@@ -46,7 +48,7 @@
+ .comparisonStat :global(.ant-statistic-content) { font-size: 26px; font-weight: 600; }
+ .delta { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; color: var(--ui-muted); }
+ .positive { color: #15977c; }
+-.negative { color: #cc6655; }
++.negative { color: var(--chart-failed, #cc6655); }
+ .details { margin-top: 20px; border-top: 1px solid var(--ui-border); padding-top: 14px; }
+ .details > summary { cursor: pointer; color: var(--ui-accent); font-size: 12px; padding: 6px 0; }
+ .details[open] > summary { margin-bottom: 16px; }
+@@ -62,4 +64,3 @@
+ }
+ @media (prefers-reduced-motion: reduce) { .metric { transition: none; } .metric:hover { transform: none; } }
+ 
+-:global(:root[data-theme="dark"]) .metricIcon { background: var(--ui-selected); color: var(--ui-accent); }
+--- live/src/styles/globals.css
++++ local/src/styles/globals.css
+@@ -89,6 +89,8 @@
+   z-index: 5;
+   height: 100dvh;
+   overflow: auto;
++  scrollbar-width: thin;
++  scrollbar-color: var(--ui-border) transparent;
+   border-inline-end: 1px solid var(--ui-border);
+   box-shadow: var(--ui-shadow);
+ }
+@@ -265,15 +267,15 @@
+ .dashboard-user strong { font-size: 13px; color: var(--ui-text); }
+ .dashboard-user small { font-size: 11px; color: var(--ui-muted); }
+ 
+-/* Doran WA: fresh pastel surfaces with readable foregrounds. */
+-:root { --ui-text: #193b56; --ui-muted: #4c687d; --ui-surface: #fff; --ui-soft: #f2f9ff; --ui-border: #d9ebf5; --ui-accent: #246b96; --ui-color: #83cefa; --ui-on-color: #193b56; --ui-sort-arrow: #52677c; --ui-sort-active: #246b96; --ui-sort-header: #e2f4ff; --ui-shadow: 0 6px 24px rgba(26, 85, 128, .07); }
++/* Doran WA workspace colors. */
++:root { --ui-text: #193b56; --ui-muted: #4c687d; --ui-surface: #fff; --ui-soft: #f2f9ff; --ui-border: #c9deee; --ui-accent: #075c96; --ui-color: #0875bd; --ui-on-color: #fff; --ui-sort-arrow: #52677c; --ui-sort-active: #075c96; --ui-sort-header: #d9efff; --ui-shadow: 0 6px 24px rgba(26, 85, 128, .07); }
+ :root[data-theme="dark"] { --ui-text: #e7f2fc; --ui-muted: #aac4da; --ui-surface: #152b40; --ui-soft: #0e2031; --ui-border: #35516b; --ui-accent: #91d1ff; --ui-color: #65baff; --ui-on-color: #16313d; --ui-sort-arrow: #bdcee0; --ui-sort-active: #91d1ff; --ui-sort-header: #234b6a; --ui-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+ .dashboard-sidebar.ant-layout-sider { box-shadow: none; }
+ .dashboard-brand { justify-content: flex-start; padding: 24px; min-height: 88px; box-sizing: border-box; }
+ .dashboard-brand strong { font-size: 25px; letter-spacing: -1.2px; color: var(--ui-text); }
+ .dashboard-brand small { font-size: 10px; letter-spacing: .3px; margin-top: 2px; }
+ .dashboard-brand-dot { color: var(--ui-accent); }
+-.dashboard-brand-icon { background: var(--ui-selected, #e2f4ff); color: var(--ui-accent); border: 1px solid var(--ui-border); border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
++.dashboard-brand-icon { background: var(--ui-brand-bg, var(--ui-selected, #e2f4ff)); color: var(--ui-brand-fg, var(--ui-accent)); border: var(--ui-brand-border, 1px solid var(--ui-border)); border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
+ .dashboard-sidebar .ant-menu { padding: 8px 12px; font-size: 12px; }
+ .dashboard-sidebar .ant-menu-item { margin-block: 3px; }
+ .dashboard-sidebar .ant-menu-item-divider { margin: 16px 12px; border-color: var(--ui-border); }
+@@ -377,3 +379,16 @@
+  .device-setting-state { max-width: 66px; }
+  .device-setting-dependent { padding: 14px 12px; }
+ }
++
++
++/* Shared color hierarchy for brand, charts and metric icons across every theme. */
++:root {
++  --ui-brand-bg: #edf7ff; --ui-brand-fg: var(--ui-color); --ui-brand-border: 1px solid var(--ui-border);
++  --chart-queued: #d69a35; --chart-processing: #38aab3; --chart-sent: #4b8be9; --chart-delivered: #15977c;
++  --chart-read: #8b78ce; --chart-failed: #da6262; --chart-suppressed: #89959c; --chart-uncertain: #c77b3a;
++  --metric-green-bg: #15977c16; --metric-green-fg: #15977c; --metric-blue-bg: #4b8be916; --metric-blue-fg: #4b8be9;
++  --metric-amber-bg: #d69a3516; --metric-amber-fg: #bd841f; --metric-purple-bg: #8b78ce16; --metric-purple-fg: #8b78ce;
++  --welcome-glow: rgba(21,151,124,.12); --action-shadow: 0 4px 8px color-mix(in srgb, var(--ui-color) 12%, transparent); --action-hover: var(--ui-accent);
++}
++
++:root[data-theme="dark"] { --ui-brand-bg: #1b354d; --ui-brand-fg: var(--ui-accent); }
+--- live/src/lib/dashboardColors.ts
++++ local/src/lib/dashboardColors.ts
+@@ -1,10 +1,10 @@
+ export const dashboardColors = [
+-  { value: "green", label: "Hijau", primary: "#79dfbb", dark: "#6ee7b7" },
+-  { value: "blue", label: "Biru", primary: "#83cefa", dark: "#65baff" },
+-  { value: "orange", label: "Oranye", primary: "#ffd18a", dark: "#ffd18a" },
+-  { value: "purple", label: "Ungu", primary: "#c9b5fa", dark: "#d0baff" },
+-  { value: "rose", label: "Rose", primary: "#ffbad2", dark: "#ffb4d0" },
+-  { value: "teal", label: "Teal", primary: "#89e2de", dark: "#80e8e4" },
++  { value: "green", label: "Hijau", primary: "#15803d", dark: "#86efac" },
++  { value: "blue", label: "Biru", primary: "#0875bd", dark: "#65baff" },
++  { value: "orange", label: "Oranye", primary: "#ff8500", dark: "#ffb454" },
++  { value: "purple", label: "Ungu", primary: "#7950b8", dark: "#d0baff" },
++  { value: "rose", label: "Rose", primary: "#b33e70", dark: "#ffb4d0" },
++  { value: "teal", label: "Teal", primary: "#0e7490", dark: "#67e8f9" },
+ ] as const;
+ 
+ export type DashboardColor = typeof dashboardColors[number]["value"];
+@@ -24,23 +24,48 @@
+ export function dashboardPalette(dark: boolean, color: DashboardColor = "blue") {
+   const selected = dashboardColors.find(option => option.value === color) || dashboardColors[1];
+   const primary = dark ? selected.dark : selected.primary;
+-  // Airy surfaces and pastel accents; darker ink keeps labels readable.
+-  if (selected.value === "blue") return {
+-    primary,
+-    emphasis: dark ? "#91d1ff" : "#246b96",
+-    onPrimary: dark ? "#16313d" : "#193b56",
+-    surface: dark ? "#152b40" : "#ffffff",
+-    layout: dark ? "#0e2031" : "#f5fbff",
+-    soft: dark ? "#1b354d" : "#edf7ff",
+-    selected: dark ? "#234b6a" : "#e2f4ff",
+-    border: dark ? "#35516b" : "#d9ebf5",
+-    text: dark ? "#e7f2fc" : "#193b56",
+-    secondary: dark ? "#aac4da" : "#4c687d",
++  // Dominant fill sampled from the supplied JETE wordmark: #FF8500.
++  if (selected.value === "orange") return {
++    primary, emphasis: dark ? "#ffc780" : "#a94f00", onPrimary: "#2b170d",
++    surface: dark ? "#2c2318" : "#ffffff", layout: dark ? "#201a12" : "#fffaf3",
++    soft: dark ? "#3b2d1b" : "#fff5e8", selected: dark ? "#543d1d" : "#ffe5bf",
++    border: dark ? "#69502f" : "#f0d5af", text: dark ? "#fff4e5" : "#3b2a16",
++    secondary: dark ? "#d5bfa4" : "#7a6044",
++  };
++  // Give green a botanical hue and teal a cyan hue, including their soft surfaces.
++  if (selected.value === "green") return {
++    primary, emphasis: dark ? "#a7f3c0" : "#166534",
++    onPrimary: dark ? "#16313d" : "#ffffff",
++    surface: dark ? "#17281d" : "#ffffff", layout: dark ? "#101e16" : "#f3faf4",
++    soft: dark ? "#173829" : "#edf8ee", selected: dark ? "#214b34" : "#dcf3df",
++    border: dark ? "#355a43" : "#c9e3ce", text: dark ? "#e7f5eb" : "#203729",
++    secondary: dark ? "#adc9b7" : "#506858",
++  };
++  if (selected.value === "teal") return {
++    primary, emphasis: dark ? "#8deaf4" : "#155e75",
++    onPrimary: dark ? "#16313d" : "#ffffff",
++    surface: dark ? "#142b36" : "#ffffff", layout: dark ? "#0e202a" : "#f1f9fc",
++    soft: dark ? "#183b49" : "#e9f7fb", selected: dark ? "#205261" : "#d6eff6",
++    border: dark ? "#355b6b" : "#c5e2ec", text: dark ? "#e4f4fb" : "#193747",
++    secondary: dark ? "#a9c8d8" : "#4b6879",
++  };
++  // Blue keeps its historical palette; all accents share the same visual hierarchy.
++  if (selected.value === "blue") return {
++    primary,
++    emphasis: dark ? "#91d1ff" : "#075c96",
++    onPrimary: dark ? "#16313d" : "#ffffff",
++    surface: dark ? "#152b40" : "#ffffff",
++    layout: dark ? "#0e2031" : "#f2f9ff",
++    soft: dark ? "#1b354d" : "#edf7ff",
++    selected: dark ? "#234b6a" : "#d9efff",
++    border: dark ? "#35516b" : "#c9deee",
++    text: dark ? "#e7f2fc" : "#193b56",
++    secondary: dark ? "#aac4da" : "#4c687d",
+   };
+   return {
+     primary,
+     emphasis: dark ? primary : mix(primary, "#142c36", 0.46),
+-    onPrimary: "#16313d",
++    onPrimary: dark ? "#16313d" : "#ffffff",
+     surface: dark ? mix(selected.primary, "#171d24", 0.14) : "#ffffff",
+     layout: dark ? mix(selected.primary, "#10151b", 0.12) : mix(primary, "#ffffff", 0.045),
+     soft: dark ? mix(primary, "#17212b", 0.13) : mix(primary, "#ffffff", 0.10),
+--- live/src/lib/dashboardTheme.ts
++++ local/src/lib/dashboardTheme.ts
+@@ -19,10 +19,14 @@
+       colorLinkActive: emphasis,
+       controlItemBgActive: selected,
+       controlItemBgActiveHover: selected,
+-      colorInfo: primary,
+-      colorSuccess: dark ? "#79dfbb" : "#56cfa8",
+-      colorWarning: dark ? "#ffd18a" : "#efbd68",
+-      colorError: dark ? "#ffb0bc" : "#ee899d",
++      colorInfo: primary,
++      // Explicit info surfaces keep strong accent colors light and readable.
++      ...(["green", "teal", "orange"].includes(color) ? {
++        colorInfoBg: soft, colorInfoBgHover: selected,
++        colorInfoBorder: border, colorInfoBorderHover: primary,
++        colorInfoText: emphasis, colorInfoTextHover: primary, colorInfoTextActive: emphasis,
++      } : {}),
++      // Use consistent Ant Design success, warning and error scales for every accent.
+       colorBgBase: surface,
+       colorBgContainer: surface,
+       colorBgElevated: surface,
+--- live/src/pages/_app.tsx
++++ local/src/pages/_app.tsx
+@@ -60,6 +60,7 @@
+       "--ui-surface": colors.surface, "--ui-soft": colors.layout,
+       "--ui-border": colors.border, "--ui-accent": colors.emphasis,
+       "--ui-color": colors.primary, "--ui-on-color": colors.onPrimary,
++      "--ui-brand-bg": colors.soft, "--ui-brand-fg": dark || color === "orange" ? colors.emphasis : colors.primary,
+       "--ui-selected": colors.selected, "--ui-sort-arrow": colors.secondary,
+       "--ui-sort-active": colors.emphasis, "--ui-sort-header": colors.selected,
+     };
+--- live/src/components/MessagingAnalytics.tsx
++++ local/src/components/MessagingAnalytics.tsx
+@@ -33,8 +33,8 @@
+     })}</div>
+     <details className={styles.details}><summary>{uiText("Lihat analisis dan rincian perangkat")}</summary>
+       <Row gutter={[16, 16]}>
+-        <Col xs={24} xl={12}><Card title={uiText("Alasan kegagalan")}><RankingChart emptyDescription={uiText("Tidak ada kegagalan pada periode ini")} items={(c?.failures || []).map((r: any) => ({ label: uiText(r.reason), count: r.count, color: "#f3a0b0" }))} /></Card></Col>
+-        <Col xs={24} xl={12}><Card title={uiText("5 perangkat teratas pada periode ini")}><RankingChart items={topDevices.map((r: any) => ({ label: phones.data?.find(p => p.id === r.phoneId)?.name || r.phoneId, count: sentCount(r), color: "#79dfbb" }))} /></Card></Col>
++        <Col xs={24} xl={12}><Card title={uiText("Alasan kegagalan")}><RankingChart emptyDescription={uiText("Tidak ada kegagalan pada periode ini")} items={(c?.failures || []).map((r: any) => ({ label: uiText(r.reason), count: r.count, color: "var(--chart-failed, #f3a0b0)" }))} /></Card></Col>
++        <Col xs={24} xl={12}><Card title={uiText("5 perangkat teratas pada periode ini")}><RankingChart items={topDevices.map((r: any) => ({ label: phones.data?.find(p => p.id === r.phoneId)?.name || r.phoneId, count: sentCount(r), color: "var(--chart-delivered, #79dfbb)" }))} /></Card></Col>
+         <Col span={24}><Card title={uiText("Rincian seluruh perangkat")}>
+           {phones.error && <Alert type="warning" showIcon message={uiText("Status koneksi belum dapat dimuat.")} />}
+           <Table rowKey="phoneId" dataSource={c?.devices || []} loading={!c && !api.error} pagination={{ pageSize: 10, showSizeChanger: false }} scroll={{ x: 700 }} columns={[

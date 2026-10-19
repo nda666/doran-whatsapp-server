@@ -1,0 +1,11 @@
+'use strict';
+const path = require('node:path');
+const app = path.resolve(__dirname, '..');
+process.env.NODE_ENV ||= 'development';
+require('@next/env').loadEnvConfig(app, process.env.NODE_ENV !== 'production');
+const target = process.argv[2] || 'server';
+const entries = { server: 'src/server/index.ts', worker: 'src/lib/workers/index.ts' };
+if (!entries[target]) throw new Error('Use server or worker');
+const compiler = require('ts-node').register({ project: path.join(app, 'tsconfig.server.json') });
+require('tsconfig-paths').register({ baseUrl: app, paths: compiler.config.options.paths || {} });
+require(path.join(app, entries[target]));

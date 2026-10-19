@@ -1,0 +1,107 @@
+--- live/src/components/MessagingPreferences.tsx
++++ new/src/components/MessagingPreferences.tsx
+@@ -1,7 +1,6 @@
+-import SettingToggle from "@/components/phone/SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import { useState } from "react";
+-import { Alert, Button, Card, Form, Input, InputNumber, Space, message } from "antd";
++import { Alert, Button, Card, Form, Input, InputNumber, Space, Switch, message } from "antd";
+ import axios from "axios";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+ export default function MessagingPreferences() {
+@@ -18,8 +17,8 @@
+ {settings.error && <Alert type="error" message={uiText(settings.error)} />}
+     <Card title={uiText("Pengaturan pesan dan notifikasi")} loading={!settings.data}>
+       {settings.data && <Form key={settings.data.updatedAt || "initial"} form={form} layout="vertical" initialValues={settings.data} onFinish={save}>
+-        <SettingToggle name="optOutEnabled" label={uiText("Deteksi balasan STOP")} description={uiText("Berlaku untuk seluruh perangkat akun Anda, tanpa perlu mengaktifkan balasan otomatis. Mematikan deteksi tidak menghapus daftar blokir yang sudah ada.")} />
+-        <SettingToggle name="offlineAlertsEnabled" label={uiText("Notifikasi perangkat terputus dan tersambung kembali")} />
++        <Form.Item name="optOutEnabled" label={uiText("Deteksi balasan STOP")} valuePropName="checked" extra={uiText("Berlaku untuk seluruh perangkat akun Anda, tanpa perlu mengaktifkan balasan otomatis. Mematikan deteksi tidak menghapus daftar blokir yang sudah ada.")}><Switch checkedChildren={"ON"} unCheckedChildren={"OFF"} /></Form.Item>
++        <Form.Item name="offlineAlertsEnabled" label={uiText("Notifikasi perangkat terputus dan tersambung kembali")} valuePropName="checked"><Switch checkedChildren={"ON"} unCheckedChildren={"OFF"} /></Form.Item>
+         <Form.Item name="alertEmail" label={uiText("Email admin")} rules={[{ type: "email" }]} extra={uiText("Email dikirim menggunakan integrasi Postmark Jeblast yang sudah tersedia.")}><Input maxLength={254} /></Form.Item>
+         <Form.Item name="offlineDelaySeconds" label={uiText("Kirim alert setelah terputus (detik)")} extra={uiText("Pemulihan dikonfirmasi setelah 30 detik. Alert perangkat yang sama dibatasi maksimal satu kali setiap 30 menit.")}><InputNumber min={30} max={3600} /></Form.Item>
+         <Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan pengaturan")}</Button>
+--- live/src/components/phone/DeviceWebhookSettings.tsx
++++ new/src/components/phone/DeviceWebhookSettings.tsx
+@@ -1,7 +1,6 @@
+-import SettingToggle from "@/components/phone/SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import { useEffect, useState } from "react";
+-import { Alert, Button, Card, Form, Input, Space, Table, Tag, message } from "antd";
++import { Alert, Button, Card, Form, Input, Space, Switch, Table, Tag, message } from "antd";
+ import axios from "axios";
+ import dayjs from "dayjs";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+@@ -29,7 +28,7 @@
+     <Card title={uiText("Webhook Perubahan Perangkat")}>
+       <p>{uiText("Kirim perubahan data perangkat seluruh pemilik ke kasir: tambah, edit, hapus, aktif/nonaktif, dan generate token. Webhook ini tidak berisi pesan customer. Perubahan online/offline tidak memicu webhook.")}</p>
+       <Form form={form} layout="vertical" disabled={!loaded || busy} onFinish={values => submit({ enabled: !!values.enabled, url: values.url || "", ...(values.secret ? { secret: values.secret } : {}) })}>
+-        <SettingToggle name="enabled" label={uiText("Aktifkan webhook")} />
++        <Form.Item name="enabled" label={uiText("Aktifkan webhook")} valuePropName="checked"><Switch /></Form.Item>
+         <Form.Item name="url" label={uiText("Webhook URL Kasir")} rules={[{ type: "url", message: uiText("Masukkan URL yang valid.") }]} extra={uiText("Endpoint HTTPS publik yang menerima POST JSON. Kosongkan jika belum digunakan.")}><Input placeholder="https://kasir.example.com/webhooks/jeblast/device" /></Form.Item>
+         <Form.Item name="secret" label={uiText("Kunci Autentikasi Webhook")} rules={[{ min: 16, message: uiText("Minimal 16 karakter.") }]} extra={api.data?.settings.secretConfigured ? "Kunci tersimpan. Kosongkan untuk mempertahankannya. Kasir memeriksa header Authorization: Bearer <kunci>." : uiText("Gunakan kunci yang sama di kasir. Simpan salinannya sebelum menyimpan pengaturan.")}><Input.Password autoComplete="new-password" /></Form.Item>
+         <Space wrap><Button onClick={() => { const bytes = new Uint8Array(32); crypto.getRandomValues(bytes); form.setFieldValue("secret", Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")); }}>{uiText("Buat Kunci")}</Button><Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan Webhook")}</Button></Space>
+--- live/src/components/phone/DispatchWebhookSettings.tsx
++++ new/src/components/phone/DispatchWebhookSettings.tsx
+@@ -1,7 +1,6 @@
+-import SettingToggle from "@/components/phone/SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import { useEffect, useState } from "react";
+-import { Alert, Button, Card, Form, Input, Space, Table, Tag, message } from "antd";
++import { Alert, Button, Card, Form, Input, Space, Switch, Table, Tag, message } from "antd";
+ import axios from "axios";
+ import dayjs from "dayjs";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+@@ -29,7 +28,7 @@
+     <Card title={uiText("Webhook Status Antrean Pengiriman")}>
+       <p>{uiText("Kirim status terbaru setiap pekerjaan ke satu endpoint kasir: QUEUED, PROCESSING, SENT, DELIVERED, READ, FAILED, dan UNCERTAIN. Berlaku untuk antrean API dan campaign.")}</p>
+       <Form form={form} layout="vertical" disabled={!loaded || busy} onFinish={values => submit({ enabled: !!values.enabled, url: values.url || "", ...(values.secret ? { secret: values.secret } : {}) })}>
+-        <SettingToggle name="enabled" label={uiText("Aktifkan webhook")} />
++        <Form.Item name="enabled" label={uiText("Aktifkan webhook")} valuePropName="checked"><Switch /></Form.Item>
+         <Form.Item name="url" label={uiText("Webhook URL Kasir")} rules={[{ type: "url", message: uiText("Masukkan URL yang valid.") }]} extra={uiText("Endpoint HTTPS publik yang menerima POST JSON. Kosongkan jika belum digunakan.")}><Input placeholder="https://kasir.example.com/webhooks/jeblast/send-status" /></Form.Item>
+         <Form.Item name="secret" label={uiText("Kunci Autentikasi Webhook")} rules={[{ min: 16, message: uiText("Minimal 16 karakter.") }]} extra={api.data?.settings.secretConfigured ? "Kunci tersimpan. Kosongkan untuk mempertahankannya. Kasir memeriksa header Authorization: Bearer <kunci>." : uiText("Gunakan kunci yang sama di kasir. Simpan salinannya sebelum menyimpan pengaturan.")}><Input.Password autoComplete="new-password" /></Form.Item>
+         <Space wrap><Button onClick={() => { const bytes = new Uint8Array(32); crypto.getRandomValues(bytes); form.setFieldValue("secret", Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")); }}>{uiText("Buat Kunci")}</Button><Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan Webhook")}</Button></Space>
+--- live/src/pages/dashboard/plans.tsx
++++ new/src/pages/dashboard/plans.tsx
+@@ -1,7 +1,6 @@
+-import SettingToggle from "@/components/phone/SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import { ReactElement, useState } from "react";
+-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Space, Tag, message } from "antd";
++import { Alert, Button, Card, Form, Input, InputNumber, Modal, Space, Switch, Tag, message } from "antd";
+ import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
+ import ActionDropdown from "@/components/ActionDropdown";
+ import axios from "axios";
+@@ -33,7 +32,7 @@
+       <Form form={form} layout="vertical" initialValues={{ active: true, deviceLimit: 100 }} onFinish={save} disabled={busy}>
+         <Form.Item name="id" hidden><Input /></Form.Item><Form.Item name="name" label={uiText("Nama paket")} rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>
+         <Form.Item name="deviceLimit" label={uiText("Batas device")} rules={[{ required: true }]}><InputNumber min={0} max={10000} /></Form.Item>
+-        <Form.Item name="description" label={uiText("Deskripsi")}><Input.TextArea maxLength={500} /></Form.Item><SettingToggle name="active" label={uiText("Paket aktif")} />
++        <Form.Item name="description" label={uiText("Deskripsi")}><Input.TextArea maxLength={500} /></Form.Item><Form.Item name="active" label={uiText("Paket aktif")} valuePropName="checked"><Switch /></Form.Item>
+       </Form>
+     </Modal>
+     {modalContext}
+--- live/src/pages/dashboard/admin.tsx
++++ new/src/pages/dashboard/admin.tsx
+@@ -1,4 +1,3 @@
+-import SettingToggle from "@/components/phone/SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import ActionDropdown from "@/components/ActionDropdown";
+ import { CheckOutlined, CloseOutlined, CopyOutlined, EditOutlined, KeyOutlined, PoweroffOutlined } from "@ant-design/icons";
+@@ -8,7 +7,7 @@
+ import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
+ import { ReactElement, useEffect, useState } from "react";
+ import { useRouter } from "next/router";
+-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, DatePicker, Tabs, Tag, message } from "antd";
++import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, DatePicker, Tabs, Tag, Switch, message } from "antd";
+ import axios from "axios";
+ import dayjs from "dayjs";
+ import { superAdminPageProps } from "@/lib/superAdminPageProps";
+@@ -106,7 +105,7 @@
+       </Card> },
+     ]} />
+     <Modal title={ui("Pengguna")} open={open} onCancel={() => !busy && setOpen(false)} footer={null}><Form form={form} layout="vertical" initialValues={{ role: "USER", isActive: true, deviceLimit: 100, plan: "Standard" }} onFinish={async values => { if (await save("/api/admin/users", { ...values, password: values.password || undefined, subscriptionExpiresAt: values.subscriptionExpiresAt?.toISOString() || null })) { setOpen(false); users.reload(); } }}>
+-      <Form.Item name="id" hidden><Input /></Form.Item><Form.Item name="name" label={ui("Nama")} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label={uiText("Email")} rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Form.Item name="password" label={uiText("Kata sandi baru (min. 6 karakter; kosong = pertahankan)")} rules={[{ min: 6, message: uiText("Kata sandi minimal 6 karakter.") }]}><Input.Password /></Form.Item><Form.Item name="role" label={uiText("Role")}><Select options={[{ value: "USER", label: uiText("User") }, { value: "ADMIN", label: uiText("Admin") }]} /></Form.Item><SettingToggle hidden={editingSuperAdmin} name="isActive" label={uiText("Status user")} description={uiText("User tidak aktif tidak dapat login dan sesi yang berjalan akan dikeluarkan.")} /><Form.Item hidden={editingSuperAdmin} name="plan" label={ui("Paket")} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={(plans.data || []).map((plan: any) => ({ value: plan.name, label: uiText("{{v0}} ({{v1}} device)", { v0: plan.name, v1: plan.deviceLimit }), disabled: !plan.active && form.getFieldValue("plan") !== plan.name }))} onChange={name => { const plan = (plans.data || []).find((item: any) => item.name === name); if (plan) form.setFieldValue("deviceLimit", plan.deviceLimit); }} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="deviceLimit" label={ui("Limit device")}><InputNumber min={0} max={10000} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="subscriptionExpiresAt" label={ui("Tanggal berakhir paket")}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" style={{ width: "100%" }} /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{ui("Simpan")}</Button>
++      <Form.Item name="id" hidden><Input /></Form.Item><Form.Item name="name" label={ui("Nama")} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label={uiText("Email")} rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Form.Item name="password" label={uiText("Kata sandi baru (min. 6 karakter; kosong = pertahankan)")} rules={[{ min: 6, message: uiText("Kata sandi minimal 6 karakter.") }]}><Input.Password /></Form.Item><Form.Item name="role" label={uiText("Role")}><Select options={[{ value: "USER", label: uiText("User") }, { value: "ADMIN", label: uiText("Admin") }]} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="isActive" valuePropName="checked" label={uiText("Status user")} extra={uiText("User tidak aktif tidak dapat login dan sesi yang berjalan akan dikeluarkan.")}><Switch checkedChildren={uiText("Aktif")} unCheckedChildren={uiText("Tidak aktif")} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="plan" label={ui("Paket")} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={(plans.data || []).map((plan: any) => ({ value: plan.name, label: uiText("{{v0}} ({{v1}} device)", { v0: plan.name, v1: plan.deviceLimit }), disabled: !plan.active && form.getFieldValue("plan") !== plan.name }))} onChange={name => { const plan = (plans.data || []).find((item: any) => item.name === name); if (plan) form.setFieldValue("deviceLimit", plan.deviceLimit); }} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="deviceLimit" label={ui("Limit device")}><InputNumber min={0} max={10000} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="subscriptionExpiresAt" label={ui("Tanggal berakhir paket")}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" style={{ width: "100%" }} /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{ui("Simpan")}</Button>
+     </Form></Modal>
+     <Modal title={uiText("Token API user")} open={!!tokenUser} onCancel={() => setTokenUser(undefined)} destroyOnHidden
+       footer={<Button onClick={() => setTokenUser(undefined)}>{uiText("Tutup")}</Button>}>

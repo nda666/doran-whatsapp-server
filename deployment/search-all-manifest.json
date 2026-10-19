@@ -1,0 +1,8 @@
+{
+  "src/components/phone/SearchPhoneForm.tsx": "dbac17cb384a94f30954f2b17e39b46691f8c2d385cf6c617b751e8afa97bede",
+  "src/pages/dashboard/admin.tsx": "9daf96d7bade4786e694a1bbeba0165156be1927b78ac7a1cc273682086bcdb5",
+  "src/pages/dashboard/campaigns.tsx": "ea9a540f7f04b918a85213b26399b8fa2628fd1e4a7dbe72b96672a63d84c8d5",
+  "src/pages/dashboard/contacts.tsx": "fceabc5681f03079e6c68c9a26be603941217277ba7e47e1b0a74039905f0ba9",
+  "src/pages/dashboard/dispatch.tsx": "4df73a4db57d34e9e9770dbe5bfe8954cb6b3054300523cbb0b1e47b6ea320d0",
+  "src/pages/dashboard/reports.tsx": "825136e9d12141d0184b63a9f37727e1cebd90f977a7c8616804e096a1518580"
+}

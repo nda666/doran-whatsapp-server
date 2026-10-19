@@ -1,3 +1,4 @@
+import { useUiTranslation } from "@/lib/uiTranslation";
 import {
   ReactElement,
   useState,
@@ -6,16 +7,19 @@ import {
 import {
   Button,
   Flex,
+  Tabs,
 } from 'antd';
 import { useSession } from 'next-auth/react';
 import { i18n } from 'next-i18next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useTranslation } from 'react-i18next';
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 
 import Layout from '@/components/Layout';
 import { LogTable } from '@/components/log/LogTable';
+import DispatchPage from './dispatch';
 
 const LogPage = () => {
+  const uiText = useUiTranslation();
   const { data: session } = useSession();
   const [state, setState] = useState<{
     showSearch: boolean;
@@ -35,7 +39,7 @@ const LogPage = () => {
             {state.showSearch ? t("hide_search") : t("show_search")}
           </Button>
         </Flex>
-        <LogTable showSearch={state.showSearch} token={session?.user?.token!} />
+        <Tabs items={[{ key: "out", label: uiText("Riwayat Pesan Keluar (Blast/API)"), children: <DispatchPage /> }, { key: "in", label: uiText("Pesan Masuk (Webhook)"), children: <LogTable showSearch={state.showSearch} token={session?.user?.token!} /> }]} />
       </Flex>
     </>
   );
@@ -43,13 +47,12 @@ const LogPage = () => {
 
 export const getStaticProps = async ({ locale }: { locale: string }) => ({
   props: {
-    ...(await serverSideTranslations(locale, ["common"])),
+    ...(await serverSideTranslations(locale, ["common", "upgrade", "interface"])),
   },
 });
 
 LogPage.getLayout = function getLayout(page: ReactElement) {
-  const title = () => i18n?.t("log") || "";
-  return <Layout title={title().toUpperCase()}>{page}</Layout>;
+  return <Layout title="Riwayat aktivitas">{page}</Layout>;
 };
 
 export default LogPage;

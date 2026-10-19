@@ -1,0 +1,17 @@
+--- live/src/pages/dashboard/phone.tsx
++++ new/src/pages/dashboard/phone.tsx
+@@ -471,14 +471,6 @@
+         <Table
+           className="table-with-data-count"
+           scroll={{ x: true }}
+-          onRow={(record) => {
+-            return {
+-              onContextMenu: (event) => {
+-                event.preventDefault();
+-                //
+-              },
+-            };
+-          }}
+           dataSource={phoneData.phones}
+           columns={dataColumn}
+           rowKey="id"

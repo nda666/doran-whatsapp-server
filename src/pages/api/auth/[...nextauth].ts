@@ -6,6 +6,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 
 import { PrismaAdapter } from "@/lib/prismaAdapter";
 import { PrismaClient } from "@prisma/client";
+import { isApproved, isCurrentSession } from "@/lib/access";
 
 const prisma = new PrismaClient();
 
@@ -39,12 +40,19 @@ export default NextAuth({
         },
       });
 
-      if (user && session.user) {
+      const valid = !!user && isApproved(user) && isCurrentSession(user, token);
+      if (valid && session.user) {
         session.user.id = user?.id;
         session.user.token = user?.token;
         session.user.email = user?.email!;
+        session.user.name = user.name;
+        session.user.role = user.role;
+        session.user.approvalStatus = user.approvalStatus;
+        session.user.isActive = user.isActive;
+        session.user.sessionVersion = user.sessionVersion;
       }
 
+      if (!valid) session.user = undefined;
       return session;
     },
     async jwt({ token, user }) {
@@ -52,6 +60,7 @@ export default NextAuth({
         token.id = user.id;
         token.token = user.token;
         token.email = user.email;
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
       return token;
     },
@@ -80,7 +89,7 @@ export default NextAuth({
           }
         } catch (e) {
           if (e instanceof AxiosError) {
-            throw new Error(e.message);
+            throw new Error(e.response?.data?.message || "Login belum berhasil. Silakan coba lagi.");
           }
         }
 

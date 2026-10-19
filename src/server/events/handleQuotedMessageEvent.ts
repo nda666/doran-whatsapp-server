@@ -1,3 +1,4 @@
+import { mediaUrl } from "../utils/mediaUrl";
 import { Phone } from "@prisma/client";
 import { proto, WAMessage, WASocket } from "@whiskeysockets/baileys";
 
@@ -13,6 +14,9 @@ import {
   InserttWebhookToInboxMessageProps,
   insertWebhookToInboxMessage,
 } from "../../services/inboxMessage";
+import { sendAutoReply } from "../campaigns/autoReply";
+import { webhookSender } from "../utils/webhookSender";
+import { sendAiAutoReply } from "../ai/service";
 
 export type HandleQuotedMessageEventProps = {
   messageType: string;
@@ -21,12 +25,14 @@ export type HandleQuotedMessageEventProps = {
   waSocket: WASocket;
   messages: WAMessage[];
   userId: string;
+  allowAi?: boolean;
 };
 export const handleQuotedMessageEvent = async (
   props: HandleQuotedMessageEventProps
 ) => {
   const { waSocket, messages, quotedMessage, phone, messageType, userId } =
     props;
+  if (!phone.autoReplyEnabled) return;
 
   const phoneReplies = async () => getAutoReplyByPhoneId(phone.id);
 
@@ -35,16 +41,10 @@ export const handleQuotedMessageEvent = async (
 
   if (messages[0].message!.extendedTextMessage?.text) {
     clientMessage = messages[0].message!.extendedTextMessage!.text;
-    participantNum = String(
-      messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
-        "@"
-      )[0]
-    );
+    participantNum = messages[0].message!.extendedTextMessage!.contextInfo?.participant?.split("@")[0] || phone.number || "";
   } else if (messages[0].message!.imageMessage?.caption) {
     clientMessage = messages[0].message!.imageMessage?.caption;
-    participantNum = String(
-      messages[0].message!.imageMessage!.contextInfo!.participant!.split("@")[0]
-    );
+    participantNum = messages[0].message!.imageMessage!.contextInfo?.participant?.split("@")[0] || phone.number || "";
   }
 
   const finalFilePath = await getImageFromWaMessage(messages, waSocket);
@@ -58,7 +58,14 @@ export const handleQuotedMessageEvent = async (
   }
   const senderNum = messages[0].key.remoteJid?.split("@")[0];
 
-  replies_list.forEach(async (val) => {
+  for (const val of replies_list) {
+    try {
+    if (val.type === "ai") {
+      if (props.allowAi && clientMessage && messageKeywordTypeChecker(clientMessage, val.keyword, val.type_keyword)) {
+        await sendAiAutoReply(val, phone, waSocket, messages[0], clientMessage);
+      }
+      continue;
+    }
     if (
       !conversation_quote ||
       !messageKeywordTypeChecker(
@@ -67,11 +74,11 @@ export const handleQuotedMessageEvent = async (
         val.type_keyword
       )
     ) {
-      return;
+      continue;
     }
 
     const replyText = JSON.parse(JSON.stringify(val.reply));
-    if (val.type == "text") {
+    if (val.type !== "webhook") {
       val.is_save_inbox &&
         (await insertQuotesToInboxMessage({
           message: clientMessage,
@@ -80,7 +87,7 @@ export const handleQuotedMessageEvent = async (
           recipient: participantNum,
           userId,
         }));
-      await waSocket.sendMessage(messages[0].key.remoteJid!, replyText);
+      await sendAutoReply(val, phone, waSocket, messages);
     }
 
     if (val.type == "webhook") {
@@ -92,7 +99,7 @@ export const handleQuotedMessageEvent = async (
         message: clientMessage,
         quote: conversation_quote,
         recipient: participantNum,
-        sender: senderNum,
+        sender: await webhookSender(messages[0].key, waSocket),
         image_in: finalFilePath,
         userId,
         // auto_reply_id: val.id.toString(),
@@ -150,9 +157,9 @@ export const handleQuotedMessageEvent = async (
           });
         }
 
-        params["phone"] = senderNum ?? null;
+        params["phone"] = data.sender ?? null;
         params["recipient"] = participantNum ?? "";
-        params["image"] = `${process.env.APP_URL}/api/image/${finalFilePath}`;
+        params["image"] = mediaUrl(finalFilePath, userId);
         params["quote"] = conversation_quote;
         params["message"] = clientMessage;
         // params["detail"] = JSON.stringify(messages[0]);
@@ -187,5 +194,7 @@ export const handleQuotedMessageEvent = async (
         const resultSave = await insertWebhookToInboxMessage(data);
       }
     }
-  });
+    } catch { console.error("QUOTED_REPLY_FAILED", val.id); }
+  }
 };
+

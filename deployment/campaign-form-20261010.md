@@ -1,0 +1,7 @@
+Deployed 10 October 2026 to https://dashboard.jeblast.com/dashboard/campaigns.
+
+Campaign help now explains recipient placeholders and device rotation with examples. The shared create/edit form has clearer message guidance, an explicit character counter, the requested Input manual label, a searchable selector sourced from Contact groups that refreshes when opened, and the main Delay waktu pengiriman antar pesan label above both delay fields.
+
+Validation: local TypeScript and ESLint passed. Full Next.js and server TypeScript build passed on staging copied from the latest live source. Public authenticated campaign HTML and JavaScript contain the new labels and help, with no detected replacement or mojibake characters. The live Contact groups API returned a valid empty list. Eight authenticated pages and thirteen read-only API routes passed. Production source hashes match the deployed manifest; build ID is ZTgr5gBdDZQVcYy-mzMTZ. Existing lint/i18n warnings remain. Interactive modal testing was not performed because the browser requires sign-in.
+
+Backup: /home/jeblast/backups/doran-campaign-form-20261010. Previous runtime and changed source are retained for rollback. Build ID and source hash checks prevent promotion over a concurrent deployment. WhatsApp/dispatch flags were retained and the Telegram process PID stayed unchanged. Verification did not create campaigns or send test messages.

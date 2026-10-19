@@ -12,6 +12,132 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum WaDispatchStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  UNCERTAIN
+  SUPPRESSED
+}
+
+model MessagingPreference {
+  userId               String   @id @db.VarChar(36)
+  optOutEnabled        Boolean  @default(false)
+  offlineAlertsEnabled Boolean  @default(false)
+  alertEmail           String   @default("") @db.VarChar(254)
+  offlineDelaySeconds  Int      @default(90)
+  updatedAt            DateTime @updatedAt
+
+  @@map("messaging_preferences")
+}
+
+model RecipientSuppression {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  number    String   @db.VarChar(32)
+  reason    String   @default("") @db.VarChar(255)
+  source    String   @default("MANUAL") @db.VarChar(16)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, number])
+  @@map("recipient_suppressions")
+}
+
+model DeviceSendPolicy {
+  phoneId            String    @id @db.VarChar(36)
+  dailyLimit         Int       @default(200)
+  useGlobalQuota     Boolean   @default(true)
+  minIntervalSeconds Int?
+  maxIntervalSeconds Int?
+  adaptiveEnabled    Boolean   @default(true)
+  paused             Boolean   @default(false)
+  pauseReason        String?   @db.VarChar(128)
+  warmupStartedAt    DateTime?
+  nextAllowedAt      DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("device_send_policies")
+}
+
+model DeviceDailyUsage {
+  phoneId  String @db.VarChar(36)
+  day      String @db.VarChar(10)
+  attempts Int    @default(0)
+  failures Int    @default(0)
+
+  @@id([phoneId, day])
+  @@map("device_daily_usage")
+}
+
+model DeviceAlertState {
+  phoneId         String    @id @db.VarChar(36)
+  offlineAt       DateTime?
+  notifiedAt      DateTime?
+  recoveryPending Boolean   @default(false)
+  lastAlertAt     DateTime?
+  leaseToken      String?   @db.VarChar(36)
+  leaseUntil      DateTime?
+  nextAttemptAt   DateTime  @default(now())
+
+  @@map("device_alert_states")
+}
+
+model WaDispatch {
+  id            String           @id @default(uuid()) @db.VarChar(36)
+  userId        String           @db.VarChar(36)
+  phoneId       String           @db.VarChar(36)
+  storeId       String           @db.VarChar(64)
+  transactionId String           @db.VarChar(128)
+  messageKey    String           @db.VarChar(64)
+  recipient     String           @db.VarChar(32)
+  dedupeKey     String           @unique @db.Char(64)
+  clientJobId   String?          @db.VarChar(128)
+  requestJobKey String?          @db.Char(64)
+  payloadHash   String           @db.Char(64)
+  message       String           @db.Text
+  image         String?          @db.LongText
+  campaignId    String?          @db.VarChar(36)
+  campaign      Campaign?        @relation(fields: [campaignId], references: [id])
+  mediaId       String?          @db.VarChar(36)
+  media         MediaAsset?      @relation(fields: [mediaId], references: [id])
+  source        String           @default("API") @db.VarChar(16)
+  payload       Json?
+  status        WaDispatchStatus @default(QUEUED)
+  attempts      Int              @default(0)
+  nextAttemptAt DateTime         @default(now())
+  expiresAt     DateTime
+  leaseToken    String?          @db.VarChar(36)
+  leaseUntil    DateTime?
+  messageId     String?          @unique @db.VarChar(64)
+  lastError     String?          @db.VarChar(128)
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([phoneId, status, createdAt])
+  @@index([phoneId, storeId, transactionId])
+  @@index([userId, createdAt])
+  @@index([requestJobKey])
+  @@index([campaignId, status])
+  @@map("wa_dispatches")
+}
+
+model WaSenderLease {
+  phoneId    String    @id @db.VarChar(36)
+  leaseToken String?   @db.VarChar(36)
+  leaseUntil DateTime?
+  nextSendAt DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("wa_sender_leases")
+}
+
 model Account {
   id                String  @id @default(uuid())
   userId            String
@@ -52,22 +178,72 @@ model VerificationToken {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  name          String?
-  email         String?        @unique
-  password      String
-  token         String         @unique
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime       @default(now()) @map(name: "created_at")
-  updatedAt     DateTime       @updatedAt @map(name: "updated_at")
-  phones        Phone[]
-  auto_replies  AutoReply[]
-  accounts      Account[]
-  sessions      Session[]
-  InboxMessage  InboxMessage[]
+  id                    String               @id @default(uuid())
+  name                  String?
+  email                 String?              @unique
+  password              String
+  token                 String               @unique
+  image                 String?
+  emailVerified         DateTime?
+  createdAt             DateTime             @default(now()) @map(name: "created_at")
+  updatedAt             DateTime             @updatedAt @map(name: "updated_at")
+  phones                Phone[]
+  auto_replies          AutoReply[]
+  accounts              Account[]
+  sessions              Session[]
+  InboxMessage          InboxMessage[]
+  role                  String               @default("USER") @db.VarChar(16)
+  approvalStatus        String               @default("APPROVED") @db.VarChar(16)
+  isActive              Boolean              @default(true)
+  sessionVersion        Int                  @default(0)
+  deviceLimit           Int                  @default(100)
+  plan                  String               @default("Standard")
+  subscriptionExpiresAt DateTime?
+  passwordResets        PasswordResetToken[]
 
   @@map(name: "users")
+}
+
+model GlobalSetting {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  label     String   @db.VarChar(200)
+  key       String   @unique @db.VarChar(120)
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("global_settings")
+}
+
+model PasswordResetToken {
+  tokenHash      String   @id @db.Char(64)
+  userId         String
+  email          String   @db.VarChar(200)
+  sessionVersion Int
+  passwordHash   String   @db.Char(64)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model EmailSequence {
+  id       Int    @id
+  attempts BigInt @default(0)
+
+  @@map("email_sequences")
+}
+
+model AuthRateLimit {
+  key       String   @id @db.Char(64)
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("auth_rate_limits")
 }
 
 enum PhoneStatus {
@@ -77,23 +253,75 @@ enum PhoneStatus {
 }
 
 model Phone {
-  id            String       @id @default(uuid())
-  name          String
-  number        String?
-  account_name  String?
-  qrCode        String?      @db.Text
-  status        PhoneStatus? @default(value: CLOSE)
-  isOnline      Boolean      @default(value: false) @map("is_online")
-  token         String       @unique @default(uuid())
-  user          User         @relation(fields: [userId], references: [id])
-  userId        String
-  auto_replies  AutoReply[]
-  is_save_group Boolean      @default(value: false) @map("is_save_group")
-  active        Int          @default(value: 1)
-  createdAt     DateTime     @default(now()) @map(name: "created_at")
-  updatedAt     DateTime     @updatedAt @map(name: "updated_at")
+  id                   String             @id @default(uuid())
+  name                 String
+  number               String?
+  account_name         String?
+  qrCode               String?            @db.Text
+  status               PhoneStatus?       @default(value: CLOSE)
+  isOnline             Boolean            @default(value: false) @map("is_online")
+  token                String             @unique @default(uuid())
+  user                 User               @relation(fields: [userId], references: [id])
+  userId               String
+  auto_replies         AutoReply[]
+  is_save_group        Boolean            @default(value: false) @map("is_save_group")
+  active               Int                @default(value: 1)
+  webhookUrl           String?            @db.Text
+  readReceipt          Boolean            @default(false)
+  rejectCall           Boolean            @default(false)
+  showOnline           Boolean            @default(true)
+  showTyping           Boolean            @default(false)
+  autoReplyEnabled     Boolean            @default(false)
+  saveIncomingMessages Boolean            @default(false)
+  saveIncomingSince    DateTime?
+  conversations        ChatConversation[]
+  createdAt            DateTime           @default(now()) @map(name: "created_at")
+  updatedAt            DateTime           @updatedAt @map(name: "updated_at")
 
   @@map(name: "phones")
+}
+
+model ChatConversation {
+  id            String        @id @default(uuid()) @db.VarChar(36)
+  phoneId       String
+  userId        String
+  jid           String        @db.VarChar(100)
+  name          String        @db.VarChar(200)
+  lastMessage   String?       @db.Text
+  lastMessageAt DateTime      @default(now())
+  unreadCount   Int           @default(0)
+  archived      Boolean       @default(false)
+  phone         Phone         @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+
+  @@unique([phoneId, jid])
+  @@index([userId, phoneId, lastMessageAt])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  conversationId  String           @db.VarChar(36)
+  waMessageId     String           @db.VarChar(100)
+  clientRequestId String?          @db.VarChar(36)
+  requestHash     String?          @db.VarChar(64)
+  sourceMediaId   String?          @db.VarChar(36)
+  direction       String           @db.VarChar(3)
+  type            String           @db.VarChar(20)
+  text            String           @db.LongText
+  quotedText      String?          @db.Text
+  sender          String?          @db.VarChar(200)
+  status          String           @db.VarChar(20)
+  mediaPath       String?          @db.VarChar(100)
+  mediaMime       String?          @db.VarChar(100)
+  mediaName       String?          @db.VarChar(255)
+  createdAt       DateTime         @default(now())
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, waMessageId])
+  @@unique([conversationId, clientRequestId])
+  @@index([conversationId, createdAt, id])
+  @@map("chat_messages")
 }
 
 enum ReplyType {
@@ -103,6 +331,50 @@ enum ReplyType {
   template
   list
   webhook
+  ai
+}
+
+model MessageTemplate {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  name      String   @db.VarChar(200)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@map("message_templates")
+}
+
+model AiPlugin {
+  id                String   @id @default(uuid()) @db.VarChar(36)
+  userId            String   @db.VarChar(36)
+  provider          String   @db.VarChar(16)
+  enabled           Boolean  @default(false)
+  encryptedKey      String   @db.Text
+  model             String   @db.VarChar(120)
+  systemPrompt      String   @db.Text
+  maxOutputTokens   Int      @default(1024)
+  requestsPerMinute Int      @default(10)
+  dailyLimit        Int      @default(1000)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@map("ai_plugins")
+}
+
+model AiRequest {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  provider  String   @db.VarChar(16)
+  dedupeKey String   @unique @db.Char(64)
+  status    String   @db.VarChar(16)
+  error     String?  @db.VarChar(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, provider, createdAt])
+  @@map("ai_requests")
 }
 
 enum KeywordType {
@@ -142,10 +414,12 @@ model AutoReply {
   phone          Phone           @relation(fields: [phoneId], references: [id], onDelete: Cascade)
   phoneId        String
   keyword        String
+  delaySeconds   Int             @default(0)
+  sentCount      Int             @default(0)
   type_keyword   KeywordType     @default(value: Equal)
   type           ReplyType       @default(value: text)
   reply          Json?
-  reply_status   AutoReplyStatus @default(value: active)
+  reply_status   AutoReplyStatus @default(value: inactive)
   reply_when     ReplyWhen       @default(value: All)
   is_quoted      Boolean         @default(value: false)
   is_save_inbox  Boolean         @default(value: false)
@@ -164,6 +438,171 @@ model AutoReply {
   updatedAt      DateTime        @updatedAt @map(name: "updated_at")
 
   @@map(name: "auto_replies")
+}
+
+enum CampaignStatus {
+  WAITING
+  PROCESSING
+  COMPLETED
+  PAUSED
+  CLEARED
+}
+
+model Campaign {
+  id          String         @id @default(uuid()) @db.VarChar(36)
+  userId      String         @db.VarChar(36)
+  name        String         @db.VarChar(200)
+  message     String         @db.Text
+  phoneIds    Json
+  audience    Json?
+  mediaId     String?        @db.VarChar(36)
+  scheduledAt DateTime
+  delayMin    Int            @default(5)
+  delayMax    Int            @default(15)
+  status      CampaignStatus @default(WAITING)
+  dispatches  WaDispatch[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@map("campaigns")
+}
+
+model ContactGroup {
+  id       String    @id @default(uuid()) @db.VarChar(36)
+  userId   String    @db.VarChar(36)
+  name     String    @db.VarChar(200)
+  contacts Contact[]
+
+  @@unique([userId, name])
+  @@map("contact_groups")
+}
+
+model Contact {
+  id        String        @id @default(uuid()) @db.VarChar(36)
+  userId    String        @db.VarChar(36)
+  name      String        @db.VarChar(200)
+  number    String        @db.VarChar(32)
+  groupId   String?       @db.VarChar(36)
+  group     ContactGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, number])
+  @@index([userId, groupId])
+  @@map("contacts")
+}
+
+model MediaAsset {
+  id           String       @id @default(uuid()) @db.VarChar(36)
+  userId       String       @db.VarChar(36)
+  name         String       @db.VarChar(255)
+  originalName String?      @db.VarChar(255)
+  mime         String       @db.VarChar(100)
+  size         Int
+  filename     String       @unique @db.VarChar(100)
+  dispatches   WaDispatch[]
+  createdAt    DateTime     @default(now())
+
+  @@index([userId, createdAt])
+  @@map("media_assets")
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  name        String   @unique @db.VarChar(100)
+  deviceLimit Int      @default(100)
+  description String   @default("") @db.VarChar(500)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+model ServerSetting {
+  id         Int      @id @default(1)
+  serverType String   @default("VPS")
+  nodeUrl    String   @default("http://127.0.0.1")
+  nodePort   Int      @default(3000)
+  updatedAt  DateTime @updatedAt
+
+  @@map("server_settings")
+}
+
+model DeviceWebhookSetting {
+  id        Int      @id @default(1)
+  enabled   Boolean  @default(false)
+  url       String   @default("") @db.Text
+  secret    String   @default("") @db.Text
+  revision  String   @db.VarChar(36)
+  updatedAt DateTime @updatedAt
+
+  @@map("device_webhook_settings")
+}
+
+model DeviceWebhookEvent {
+  id            Int       @id @default(autoincrement())
+  eventId       String    @unique @db.VarChar(36)
+  deviceId      String?   @db.VarChar(36)
+  event         String    @db.VarChar(64)
+  revision      String    @db.VarChar(36)
+  payload       String?   @db.LongText
+  status        String    @default("PENDING") @db.VarChar(16)
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  leaseToken    String?   @db.VarChar(36)
+  leaseUntil    DateTime?
+  lastError     String?   @db.VarChar(100)
+  createdAt     DateTime  @default(now())
+  deliveredAt   DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt])
+  @@map("device_webhook_events")
+}
+
+model DispatchWebhookSetting {
+  id        Int      @id @default(1)
+  enabled   Boolean  @default(false)
+  url       String   @default("") @db.Text
+  secret    String   @default("") @db.Text
+  revision  String   @db.VarChar(36)
+  updatedAt DateTime @updatedAt
+
+  @@map("dispatch_webhook_settings")
+}
+
+model DispatchWebhookEvent {
+  id            Int       @id @default(autoincrement())
+  eventId       String    @unique @db.VarChar(36)
+  dispatchId    String?   @db.VarChar(36)
+  event         String    @db.VarChar(64)
+  revision      String    @db.VarChar(36)
+  payload       String?   @db.LongText
+  status        String    @default("PENDING") @db.VarChar(16)
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  leaseToken    String?   @db.VarChar(36)
+  leaseUntil    DateTime?
+  lastError     String?   @db.VarChar(100)
+  createdAt     DateTime  @default(now())
+  deliveredAt   DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt])
+  @@map("dispatch_webhook_events")
+}
+
+model DeviceContact {
+  id      String @id @default(uuid()) @db.VarChar(36)
+  userId  String @db.VarChar(36)
+  phoneId String @db.VarChar(36)
+  number  String @db.VarChar(32)
+  name    String @db.VarChar(200)
+
+  @@unique([phoneId, number])
+  @@index([userId, phoneId])
+  @@map("device_contacts")
 }
 
 model InboxMessage {

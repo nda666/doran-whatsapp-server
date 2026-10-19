@@ -1,0 +1,95 @@
+import FilterSelect from "@/components/FilterSelect";
+import ActionDropdown from "@/components/ActionDropdown";
+import { EditOutlined, HistoryOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined } from "@ant-design/icons";
+import Table from "@/components/DashboardTable";
+import { useTableState } from "@/lib/useTableState";
+import { useTranslation } from "next-i18next";
+import { ReactElement, useState } from "react";
+import { Alert, Button, Card, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag, message } from "antd";
+import axios from "axios";
+import dayjs from "dayjs";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import Layout from "@/components/Layout";
+import { useDashboardApi } from "@/lib/useDashboardApi";
+const labels: Record<string, string> = { WAITING: "Menunggu", PROCESSING: "Memproses", COMPLETED: "Selesai", PAUSED: "Dijeda", CLEARED: "Dikosongkan" };
+export default function Campaigns() {
+  const { t: ui } = useTranslation("upgrade");
+  const [contactSearch, setContactSearch] = useState("");
+  const contacts = useDashboardApi(`/api/contacts?q=${encodeURIComponent(contactSearch)}`);
+  const table = useTableState(), historyTable = useTableState();
+  const [modal, modalContext] = Modal.useModal();
+  const [status, setStatus] = useState(""), [phoneId, setPhoneId] = useState("");
+  const api = useDashboardApi(`/api/campaigns?${table.params}&status=${status}&phoneId=${phoneId}`, 5000);
+  const phones = useDashboardApi("/api/phones?options=1"), groups = useDashboardApi("/api/contacts/groups"), media = useDashboardApi("/api/media?options=1");
+  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [history, setHistory] = useState(""), [editing, setEditing] = useState(false);
+  const detail = useDashboardApi(history ? `/api/campaigns/${history}?${historyTable.params}` : "", 5000);
+  const [form] = Form.useForm();
+  const sendNow = Form.useWatch("sendNow", form);
+  const action = async (id: string, action: string) => { try { await axios.patch(`/api/campaigns/${id}`, { action }, { headers: api.headers }); api.reload(); } catch (e: any) { message.error(e.response?.data?.message || "Aksi gagal."); } };
+  const save = async (values: any) => {
+    setBusy(true);
+    try {
+      const recipients = (values.manual || "").split(/[\n;,]+/).map((v: string) => v.trim()).filter(Boolean).map((v: string) => { const [number, ...name] = v.split("|"); return { number: number.trim(), name: name.join("|").trim() }; });
+      const data = { ...values, contactIds: (values.contactIds || []).map((c: any) => c.value), recipients, scheduledAt: values.sendNow ? undefined : values.scheduledAt?.toISOString() };
+      if (editing) await axios.patch(`/api/campaigns/${values.id}`, { ...data, action: "edit" }, { headers: api.headers });
+      else await axios.post("/api/campaigns", data, { headers: api.headers });
+      setOpen(false); form.resetFields(); api.reload(); message.success(editing ? "Campaign diperbarui." : "Campaign tersimpan dalam antrean.");
+    } catch (e: any) { message.error(e.response?.data?.message || "Campaign belum tersimpan. Coba lagi dengan formulir yang sama."); }
+    finally { setBusy(false); }
+  };
+  const phoneOptions = (phones.data || []).map((p: any) => ({ value: p.id, label: `${p.name} (${p.number || "belum dipasangkan"})`, disabled: p.active !== 1 }));
+  return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    <Alert type="info" showIcon message="Campaign / Blast" description="Personalisasi dengan {nama} dan {nomor}. Device dipakai bergiliran sesuai urutan pilihan. Delay berlaku per device; delay dan rotasi tidak menjamin akun bebas pembatasan. Pause/clear berlaku untuk pesan yang belum mulai dikirim." />
+    <Space wrap><Button type="primary" onClick={() => { if (editing || !form.getFieldValue("id")) { form.resetFields(); form.setFieldsValue({ id: crypto.randomUUID(), delayMin: 5, delayMax: 15, phoneIds: [], sendNow: true }); } setEditing(false); setOpen(true); }}>{ui("Buat Campaign")}</Button>
+    </Space>
+    <Card title="Pencarian"><Form layout="vertical" colon={false} className="dashboard-filter-grid" onFinish={values => { setStatus(values.status || ""); setPhoneId(values.phoneId || ""); table.reset(); api.reload(); }}>
+      <Form.Item name="status" label="Status campaign"><FilterSelect allLabel="Semua status" options={Object.entries(labels).map(([value, label]) => ({ value, label }))} /></Form.Item>
+      <Form.Item name="phoneId" label="Perangkat"><FilterSelect allLabel="Semua perangkat" options={phoneOptions.map((phone: any) => ({ ...phone, disabled: false }))} /></Form.Item>
+      <div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">Cari</Button></div>
+    </Form></Card>
+    {api.error && <Alert type="error" message={api.error} />}
+    <Table className="table-with-data-count" rowKey="id" scroll={{ x: 1100 }} dataSource={api.data?.data || []} table={table} total={api.data?.total} columns={[
+      { title: "Campaign", dataIndex: "name" }, { title: ui("Status"), dataIndex: "status", render: s => <Tag>{ui(labels[s])}</Tag> },
+      { title: ui("Jadwal"), dataIndex: "scheduledAt", render: v => dayjs(v).format("DD/MM/YYYY HH:mm") },
+      { title: "Terkirim / Gagal / Antrean / Perlu diperiksa", width: 280, render: (_, c: any) => `${(c.counts.SENT || 0) + (c.counts.DELIVERED || 0) + (c.counts.READ || 0)} / ${c.counts.FAILED || 0} / ${(c.counts.QUEUED || 0) + (c.counts.PROCESSING || 0)} / ${c.counts.UNCERTAIN || 0}` },
+      { title: ui("Aksi"), key: "aksi", width: 120, render: (_, c: any) => <ActionDropdown ariaLabel={`Aksi campaign ${c.name}`} items={[
+        { key: "history", label: ui("Riwayat"), icon: <HistoryOutlined />, onClick: () => { setHistory(c.id); historyTable.reset(); } },
+        ...(["WAITING", "PAUSED"].includes(c.status) ? [{ key: "edit", label: "Edit", icon: <EditOutlined />, onClick: async () => { try {
+          const audience = c.audience || {};
+          let targets = audience.recipients || [];
+          if (!c.audience) { const rows = await axios.get(`/api/campaigns/${c.id}?limit=100`, { headers: api.headers }); if (rows.data.total > 100) { message.error("Campaign lama dengan lebih dari 100 penerima perlu dibuat ulang untuk mengubah target."); return; } targets = rows.data.data.map((job: any) => ({ number: job.recipient, name: "" })); }
+          form.resetFields(); form.setFieldsValue({ ...c, sendNow: false, scheduledAt: dayjs(c.scheduledAt), phoneIds: c.phoneIds, allContacts: audience.allContacts || false, groupIds: audience.groupIds || [], contactIds: (audience.contactIds || []).map((id: string) => ({ value: id, label: (contacts.data?.data || []).find((contact: any) => contact.id === id)?.name || id })), manual: targets.map((recipient: any) => `${recipient.number}|${recipient.name || ""}`).join("\n") }); setEditing(true); setOpen(true);
+        } catch { message.error("Campaign belum dapat dibuka."); } } }] : []),
+        ...(["WAITING", "PROCESSING", "PAUSED"].includes(c.status) ? [
+          { key: "pause", label: c.status === "PAUSED" ? "Lanjutkan" : "Jeda", icon: c.status === "PAUSED" ? <PlayCircleOutlined /> : <PauseCircleOutlined />, onClick: () => action(c.id, c.status === "PAUSED" ? "resume" : "pause") },
+          { key: "clear", label: ui("Kosongkan"), icon: <StopOutlined />, danger: true, onClick: () => modal.confirm({ title: "Batalkan semua pesan yang belum dikirim?", content: c.name, okText: ui("Kosongkan"), cancelText: "Batal", okButtonProps: { danger: true }, onOk: () => action(c.id, "clear") }) },
+        ] : []),
+      ]} /> },
+    ]} />
+    <Modal title={editing ? "Edit campaign" : "Campaign baru"} open={open} width={720} onCancel={() => !busy && setOpen(false)} okText="Simpan" cancelText="Batal" confirmLoading={busy} onOk={() => form.submit()} styles={{ body: { paddingTop: 16 } }}>
+      <Form form={form} layout="vertical" onFinish={save} disabled={busy}>
+        <Form.Item name="id" hidden><Input /></Form.Item>
+        <Form.Item name="name" label={ui("Nama campaign")} rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>
+        <Form.Item name="phoneIds" label="Perangkat pengirim (pilih beberapa untuk rotasi)" rules={[{ required: true, message: "Pilih perangkat pengirim." }]}><Select mode="multiple" showSearch optionFilterProp="label" placeholder="Pilih perangkat pengirim campaign" options={phoneOptions} /></Form.Item>
+        <Form.Item name="message" label={ui("Pesan / caption")} extra="Gunakan {nama} untuk nama penerima dan {nomor} untuk nomor WhatsApp. Contoh: Halo {nama}, pesan ini untuk {nomor}. Jika nama kosong, {nama} memakai nomor penerima." rules={[{ required: true }]}><Input.TextArea rows={4} maxLength={10000} showCount placeholder="Halo {nama}, ..." /></Form.Item>
+        <Form.Item name="mediaId" label="Media dari File Manager"><Select allowClear options={(media.data?.data || []).map((m: any) => ({ value: m.id, label: m.name }))} /></Form.Item>
+        <Form.Item name="groupIds" label="Target grup kontak"><Select mode="multiple" options={(groups.data || []).map((g: any) => ({ value: g.id, label: `${g.name} (${g._count.contacts})` }))} /></Form.Item>
+        <Form.Item name="contactIds" label="Pilih kontak phonebook"><Select mode="multiple" labelInValue showSearch filterOption={false} onSearch={setContactSearch} options={(contacts.data?.data || []).map((c: any) => ({ value: c.id, label: `${c.name} (${c.number})` }))} /></Form.Item>
+        <Form.Item name="allContacts" valuePropName="checked"><Checkbox>Semua kontak phonebook (maks. 10.000)</Checkbox></Form.Item>
+        <Form.Item name="manual" label="Nomor manual (satu baris: nomor|nama)"><Input.TextArea rows={4} placeholder={"081234567890|Budi\n+628134567890|Sari"} /></Form.Item>
+        <Form.Item name="sendNow" valuePropName="checked"><Checkbox>Kirim sekarang</Checkbox></Form.Item>
+        {!sendNow && <Form.Item name="scheduledAt" label="Tanggal dan jam pengiriman" rules={[{ required: true, message: "Pilih tanggal dan jam pengiriman." }]}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" style={{ width: "100%" }} /></Form.Item>}
+        <Space wrap><Form.Item name="delayMin" label="Delay minimum (detik)"><InputNumber min={1} max={3600} /></Form.Item><Form.Item name="delayMax" label="Delay maksimum (detik)"><InputNumber min={1} max={3600} /></Form.Item></Space>
+      </Form>
+    </Modal>
+    {modalContext}
+    <Modal title={ui("Riwayat penerima")} open={!!history} width={950} onCancel={() => setHistory("")} footer={null}>
+      {detail.error && <Alert type="error" message={detail.error} />}
+      <Table className="table-with-data-count" rowKey="id" scroll={{ x: true }} dataSource={detail.data?.data || []} table={historyTable} total={detail.data?.total} columns={[
+        { title: ui("Penerima"), dataIndex: "recipient" }, { title: ui("Device"), dataIndex: "phoneId" }, { title: ui("Status"), dataIndex: "status" }, { title: ui("Keterangan"), dataIndex: "lastError" }, { title: ui("Terkirim"), dataIndex: "sentAt", render: v => v ? dayjs(v).format("DD/MM HH:mm:ss") : "—" },
+      ]} />
+    </Modal>
+  </Space>;
+}
+Campaigns.getLayout = (page: ReactElement) => <Layout title="CAMPAIGN / BLAST">{page}</Layout>;
+export const getStaticProps = async ({ locale }: { locale: string }) => ({ props: { ...(await serverSideTranslations(locale, ["common", "upgrade"])) } });

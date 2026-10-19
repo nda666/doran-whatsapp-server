@@ -1,6 +1,6 @@
 import sendWaQueue from "../queues/sendWaQueue";
 
-sendWaQueue.process(async (job) => {
+sendWaQueue?.process(async (job) => {
   const data = job.data;
 
   console.log(`Sending email to ` + JSON.stringify(data));

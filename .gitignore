@@ -3,8 +3,14 @@
 # env
 .env
 .env.production
+.env.local
+.env.production.local
+/.recovery/
 # dependencies
 /node_modules
+/.npm-cache
+/.test-db
+/storage
 /.pnp
 .pnp.js
 
@@ -44,3 +50,16 @@ next-env.d.ts
 # ide
 .history
 .vscode
+
+/.next-local/
+
+# Local verification output, temporary copies, and deployment artifacts
+/tmp/
+/output/
+__pycache__/
+*.pyc
+/deployment/*.zip
+/deployment/*.tar.gz
+/deployment/*.log
+/deployment/*.png
+/deployment/*.jpg

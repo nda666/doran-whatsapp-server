@@ -1,0 +1,91 @@
+[
+  {
+    "menu": "contacts",
+    "field": "Grup",
+    "all": "Semua grup",
+    "defaultSelected": true,
+    "otherOptions": 0
+  },
+  {
+    "menu": "campaigns",
+    "field": "Status campaign",
+    "all": "Semua status",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "campaigns",
+    "field": "Perangkat",
+    "all": "Semua perangkat",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "dispatch",
+    "field": "Status pengiriman",
+    "all": "Semua status",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "dispatch",
+    "field": "Perangkat pengirim",
+    "all": "Semua perangkat",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "dispatch",
+    "field": "Sumber",
+    "all": "Semua sumber",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "dispatch",
+    "field": "Perangkat pengirim",
+    "allRemainsDuringSearch": true
+  },
+  {
+    "menu": "reports",
+    "field": "Perangkat",
+    "all": "Semua perangkat",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "admin",
+    "field": "Status akun",
+    "all": "Semua status akun",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "phone",
+    "field": "Koneksi",
+    "all": "Semua koneksi",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "phone",
+    "field": "Status perangkat",
+    "all": "Semua status",
+    "defaultSelected": true,
+    "persistsAfterChange": true,
+    "canSelectAgain": true
+  },
+  {
+    "menu": "phone",
+    "field": "Status perangkat",
+    "clearRestoresAll": true
+  }
+]

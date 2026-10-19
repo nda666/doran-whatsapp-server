@@ -1,5 +1,6 @@
 import express from "express";
 import { NextApiRequest, NextApiResponse } from "next";
+import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
 
 import { createBullBoard } from "@bull-board/api";
 import { BullAdapter } from "@bull-board/api/bullAdapter";
@@ -9,7 +10,7 @@ import sendWaQueue from "../../lib/queues/sendWaQueue"; // sesuaikan path queue 
 
 let handler: any; // singleton
 
-if (!handler) {
+if (!handler && sendWaQueue) {
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath("/api/bull-queue"); // ganti path di sini
 
@@ -24,9 +25,12 @@ if (!handler) {
   handler = app;
 }
 
-export default (req: NextApiRequest, res: NextApiResponse) => {
+export default apiSuperAdminMiddleware((req: NextApiRequest, res: NextApiResponse) => {
+  if (!sendWaQueue) {
+    return res.status(503).json({ message: "Antrean WhatsApp dinonaktifkan sementara." });
+  }
   return handler(req, res);
-};
+});
 
 export const config = {
   api: {

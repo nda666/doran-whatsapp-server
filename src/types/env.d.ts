@@ -10,9 +10,5 @@ declare namespace NodeJS {
     WHATSAPP_AUTH_FOLDER: string;
     WHATSAPP_LOG: string;
     WEBSITE_LOG: string;
-
-    API_TOKEN?: string;
-    WEBHOOK_URLS?: string;
-    WEBHOOK_RATE_LIMIT_MS?: string;
   }
 }

@@ -1,83 +1,22 @@
-import type {
-  NextApiRequest,
-  NextApiResponse,
-} from 'next';
-import { getToken } from 'next-auth/jwt';
-
-import { prisma } from '@/lib/prisma';
-import apiAuthMiddleware from '@/middleware/apiAuthMiddleware';
-import { AuthNextApiRequest } from '@/types/global';
-
-async function handler(req: NextApiRequest, res: NextApiResponse) {
-  switch (req.method) {
-    case "GET":
-      return GET(req, res);
-    default:
-      res.status(405).end();
-  }
+import { tableQuery } from "@/lib/tableQuery";
+import { ownerScope } from "@/lib/access";
+import type { NextApiResponse } from "next";
+import { prisma } from "@/lib/prisma";
+import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+import { AuthNextApiRequest } from "@/types/global";
+import { dispatchDateFilter } from "@/lib/dispatchDateFilter";
+async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") return res.status(405).end();
+  res.setHeader("Cache-Control", "no-store");
+  let dateFilter: ReturnType<typeof dispatchDateFilter>;
+  try { dateFilter = dispatchDateFilter(req.query.start_date, req.query.end_date); }
+  catch (error) { return res.status(400).json({ message: (error as Error).message }); }
+  const { page, limit, skip, orderBy } = tableQuery(req.query, ["sender", "recipient", "message", "quote", "respons", "image_in", "type_request", "url", "sentAt", "receivedAt"], "id", "desc");
+  const where = { ...ownerScope(req.user!),
+    ...(dateFilter.gte ? { receivedAt: dateFilter } : {}),
+    ...(typeof req.query.sender === "string" && req.query.sender ? { sender: { contains: req.query.sender.slice(0, 100) } } : {}),
+    ...(typeof req.query.recipient === "string" && req.query.recipient ? { recipient: { contains: req.query.recipient.slice(0, 100) } } : {}) };
+  const [data, totalData] = await Promise.all([prisma.inboxMessage.findMany({ where, take: limit, skip, orderBy }), prisma.inboxMessage.count({ where })]);
+  return res.json({ data, totalData, totalPage: Math.ceil(totalData / limit), currentPage: page });
 }
-
-const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
-  const token = await getToken({ req });
-  try {
-    const { limit = 10, page = 1, sender, recipient } = req.query;
-
-    const limitNumber = parseInt(limit as string) || 10;
-    const pageNumber = parseInt(page as string) || 1;
-    await prisma.inboxMessage.updateMany({
-      where: {
-        userId: null,
-      },
-      data: {
-        userId: token?.id,
-      },
-    });
-    const inbox = await prisma.inboxMessage.findMany({
-      where: {
-        userId: token?.id,
-        ...(sender && {
-          sender: {
-            contains: String(sender), // Case-insensitive search, adjust if needed
-          },
-        }),
-        ...(recipient && {
-          recipient: {
-            contains: String(recipient), // Case-insensitive search, adjust if needed
-          },
-        }),
-      },
-      take: limitNumber, // Fetch an extra item to determine if there’s a next page
-      skip: limitNumber * (pageNumber - 1), // Skip the cursor item itself
-      orderBy: { id: "desc" },
-    });
-
-    const totalData = await prisma.inboxMessage.count({
-      where: {
-        userId: token?.id,
-        ...(sender && {
-          sender: {
-            contains: String(sender), // Case-insensitive search, adjust if needed
-          },
-        }),
-        ...(recipient && {
-          recipient: {
-            contains: String(recipient), // Case-insensitive search, adjust if needed
-          },
-        }),
-      },
-    });
-    const totalPage = Math.ceil(totalData / limitNumber);
-
-    res.status(200).json({
-      data: inbox,
-      totalPage: totalPage,
-      totalData: totalData,
-      currentPage: pageNumber,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).end();
-  }
-};
-
 export default apiAuthMiddleware(handler);

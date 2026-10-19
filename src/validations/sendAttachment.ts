@@ -1,4 +1,5 @@
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
+import { CountryCode } from "libphonenumber-js";
+import { normalizePhoneRecipient } from "../utils/normalizePhoneRecipient";
 import { z, ZodError } from "zod";
 
 export const SendAttachmentValidation = async (data: any) => {
@@ -10,6 +11,7 @@ export const SendAttachmentValidation = async (data: any) => {
       api_key: z.string({
         required_error: "Field to is required",
       }),
+      phoneCountry: z.string().optional(),
       phoneCode: z.string().optional().default("ID"),
       caption: z.string().optional(),
     })
@@ -19,25 +21,11 @@ export const SendAttachmentValidation = async (data: any) => {
     })
     .refine(
       (data) => {
-        const tos = data.number.split(",");
-        let result = true;
-        tos.forEach((x) => {
-          try {
-            let _res = parsePhoneNumber(
-              x,
-              data.phoneCode ? (data.phoneCode as CountryCode) : "ID"
-            ).isValid();
-
-            if (!_res) {
-              result = false;
-              return false;
-            }
-          } catch (e) {
-            result = false;
-            return false;
-          }
-        });
-        return result;
+        try {
+          return data.number.split(",").every(number => !!normalizePhoneRecipient(
+            number, (data.phoneCountry || data.phoneCode || "ID") as CountryCode,
+          ));
+        } catch { return false; }
       },
       {
         message: "Number wrong formated",

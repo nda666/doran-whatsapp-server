@@ -1,0 +1,12 @@
+# BEGIN Doran dashboard proxy
+RewriteEngine On
+DirectoryIndex disabled
+
+# Leave certificate validation files with Apache.
+RewriteRule ^\.well-known/ - [L]
+
+# Socket.IO uses the same application for polling and WebSocket upgrades.
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^(.*)$ ws://127.0.0.1:3000/$1 [P,L]
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+# END Doran dashboard proxy

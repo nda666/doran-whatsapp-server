@@ -8,7 +8,10 @@ import { prisma } from "../lib/prisma";
  */
 export const getAutoReplyByPhoneId = async (phoneId: any) =>
   await prisma.autoReply.findMany({
+    orderBy: { id: "asc" },
     where: {
       phoneId: phoneId,
+      reply_status: "active",
+      phone: { autoReplyEnabled: true },
     },
   });

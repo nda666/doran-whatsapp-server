@@ -1,0 +1,5 @@
+{
+  "src/pages/dashboard/media.tsx": "48d63f1b1a97d9652799f02dbdbc40552d5377e90cda3e645a176aecfbf09abd",
+  "src/pages/api/media/[id].ts": "946f25ef0e6b0d3616c25518115b4eaf67f891264f3066573f879019a863bf0f",
+  "src/server/campaigns/media.ts": "c8977225296b70a88dffc23119676028ddccc3c7a8eb6c52ce2c1539d409b518"
+}

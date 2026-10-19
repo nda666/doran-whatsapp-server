@@ -1,9 +1,10 @@
-import { parsePhoneNumber } from "libphonenumber-js";
+import { CountryCode } from "libphonenumber-js";
+import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 
 import { delay, WAMessage } from "@whiskeysockets/baileys";
 
 // import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
-import makeWASocket, { deleteSession } from "./makeWASocket";
+import makeWASocket from "./makeWASocket";
 
 const sendMessageFromIo = async ({
   phoneId,
@@ -33,7 +34,8 @@ const sendMessageFromIo = async ({
       userId,
       image
     );
-    sendResult && send.push(sendResult);
+    if (!sendResult?.key?.id) throw new Error("WhatsApp tidak mengembalikan ID pesan.");
+    send.push(sendResult);
   }
   return send;
 };
@@ -61,15 +63,14 @@ const sendMessage = async (
 ): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
-    const parsedTo = parsePhoneNumber(_to, "ID");
+    const recipient = normalizePhoneRecipient(_to, (phoneCountry || "ID") as CountryCode);
     if (!image) {
       const res = await createdWaSock.sendMessage(
-        `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+        `${recipient}@s.whatsapp.net`,
         {
           text: message!,
         }
       );
-      console.log("HERE", res);
       return res;
     } else {
       const imgExt = ["jpg", "jpeg", "png", "gif"];
@@ -82,7 +83,7 @@ const sendMessage = async (
         // const file = new File([blob], fileName || 'image', {type: 'image/png' || 'image/png'});
         // return res.status(200).json({'binary': binaryString});
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             image: binaryString,
             caption: message,
@@ -91,7 +92,7 @@ const sendMessage = async (
       } else if (image !== null && !isBase64(image)) {
         // return res.status(200).json('ok');
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             image: {
               url: image,
@@ -105,8 +106,6 @@ const sendMessage = async (
     if (e?.output?.statusCode === 428) {
       retry++;
       if (retry < 5) {
-        deleteSession(phoneId);
-
         await delay(2000);
         return await sendMessage(
           _to,
@@ -114,14 +113,15 @@ const sendMessage = async (
           message,
           retry,
           phoneId,
-          userId
+          userId,
+          image
         );
       } else {
         // rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {
         //   recursive: true,
         //   force: true,
         // });
-        return undefined;
+        throw e;
       }
     } else {
       throw e;

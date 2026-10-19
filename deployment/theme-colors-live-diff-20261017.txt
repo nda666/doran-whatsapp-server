@@ -1,0 +1,270 @@
+--- live/src/lib/dashboardColors.ts
++++ new/src/lib/dashboardColors.ts
+@@ -0,0 +1,37 @@
++export const dashboardColors = [
++  { value: "green", label: "Hijau", primary: "#147d68", dark: "#79d5b5" },
++  { value: "blue", label: "Biru", primary: "#1668c7", dark: "#85baff" },
++  { value: "orange", label: "Oranye", primary: "#b95012", dark: "#ffb279" },
++  { value: "purple", label: "Ungu", primary: "#7950bd", dark: "#c4a5ff" },
++  { value: "rose", label: "Rose", primary: "#bc3868", dark: "#ff9dbd" },
++  { value: "teal", label: "Teal", primary: "#087e8b", dark: "#73d4df" },
++] as const;
++
++export type DashboardColor = typeof dashboardColors[number]["value"];
++
++export function isDashboardColor(value: unknown): value is DashboardColor {
++  return dashboardColors.some(color => color.value === value);
++}
++
++function mix(color: string, base: string, weight: number) {
++  const channels = [1, 3, 5].map(offset => Math.round(
++    parseInt(color.slice(offset, offset + 2), 16) * weight
++    + parseInt(base.slice(offset, offset + 2), 16) * (1 - weight),
++  ).toString(16).padStart(2, "0"));
++  return `#${channels.join("")}`;
++}
++
++export function dashboardPalette(dark: boolean, color: DashboardColor = "green") {
++  const selected = dashboardColors.find(option => option.value === color) || dashboardColors[0];
++  const primary = dark ? selected.dark : selected.primary;
++  return {
++    primary,
++    surface: dark ? mix(selected.primary, "#171d24", 0.14) : "#ffffff",
++    layout: dark ? mix(selected.primary, "#10151b", 0.12) : mix(selected.primary, "#fafbfc", 0.025),
++    soft: dark ? mix(primary, "#17212b", 0.13) : mix(primary, "#ffffff", 0.065),
++    selected: dark ? mix(primary, "#17212b", 0.23) : mix(primary, "#ffffff", 0.12),
++    border: dark ? mix(primary, "#374151", 0.18) : mix(primary, "#e5e7eb", 0.08),
++    text: dark ? "#e7edf4" : "#263541",
++    secondary: dark ? "#b0becb" : "#61717e",
++  };
++}
+--- live/src/lib/DashboardPreferences.tsx
++++ new/src/lib/DashboardPreferences.tsx
+@@ -1,8 +1,25 @@
+ import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+-const Context = createContext({ dark: false, toggleDark: () => {} });
++import { DashboardColor, isDashboardColor } from "./dashboardColors";
++const Context = createContext({ dark: false, toggleDark: () => {}, color: "green" as DashboardColor, setColor: (_color: DashboardColor) => {} });
+ export function DashboardPreferences({ children }: { children: ReactNode }) {
+   const [dark, setDark] = useState(false);
+-  useEffect(() => { setDark(localStorage.getItem("doran-dark") === "true"); }, []);
+-  return <Context.Provider value={{ dark, toggleDark: () => setDark(value => { localStorage.setItem("doran-dark", String(!value)); return !value; }) }}>{children}</Context.Provider>;
++  const [color, setColorState] = useState<DashboardColor>("green");
++  useEffect(() => {
++    try {
++      setDark(localStorage.getItem("doran-dark") === "true");
++      const saved = localStorage.getItem("doran-color");
++      if (isDashboardColor(saved)) setColorState(saved);
++    } catch { /* Preferences still work when browser storage is unavailable. */ }
++  }, []);
++  const setColor = (value: DashboardColor) => {
++    setColorState(value);
++    try { localStorage.setItem("doran-color", value); } catch {}
++  };
++  const toggleDark = () => {
++    const next = !dark;
++    setDark(next);
++    try { localStorage.setItem("doran-dark", String(next)); } catch {}
++  };
++  return <Context.Provider value={{ dark, toggleDark, color, setColor }}>{children}</Context.Provider>;
+ }
+ export const useDashboardPreferences = () => useContext(Context);
+--- live/src/lib/dashboardTheme.ts
++++ new/src/lib/dashboardTheme.ts
+@@ -1,50 +1,47 @@
+ import type { ThemeConfig } from "antd";
+ import { theme } from "antd";
++import { DashboardColor, dashboardPalette } from "./dashboardColors";
+ 
+-export function dashboardTheme(dark: boolean): ThemeConfig {
+-  const surface = dark ? "#172b2a" : "#ffffff";
+-  const soft = dark ? "#203936" : "#f1f6f3";
+-  const border = dark ? "#344e48" : "#e3e9e5";
+-  const text = dark ? "#e5eeeb" : "#223a35";
+-  const secondary = dark ? "#a5bbb3" : "#62736a";
++export function dashboardTheme(dark: boolean, color: DashboardColor = "green"): ThemeConfig {
++  const { primary, surface, soft, border, text, secondary, layout, selected } = dashboardPalette(dark, color);
+   return {
+     algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+     token: {
+-      colorPrimary: dark ? "#63c4a6" : "#147d68",
+-      colorInfo: dark ? "#63c4a6" : "#147d68",
++      colorPrimary: primary,
++      colorInfo: primary,
+       colorBgBase: surface,
+       colorBgContainer: surface,
+       colorBgElevated: surface,
+-      colorBgLayout: dark ? "#10201e" : "#f5f7f6",
++      colorBgLayout: layout,
+       colorText: text,
+       colorTextSecondary: secondary,
+       colorTextTertiary: secondary,
+       colorTextPlaceholder: dark ? "#94b0c8" : "#60798c",
+       colorTextDisabled: dark ? "#8097ab" : "#6d8292",
+-      colorBgContainerDisabled: dark ? "#21384c" : "#eaf1f6",
++      colorBgContainerDisabled: soft,
+       colorBorder: border,
+-      colorBorderSecondary: dark ? "#29445d" : "#e9eeeb",
++      colorBorderSecondary: border,
+       borderRadius: 10,
+       controlHeight: 38,
+       fontFamily: '"Segoe UI", Arial, sans-serif',
+       lineHeight: 1.6,
+     },
+     components: {
+-      Layout: { headerBg: surface, siderBg: surface, bodyBg: dark ? "#10201e" : "#f5f7f6" },
++      Layout: { headerBg: surface, siderBg: surface, bodyBg: layout },
+       Menu: {
+         itemBg: "transparent", itemColor: secondary,
+-        itemSelectedBg: dark ? "#24483c" : "#e9f4ed",
+-        itemSelectedColor: dark ? "#90d8bb" : "#147d68",
++        itemSelectedBg: selected,
++        itemSelectedColor: primary,
+         itemHoverBg: soft, itemHoverColor: text,
+         itemBorderRadius: 10, itemHeight: 42,
+       },
+       Button: { defaultBg: surface, defaultColor: text, defaultBorderColor: border, fontWeight: 600 },
+       Table: {
+-        headerBg: soft, headerColor: text, headerSortActiveBg: dark ? "#264965" : "#dcefff",
+-        headerSortHoverBg: dark ? "#264965" : "#dcefff",
+-        bodySortBg: dark ? "#19334b" : "#f5faff",
+-        rowHoverBg: soft, rowSelectedBg: dark ? "#24483c" : "#e3f3ff",
+-        rowSelectedHoverBg: dark ? "#2a5676" : "#d6edff",
++        headerBg: soft, headerColor: text, headerSortActiveBg: selected,
++        headerSortHoverBg: selected,
++        bodySortBg: soft,
++        rowHoverBg: soft, rowSelectedBg: selected,
++        rowSelectedHoverBg: selected,
+         footerBg: soft, footerColor: secondary, borderColor: border,
+         headerSplitColor: border, cellPaddingBlock: 14,
+       },
+@@ -52,7 +49,7 @@
+       Card: { headerBg: surface },
+       Notification: { colorBgElevated: surface, colorText: text, colorTextHeading: text },
+       Message: { contentBg: surface, colorText: text },
+-      Input: { activeShadow: "0 0 0 3px rgba(47, 157, 226, 0.15)" },
++      Input: { activeShadow: `0 0 0 3px ${primary}26` },
+       Select: { optionSelectedBg: soft },
+     },
+   };
+--- live/src/pages/_app.tsx
++++ new/src/pages/_app.tsx
+@@ -1,6 +1,7 @@
+ import "@/styles/globals.css";
+ import { ConfigProvider } from "antd";
+ import { dashboardTheme } from "@/lib/dashboardTheme";
++import { dashboardPalette } from "@/lib/dashboardColors";
+ import { DashboardPreferences, useDashboardPreferences } from "@/lib/DashboardPreferences";
+ import { NextPage } from "next";
+ import { SessionProvider } from "next-auth/react";
+@@ -33,15 +34,26 @@
+   return <DashboardPreferences><ThemedApp Component={Component} pageProps={{ session, ...pageProps }} /></DashboardPreferences>;
+ };
+ const ThemedApp = ({ Component, pageProps: { session, ...pageProps } }: Pick<AppPropsWithLayout, "Component" | "pageProps">) => {
+-  const { dark } = useDashboardPreferences();
++  const { dark, color } = useDashboardPreferences();
++  const palette = dashboardPalette(dark, color);
+   const { locale } = useRouter();
+   const getLayout = Component.getLayout || ((page) => page);
+   const [lang, setLang] = useState<Locale | undefined>(undefined);
+   useEffect(() => {
+     document.documentElement.dataset.theme = dark ? "dark" : "light";
++    document.documentElement.dataset.color = color;
++    const colors = dashboardPalette(dark, color);
++    const variables = {
++      "--ui-text": colors.text, "--ui-muted": colors.secondary,
++      "--ui-surface": colors.surface, "--ui-soft": colors.layout,
++      "--ui-border": colors.border, "--ui-accent": colors.primary,
++      "--ui-selected": colors.selected, "--ui-sort-arrow": colors.secondary,
++      "--ui-sort-active": colors.primary, "--ui-sort-header": colors.selected,
++    };
++    Object.entries(variables).forEach(([name, value]) => document.documentElement.style.setProperty(name, value));
+     // Static message/notification calls are rendered outside the React provider.
+-    ConfigProvider.config({ holderRender: children => <ConfigProvider theme={dashboardTheme(dark)}>{children}</ConfigProvider> });
+-  }, [dark]);
++    ConfigProvider.config({ holderRender: children => <ConfigProvider theme={dashboardTheme(dark, color)}>{children}</ConfigProvider> });
++  }, [dark, color]);
+   useEffect(() => {
+     const locales: Record<string, () => Promise<{ default: Locale }>> = {
+       id: () => import("antd/locale/id_ID"), en: () => import("antd/locale/en_US"), es: () => import("antd/locale/es_ES"),
+@@ -54,8 +66,8 @@
+   return (
+     <SessionProvider session={session} refetchInterval={15} refetchOnWindowFocus refetchWhenOffline={false}>
+       <AccountSessionGuard />
+-      <NextNProgress color={dark ? "#65baff" : "#0875bd"} />
+-      <ConfigProvider locale={lang} direction={i18n?.language === "ar" ? "rtl" : "ltr"} theme={dashboardTheme(dark)}>
++      <NextNProgress color={palette.primary} />
++      <ConfigProvider locale={lang} direction={i18n?.language === "ar" ? "rtl" : "ltr"} theme={dashboardTheme(dark, color)}>
+         {getLayout(<Component {...pageProps} />)}
+       </ConfigProvider>
+     </SessionProvider>
+--- live/src/components/Layout.tsx
++++ new/src/components/Layout.tsx
+@@ -5,6 +5,7 @@
+ import Link from "next/link";
+ import { useRouter } from "next/router";
+ import { useDashboardPreferences } from "@/lib/DashboardPreferences";
++import { dashboardColors, isDashboardColor } from "@/lib/dashboardColors";
+ import { signOut, useSession } from "next-auth/react";
+ import { isSuperAdmin, isSuperAdminPage } from "@/lib/access";
+ import ApprovalNotifications from "@/components/ApprovalNotifications";
+@@ -88,6 +89,20 @@
+             <Input.Search className="dashboard-search" placeholder={ui("Pencarian global")} aria-label={ui("Pencarian global")}
+               onSearch={q => void router.push(`/dashboard/search?q=${encodeURIComponent(q)}`)} />
+             <Button className="dashboard-mobile-search" type="text" aria-label={ui("Pencarian global")} icon={<SearchOutlined />} onClick={() => void router.push("/dashboard/search")} />
++            <Dropdown trigger={["click"]} menu={{
++              selectable: true,
++              selectedKeys: [preferences.color],
++              onClick: ({ key }) => { if (isDashboardColor(key)) preferences.setColor(key); },
++              items: dashboardColors.map(color => ({
++                key: color.value,
++                label: <span className="dashboard-color-option"><span className="dashboard-color-swatch" style={{ backgroundColor: preferences.dark ? color.dark : color.primary }} aria-hidden="true" />{color.label}</span>,
++              })),
++            }}>
++              <Button aria-label={`Tema warna: ${dashboardColors.find(color => color.value === preferences.color)?.label}`} aria-haspopup="menu" title="Tema warna">
++                <span className="dashboard-color-swatch dashboard-color-current" aria-hidden="true" />
++                <span className="theme-toggle-label">Tema warna</span><DownOutlined />
++              </Button>
++            </Dropdown>
+             <Button aria-label={preferences.dark ? ui("Mode terang") : ui("Mode gelap")} icon={preferences.dark ? <SunOutlined /> : <MoonOutlined />} onClick={preferences.toggleDark}>
+               <span className="theme-toggle-label">{preferences.dark ? ui("Mode terang") : ui("Mode gelap")}</span>
+             </Button>
+--- live/src/styles/globals.css
++++ new/src/styles/globals.css
+@@ -272,8 +272,8 @@
+ .dashboard-brand { justify-content: flex-start; padding: 24px; min-height: 88px; box-sizing: border-box; }
+ .dashboard-brand strong { font-size: 25px; letter-spacing: -1.2px; color: var(--ui-text); }
+ .dashboard-brand small { font-size: 10px; letter-spacing: .3px; margin-top: 2px; }
+-.dashboard-brand-dot { color: #15977c; }
+-.dashboard-brand-icon { background: #147d68; color: white; border: 0; border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
++.dashboard-brand-dot { color: var(--ui-accent); }
++.dashboard-brand-icon { background: var(--ui-accent); color: var(--ui-surface); border: 0; border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
+ .dashboard-sidebar .ant-menu { padding: 8px 12px; font-size: 12px; }
+ .dashboard-sidebar .ant-menu-item { margin-block: 3px; }
+ .dashboard-sidebar .ant-menu-item-divider { margin: 16px 12px; border-color: var(--ui-border); }
+@@ -288,14 +288,14 @@
+ .dashboard-header-actions .ant-btn { box-shadow: none; }
+ .dashboard-search { width: 230px; }
+ .dashboard-user { border: 0; background: transparent; padding: 3px 0 3px 12px; border-inline-start: 1px solid var(--ui-border); border-radius: 0; }
+-.dashboard-user .ant-avatar { background: #e7f2eb; color: #147d68; font-weight: 600; }
++.dashboard-user .ant-avatar { background: var(--ui-selected, #e7f2eb); color: var(--ui-accent); font-weight: 600; }
+ .dashboard-user small { display: none; }
+ .dashboard-user strong { max-width: 140px; font-weight: 500; font-size: 12px; }
+ .dashboard-user > .anticon { font-size: 9px; color: var(--ui-muted); }
+ .dashboard-content { padding: 28px 32px 40px; }
+ .dashboard-breadcrumb { font-size: 11px; margin-bottom: 20px; }
+ .dashboard-mobile-search { display: none; }
+-.dashboard-skip-link { position: fixed; top: -80px; inset-inline-start: 16px; z-index: 100; padding: 12px 20px; color: white; background: #147d68; border-radius: 8px; }
++.dashboard-skip-link { position: fixed; top: -80px; inset-inline-start: 16px; z-index: 100; padding: 12px 20px; color: var(--ui-surface); background: var(--ui-accent); border-radius: 8px; }
+ .dashboard-skip-link:focus { top: 12px; }
+ @media (min-width: 768px) and (max-width: 1250px) { .dashboard-search { width: 180px; } .dashboard-header.ant-layout-header { padding-inline: 24px; } .dashboard-user strong { max-width: 100px; } }
+ @media (max-width: 767px) {
+@@ -312,3 +312,8 @@
+ 
+ @media (max-width: 767px) { .dashboard-mobile-search { display: inline-flex; } }
+ @media (max-width: 380px) { .dashboard-heading .dashboard-page-title { display: none; } }
++
++.dashboard-color-option { display: inline-flex; align-items: center; gap: 10px; min-width: 110px; padding-block: 3px; }
++.dashboard-color-swatch { display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; border: 1px solid rgba(127, 127, 127, .25); }
++.dashboard-color-current { background: var(--ui-accent); }
++@media (max-width: 380px) { .dashboard-header-actions { gap: 4px !important; } }

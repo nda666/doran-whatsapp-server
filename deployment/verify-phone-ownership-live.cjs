@@ -1,0 +1,38 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient(), base = 'https://dashboard.jeblast.com';
+(async () => {
+  const admin = await p.user.findUniqueOrThrow({ where: { email: 'admin@gmail.com' } });
+  assert.equal(admin.role, 'ADMIN'); assert.equal(admin.approvalStatus, 'APPROVED');
+  const expected = await p.phone.findMany({ take: 100, orderBy: [{ user: { name: 'asc' } }, { id: 'asc' }], include: { user: { select: { id: true, name: true, email: true } } } });
+  let response = await fetch(base + '/api/phones?page=1&limit=100&sort=user.name&order=asc', { headers: { Authorization: 'Bearer ' + admin.token } });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.total, await p.phone.count());
+  assert.deepEqual(result.data.map(row => row.id), expected.map(row => row.id));
+  result.data.forEach((row, index) => { assert.deepEqual(row.user, expected[index].user); assert.equal(row.user.id, row.userId); assert(!('password' in row.user)); assert(!('token' in row.user)); });
+  console.log('PHONE_OWNERSHIP_ADMIN_DATA_AND_OWNER_SORT_OK', result.total);
+  const normal = await p.user.findFirst({ where: { approvalStatus: 'APPROVED', NOT: { email: 'admin@gmail.com' } } });
+  if (normal) {
+    response = await fetch(base + '/api/phones?page=1&limit=100&sort=user.name&order=asc', { headers: { Authorization: 'Bearer ' + normal.token } });
+    assert.equal(response.status, 200);
+    const own = await response.json();
+    assert.equal(own.total, await p.phone.count({ where: { userId: normal.id } }));
+    assert(own.data.every(row => row.userId === normal.id && !('user' in row)));
+    console.log('PHONE_OWNERSHIP_NORMAL_USER_DATA_SCOPING_OK');
+  } else console.log('PHONE_OWNERSHIP_NORMAL_USER_OFFLINE_REGRESSION_ONLY_NO_PRODUCTION_ACCOUNT_CREATED');
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: admin.id, token: admin.token, name: admin.name, email: admin.email }, secret: process.env.NEXTAUTH_SECRET });
+  response = await fetch(base + '/dashboard/phone', { headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const data = JSON.parse(html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)[1]);
+  assert.equal(data.buildId, fs.readFileSync('.next/BUILD_ID', 'utf8').trim());
+  const chunk = html.match(/src="([^"]*\/pages\/dashboard\/phone-[^"]+\.js)"/);
+  assert(chunk);
+  response = await fetch(new URL(chunk[1], base)); assert.equal(response.status, 200);
+  const js = await response.text(); assert(js.includes('Kepemilikan')); assert(js.includes('user.name'));
+  console.log('PHONE_OWNERSHIP_PUBLIC_PAGE_AND_JS_OK', data.buildId);
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => p.$disconnect());

@@ -1,10 +1,11 @@
+import { useUiTranslation } from "@/lib/uiTranslation";
 import React, { ReactElement, useState } from "react";
 import { Form, Typography, Alert, Space, Button } from "antd";
 import SigninForm, { SigninData } from "@/components/auth/SigninForm";
 import { NextPageWithLayout } from "./_app";
 import GuestLayout from "@/components/GuestLayout";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import { i18n, useTranslation } from "next-i18next";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import axios, { AxiosError } from "axios";
 import Link from "next/link";
 import type {
@@ -18,6 +19,7 @@ import { redirect } from "next/navigation";
 const Signin = ({
   csrfToken,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+  const uiText = useUiTranslation();
   const [state, setState] = useState({
     alert: "" as "error" | "success" | "info" | "warning" | undefined,
     message: "",
@@ -50,8 +52,9 @@ const Signin = ({
   return (
     <>
       <Space direction="vertical">
-        {state.alert && <Alert message={state.message} type={state.alert} />}
+        {state.alert && <Alert message={uiText(state.message)} type={state.alert} />}
         <SigninForm loading={state.loading} onSubmit={onSubmit} form={form} />
+        <Link href="/forgot-password">{uiText("Lupa password?")}</Link>
         <Space direction="horizontal">
           <Typography.Text>{t("dont_have_account").toString()}</Typography.Text>
           <Link href="/signup">{t("signup").toString()}</Link>
@@ -62,15 +65,14 @@ const Signin = ({
 };
 
 Signin.getLayout = function getLayout(page: ReactElement) {
-  const title = () => i18n?.t("Signin") || "";
-  return <GuestLayout title={title().toUpperCase()}>{page}</GuestLayout>;
+  return <GuestLayout title="Masuk">{page}</GuestLayout>;
 };
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const csrfToken = await getCsrfToken(context);
   return {
     props: {
-      ...(await serverSideTranslations(context?.locale!, ["common"])),
+      ...(await serverSideTranslations(context?.locale!, ["common", "interface"])),
       csrfToken: csrfToken || null,
     },
   };

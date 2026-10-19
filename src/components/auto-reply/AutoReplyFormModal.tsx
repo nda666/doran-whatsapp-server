@@ -1,3 +1,4 @@
+import { useUiTranslation } from "@/lib/uiTranslation";
 import React, {
   forwardRef,
   useEffect,
@@ -12,13 +13,14 @@ import {
   Form,
   Image,
   Input,
+  InputNumber,
   Modal,
   Radio,
   Select,
   Upload,
   UploadProps,
 } from "antd";
-import { useTranslation } from "next-i18next";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import Resizer from "react-image-file-resizer";
 
 import {
@@ -28,6 +30,11 @@ import {
   ImageReply,
 } from "@/types/components/IAutoReplyFormModal";
 import { UploadOutlined } from "@ant-design/icons";
+import WhatsAppCompatibilityNotice from "@/components/WhatsAppCompatibilityNotice";
+import KeywordTagsInput from "./KeywordTagsInput";
+import MessageTemplatePicker from "@/components/MessageTemplatePicker";
+import { aiProviders, providerNames } from "@/lib/aiPlugins";
+import { Alert } from "antd";
 
 const AutoReplyFormModal = forwardRef<
   AutoReplyFormModalRef,
@@ -45,20 +52,19 @@ const AutoReplyFormModal = forwardRef<
     },
     ref
   ) => {
+  const uiText = useUiTranslation();
     const { t } = useTranslation("common");
     const { TextArea } = Input;
     const [form] = Form.useForm();
     const [keywordType, setKeywordType] = useState("Equal");
     const [fileList, setFileList] = useState<any[]>([]);
-    const [typeMessage, setTypeMessage] = useState<String | undefined>(
-      undefined
-    );
+    const typeMessage = Form.useWatch("type_message", form);
     const [imagePreview, setImagePreview] = useState<string | undefined>(
       undefined
     );
-    const [typeParam1, setTypeParam1] = useState<String | undefined>(undefined);
-    const [typeParam2, setTypeParam2] = useState<String | undefined>(undefined);
-    const [typeParam3, setTypeParam3] = useState<String | undefined>(undefined);
+    const typeParam1 = Form.useWatch("isi_param_1", form);
+    const typeParam2 = Form.useWatch("isi_param_2", form);
+    const typeParam3 = Form.useWatch("isi_param_3", form);
     const [isSaveInbox, setIsSaveInbox] = useState(false);
     const [numIndex, setNumIndex] = useState(0);
     // const [buttonList, setButtonList] = useState([{name: '', value: ''}]);
@@ -113,12 +119,20 @@ const AutoReplyFormModal = forwardRef<
         form.setFieldValue("phoneId", phoneId!.id);
         form.setFieldValue("whatsapp_account", phoneId!.number);
         form.setFieldValue("keyword", editReply.keyword);
+        form.setFieldValue("reply_status", editReply.reply_status);
+        form.setFieldValue("delaySeconds", editReply.delaySeconds);
+        form.setFieldValue("is_quoted", editReply.is_quoted);
+        if (editReply.type === "list") form.setFieldValue("listPayload", JSON.stringify(editReply.reply, null, 2));
+        if (editReply.type === "ai") {
+          form.setFieldValue("aiProvider", reply?.provider);
+          form.setFieldValue("aiInstructions", reply?.instructions || "");
+          form.setFieldValue("reply_when", editReply.reply_when);
+        }
         if (reply) {
           form.setFieldValue("reply", reply.text);
         }
         setKeywordType(editReply.type_keyword);
         form.setFieldValue("type_keyword", editReply.type_keyword);
-        setTypeMessage(editReply.type);
         form.setFieldValue("type_message", editReply.type);
         form.setFieldValue("is_save_inbox", editReply.is_save_inbox);
         // setIsSaveInbox(editReply.is_save_inbox);
@@ -137,9 +151,9 @@ const AutoReplyFormModal = forwardRef<
 
       return () => {
         form.resetFields();
-        setTypeMessage(undefined);
+        setKeywordType("Equal");
       };
-    }, [phoneId]);
+    }, [phoneId, editReply, form]);
 
     useEffect(() => {
       form.setFieldValue("buttons", [...buttonList!]);
@@ -147,7 +161,7 @@ const AutoReplyFormModal = forwardRef<
 
     const resetForm = () => {
       form.resetFields();
-      setTypeMessage(undefined);
+      setKeywordType("Equal");
     };
     useImperativeHandle(ref, () => ({
       resetForm,
@@ -196,7 +210,7 @@ const AutoReplyFormModal = forwardRef<
       setNumIndex(numIndex + 1);
       // let nameInput = `button[${numIndex+1}]`;
       let nameInput = `button${numIndex + 1}`;
-      const label = `button ${numIndex + 1}`;
+      const label = uiText("button {{v0}}", { v0: numIndex + 1 });
       let collectVal = [];
       collectVal.push(form.getFieldValue("buttons"));
 
@@ -218,7 +232,7 @@ const AutoReplyFormModal = forwardRef<
       <Modal
         open={open}
         maskClosable={false}
-        title={props.title || ""}
+        title={props.title || (editReply ? uiText("Edit Balasan Otomatis") : uiText("Tambah Balasan Otomatis"))}
         okText={t("save")}
         cancelText={t("cancel")}
         onCancel={onCancel}
@@ -260,7 +274,7 @@ const AutoReplyFormModal = forwardRef<
           form={form}
           layout="vertical"
           name="phone-form"
-          initialValues={{ modifier: "public" }}
+          initialValues={{ modifier: "public", reply_status: "inactive", type_keyword: "Equal", type_message: "text" }}
         >
           <Form.Item name="id" hidden>
             <Input />
@@ -286,7 +300,12 @@ const AutoReplyFormModal = forwardRef<
             <Input disabled />
           </Form.Item>
           <Form.Item name="is_save_inbox" valuePropName="checked">
-            <Checkbox>Simpan Pesan Masuk</Checkbox>
+            <Checkbox>{uiText("Simpan Pesan Masuk")}</Checkbox>
+          </Form.Item>
+          <Form.Item name="reply_status" label={uiText("Aktifkan Balasan Ini")}
+            extra={uiText("Balasan ini hanya dijalankan jika Balasan Otomatis pada perangkat juga aktif.")}
+            rules={[{ required: true }]}>
+            <Select options={[{ value: "active", label: uiText("Aktif") }, { value: "inactive", label: uiText("Tidak aktif") }]} />
           </Form.Item>
           <Form.Item
             name={"type_keyword"}
@@ -312,6 +331,7 @@ const AutoReplyFormModal = forwardRef<
             <Form.Item
               name="keyword"
               label={t("keyword")}
+              extra={uiText("Tekan Enter untuk menambahkan kata kunci")}
               rules={[
                 {
                   required: keywordType != "Any",
@@ -321,45 +341,51 @@ const AutoReplyFormModal = forwardRef<
                 },
               ]}
             >
-              <Input />
+              <KeywordTagsInput />
             </Form.Item>
           )}
           <Form.Item
-            initialValue={typeMessage !== undefined ? String(typeMessage) : ""}
             label={t("reply_message_type")}
             name={"type_message"}
           >
             <Select
-              placeholder="Select One"
+              placeholder={uiText("Select One")}
               style={{
                 width: "100%",
-              }}
-              onChange={(value: string) => {
-                setTypeMessage(value);
               }}
               options={[
                 {
                   value: "text",
-                  label: "Text Message",
+                  label: uiText("Text Message"),
                 },
                 {
                   value: "image",
-                  label: "Image Message",
+                  label: uiText("Image Message"),
                 },
                 {
                   value: "button",
-                  label: "Button Message",
+                  label: uiText("Button Message"),
+                },
+                {
+                  value: "list",
+                  label: uiText("List Menu"),
                 },
                 {
                   value: "webhook",
-                  label: "Webhook",
+                  label: uiText("Webhook"),
                 },
+                { value: "ai", label: uiText("Balasan AI (OpenAI / Gemini / Claude)") },
               ]}
             />
           </Form.Item>
+          {(typeMessage === "button" || typeMessage === "template") && <WhatsAppCompatibilityNotice />}
+          <Form.Item name="delaySeconds" label={uiText("Delay balasan (detik)")} initialValue={0}><InputNumber min={0} max={60} /></Form.Item>
+          <Form.Item name="is_quoted" valuePropName="checked"><Checkbox>{uiText("Kutip pesan masuk")}</Checkbox></Form.Item>
+          {typeMessage === "list" && <Form.Item name="listPayload" label={uiText("JSON list menu (lihat API Docs)")} rules={[{ required: true }]}><Input.TextArea rows={5} placeholder={'{"text":"Menu","title":"Layanan","buttonText":"Pilih","rows":[{"id":"info","title":"Informasi"}]}'} /></Form.Item>}
 
           {typeMessage == "text" && (
             <>
+              <Form.Item label={uiText("Gunakan template tersimpan")}><MessageTemplatePicker disabled={props.loading} onApply={text => form.setFieldValue("reply", text)} /></Form.Item>
               <Form.Item
                 name={"reply"}
                 label={t("text_message")}
@@ -376,13 +402,19 @@ const AutoReplyFormModal = forwardRef<
               </Form.Item>
             </>
           )}
+          {typeMessage === "ai" && <>
+            <Alert type="info" showIcon style={{ marginBottom: 16 }} message={uiText("Konfigurasi di menu Plugin AI pada akun pemilik perangkat")} description={uiText("AI membalas pesan baru yang cocok dengan kata kunci di atas. Jika beberapa aturan AI cocok, satu pesan hanya diproses sekali. Instruksi sistem provider berlaku bersama instruksi tambahan aturan ini. Riwayat chat dan lampiran tidak dikirim ke AI.")} />
+            <Form.Item name="aiProvider" label={uiText("Provider AI")} rules={[{ required: true, message: uiText("Pilih provider AI.") }]}><Select options={aiProviders.map(value => ({ value, label: providerNames[value] }))} /></Form.Item>
+            <Form.Item name="reply_when" label={uiText("Balas AI pada")} initialValue="Personal" rules={[{ required: true }]}><Select options={[{ value: "Personal", label: uiText("Pesan pribadi") }, { value: "Group", label: uiText("Pesan grup") }, { value: "All", label: uiText("Pesan pribadi dan grup") }]} /></Form.Item>
+            <Form.Item name="aiInstructions" label={uiText("Instruksi tambahan untuk aturan ini (opsional)")}><Input.TextArea rows={4} maxLength={4000} showCount placeholder={uiText("Contoh: bantu pelanggan memilih produk dan arahkan pertanyaan harga ke admin.")} /></Form.Item>
+          </>}
           {typeMessage == "image" && (
             <>
               <Flex vertical justify="center" align="center" gap={5}>
                 {imagePreview && (
                   <Image
                     src={imagePreview}
-                    alt="Preview"
+                    alt={uiText("Preview")}
                     style={{ maxWidth: "200px", maxHeight: "200px" }}
                   />
                 )}
@@ -390,7 +422,7 @@ const AutoReplyFormModal = forwardRef<
                   {...uploadImageProps}
                   className="antd-upload-image-custom"
                 >
-                  <Button icon={<UploadOutlined />}>Click to Upload</Button>
+                  <Button icon={<UploadOutlined />}>{uiText("Click to Upload")}</Button>
                 </Upload>
               </Flex>
               <Form.Item
@@ -398,7 +430,7 @@ const AutoReplyFormModal = forwardRef<
                 label={"Caption"}
                 style={{ marginTop: "20px", marginBottom: "0" }}
               >
-                <Input placeholder="Caption" />
+                <Input placeholder={uiText("Caption")} />
               </Form.Item>
             </>
           )}
@@ -425,11 +457,9 @@ const AutoReplyFormModal = forwardRef<
 
               <Flex gap="small" wrap="wrap" style={{ marginBottom: "1.5em" }}>
                 <Button type="primary" onClick={addButton}>
-                  Add Button
-                </Button>
+                  {uiText("Add Button")}</Button>
                 <Button type="primary" danger onClick={removeButton}>
-                  Reduce Button
-                </Button>
+                  {uiText("Reduce Button")}</Button>
               </Flex>
 
               {buttonList!.length &&
@@ -454,7 +484,7 @@ const AutoReplyFormModal = forwardRef<
             <>
               <Form.Item
                 name="url"
-                label="URL"
+                label={"URL"}
                 rules={[
                   {
                     required: true,
@@ -467,7 +497,7 @@ const AutoReplyFormModal = forwardRef<
                 <Input />
               </Form.Item>
               <Form.Item
-                label="Tipe Request"
+                label={uiText("Tipe Request")}
                 name={"type_request"}
                 rules={[
                   {
@@ -479,143 +509,125 @@ const AutoReplyFormModal = forwardRef<
                 ]}
               >
                 <Select
-                  placeholder="Choose Request Type"
+                  placeholder={uiText("Choose Request Type")}
                   options={[
                     { value: "GET", label: "GET" },
                     { value: "POST", label: "POST" },
                   ]}
                 />
               </Form.Item>
-              <Form.Item label={"Param #1"} name={"param_1"}>
+              <Form.Item label={uiText("Label Param #1")} name={"param_1"}>
                 <Input style={{ width: "100%" }} />
               </Form.Item>
               <Form.Item
-                initialValue={
-                  typeParam1 !== undefined ? String(typeParam1) : ""
-                }
-                label={"Isi Param #1"}
+                label={uiText("Isi Param #1")}
                 name={"isi_param_1"}
               >
                 <Select
-                  placeholder="Choose Type Param"
-                  onChange={(value: string) => {
-                    setTypeParam1(value);
-                  }}
+                  placeholder={uiText("Choose Type Param")}
                   options={[
                     {
                       value: "Sender",
-                      label: "Sender",
+                      label: uiText("Sender"),
                     },
                     {
                       value: "Recipient",
-                      label: "Recipient",
+                      label: uiText("Recipient"),
                     },
                     {
                       value: "Message",
-                      label: "Message",
+                      label: uiText("Message"),
                     },
                     {
                       value: "Quote",
-                      label: "Quote",
+                      label: uiText("Quote"),
                     },
                     {
                       value: "Custom",
-                      label: "Manual Input",
+                      label: uiText("Manual Input"),
                     },
                   ]}
                 />
               </Form.Item>
               {typeParam1 == "Custom" && (
                 <Form.Item name={"custom_input_1"}>
-                  <Input style={{ width: "100%" }} placeholder="Input value" />
+                  <Input style={{ width: "100%" }} placeholder={uiText("Input value")} />
                 </Form.Item>
               )}
-              <Form.Item label={"Param #2"} name={"param_2"}>
+              <Form.Item label={uiText("Label Param #2")} name={"param_2"}>
                 <Input style={{ width: "100%" }} />
               </Form.Item>
               <Form.Item
-                initialValue={
-                  typeParam2 !== undefined ? String(typeParam2) : ""
-                }
-                label={"Isi Param #2"}
+                label={uiText("Isi Param #2")}
                 name={"isi_param_2"}
               >
                 <Select
-                  placeholder="Choose Type Param"
-                  onChange={(value: string) => {
-                    setTypeParam2(value);
-                  }}
+                  placeholder={uiText("Choose Type Param")}
                   options={[
                     {
                       value: "Sender",
-                      label: "Sender",
+                      label: uiText("Sender"),
                     },
                     {
                       value: "Recipient",
-                      label: "Recipient",
+                      label: uiText("Recipient"),
                     },
                     {
                       value: "Message",
-                      label: "Message",
+                      label: uiText("Message"),
                     },
                     {
                       value: "Quote",
-                      label: "Quote",
+                      label: uiText("Quote"),
                     },
                     {
                       value: "Custom",
-                      label: "Manual Input",
+                      label: uiText("Manual Input"),
                     },
                   ]}
                 />
               </Form.Item>
               {typeParam2 == "Custom" && (
                 <Form.Item name="custom_input_2">
-                  <Input style={{ width: "100%" }} placeholder="Input value" />
+                  <Input style={{ width: "100%" }} placeholder={uiText("Input value")} />
                 </Form.Item>
               )}
-              <Form.Item label={"Param #3"} name={"param_3"}>
+              <Form.Item label={uiText("Label Param #3")} name={"param_3"}>
                 <Input style={{ width: "100%" }} />
               </Form.Item>
               <Form.Item
-                initialValue={
-                  typeParam3 !== undefined ? String(typeParam3) : ""
-                }
-                label={"Isi Param #3"}
+                label={uiText("Isi Param #3")}
                 name={"isi_param_3"}
               >
                 <Select
-                  placeholder="Choose Type Param"
-                  onChange={(value: string) => {
-                    setTypeParam3(value);
-                  }}
+                  placeholder={uiText("Choose Type Param")}
                   options={[
                     {
                       value: "Sender",
-                      label: "Sender",
+                      label: uiText("Sender"),
                     },
                     {
                       value: "Recipient",
-                      label: "Recipient",
+                      label: uiText("Recipient"),
                     },
                     {
                       value: "Message",
-                      label: "Message",
+                      label: uiText("Message"),
                     },
                     {
                       value: "Quote",
-                      label: "Quote",
+                      label: uiText("Quote"),
                     },
                     {
                       value: "Custom",
-                      label: "Manual Input",
+                      label: uiText("Manual Input"),
                     },
                   ]}
                 />
               </Form.Item>
               {typeParam3 == "Custom" && (
                 <Form.Item name="custom_input_3">
-                  <Input style={{ width: "100%" }} placeholder="Input value" />
+                  <Input style={{ width: "100%" }} placeholder={uiText("Input value")} />
                 </Form.Item>
               )}
             </>

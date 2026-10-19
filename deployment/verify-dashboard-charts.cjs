@@ -1,0 +1,14 @@
+const assert = require('node:assert/strict');
+require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'commonjs', jsx: 'react' } });
+const { dashboardPeriod } = require('../src/lib/dashboardStats');
+const period = dashboardPeriod(7, new Date('2026-10-11T17:05:00Z'));
+assert.equal(period.start.toISOString(), '2026-10-05T17:00:00.000Z');
+assert.equal(period.end.toISOString(), '2026-10-12T17:00:00.000Z');
+assert.equal(period.dates.length, 7);
+assert.equal(period.dates[0], '2026-10-06');
+assert.equal(period.dates[6], '2026-10-12');
+const beforeMidnight = dashboardPeriod(30, new Date('2026-10-11T16:59:59Z'));
+assert.equal(beforeMidnight.dates[29], '2026-10-11');
+assert.equal(beforeMidnight.dates[0], '2026-09-12');
+assert.equal(beforeMidnight.end - beforeMidnight.start, 30 * 86400000);
+console.log('WIB_CALENDAR_PERIOD_CHECKS_PASSED');

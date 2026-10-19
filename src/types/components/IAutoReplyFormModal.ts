@@ -23,6 +23,13 @@ export type AutoReplyFormData = {
   type_keyword: string;
   type_message: string;
   keyword: string;
+  delaySeconds?: number;
+  reply_status?: "active" | "inactive";
+  is_quoted?: boolean;
+  listPayload?: string;
+  aiProvider?: string;
+  aiInstructions?: string;
+  reply_when?: "Personal" | "Group" | "All";
   reply: string;
   image?: any;
   image_type: string;

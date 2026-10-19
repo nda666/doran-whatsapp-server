@@ -11,6 +11,7 @@ const useSocket = (
 ) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [events, setEvents] = useState<SocketEvent[] | null>(null);
+  const optionKey = JSON.stringify(option);
   const disconnectSocket = () => {
     if (events) {
       for (const event of events) {
@@ -36,9 +37,10 @@ const useSocket = (
     socketInstance.connect();
     setSocket(socketInstance);
     return function () {
-      disconnectSocket();
+      for (const event of events) socketInstance.off(event.name, event.handler);
+      socketInstance.disconnect();
     };
-  }, [events]);
+  }, [events, optionKey]);
 
   return { socket, setEvents, disconnectSocket };
 };

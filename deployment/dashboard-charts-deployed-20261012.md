@@ -1,0 +1,9 @@
+# Dashboard charts — 12 October 2026
+
+Added four data-backed diagrams to /dashboard: dispatch status, current device health, hourly sending activity (WIB), and top five sending devices. The daily sent chart and new sending diagrams share a 7/30 calendar-day filter. Status uses createdAt and the current status; daily/hourly/ranking use sentAt. Device health is current and independent of the period. User ownership scoping is preserved in every query.
+
+Validation: source-only TypeScript check, ESLint for changed source, WIB midnight and 30-day boundary regression tests, isolated Linux production build. Live read-only API totals were checked against Prisma database counts for 7 and 30 days; unauthenticated access returns 401. Only an approved super-admin account was available for live authenticated verification. Browser checks covered the live diagrams and period switching; mobile layout stacks cards and scrolls wide charts inside their containers. No messages or campaigns were sent by verification.
+
+Initial deployment backup: /home/jeblast/backups/doran-dashboard-charts-1791742640. Width refinement backup: /home/jeblast/backups/doran-dashboard-charts-1791742767. Each contains source/manifest and previous runtime. The deployment script builds in an isolated directory, checks baseline hashes and concurrent changes, promotes only after build succeeds, and rolls back if startup or live checks fail. Only doran-whatsapp restarts; telegram-sender's PID is checked unchanged. No schema migration or dependency change.
+
+Local broad TypeScript checking includes old incomplete source snapshots under tmp and therefore fails on those snapshots; the source-only check and isolated production build pass. `next lint` attempted dependency auto-installation due to its local package detection and was stopped; direct ESLint checks pass and package versions remain unchanged.

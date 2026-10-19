@@ -1,10 +1,12 @@
+import { ownerScope } from "@/lib/access";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
-import { WaSockQrTimeout } from "@/server/constant";
+import { prisma } from "@/lib/prisma";
+import { waitForQr } from "@/server/libs/qrState";
+import { isPairingInProgress } from "@/server/libs/pairingState";
 import makeWASocket from "@/server/libs/makeWASocket";
 import { AuthNextApiRequest } from "@/types/global";
-import { ConnectionState, WASocket } from "@whiskeysockets/baileys";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   switch (req.method) {
@@ -16,32 +18,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 }
 
 const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
+  if (process.env.WHATSAPP_ENABLED === "false") return res.status(503).json({ message: "Koneksi WhatsApp dinonaktifkan sementara." });
   const phoneId = req.query.id as string;
+  res.setHeader("Cache-Control", "no-store");
+  const phone = await prisma.phone.findFirst({ where: { id: phoneId, ...ownerScope(req.user!) } });
+  if (!phone) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
+  if (phone.active !== 1) return res.status(409).json({ code: "DEVICE_INACTIVE", message: "Perangkat masih nonaktif. Aktifkan perangkat sebelum memindai QR." });
   try {
-    const waSock = await makeWASocket(req?.user?.id!, phoneId);
-    const qr = await getQrCode(waSock);
-    res.status(200).json({ qr, timeout: WaSockQrTimeout });
+    if (isPairingInProgress(phoneId)) return res.status(200).json({ pairing: true, timeout: 0 });
+    const waSock = await makeWASocket(phone.userId, phoneId);
+    const result = await waitForQr(waSock);
+    res.status(200).json(result);
   } catch (err) {
-    res.status(500).end();
+    res.status(503).json({ message: err instanceof Error ? err.message : "Gagal mendapatkan QR. Silakan coba lagi." });
   }
-};
-
-const getQrCode = async (waSock: WASocket): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      waSock.ev.off("connection.update", updateEvent);
-      reject(new Error("QR code generation timed out"));
-    }, 60000 * 2); // 60 seconds timeout
-    const updateEvent = (update: Partial<ConnectionState>) => {
-      if (update.qr) {
-        clearTimeout(timeout); // Clear timeout when QR code is received
-        resolve(update.qr);
-        waSock.ev.off("connection.update", updateEvent);
-      }
-    };
-
-    waSock.ev.on("connection.update", updateEvent);
-  });
 };
 
 export default apiAuthMiddleware(handler);

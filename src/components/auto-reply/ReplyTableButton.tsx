@@ -1,16 +1,9 @@
-import phones from "@/pages/api/phones";
-import {
-  DeleteOutlined,
-  DownOutlined,
-  EditOutlined,
-  QrcodeOutlined,
-  SettingOutlined,
-  WechatFilled,
-  UserOutlined,
-} from "@ant-design/icons";
-import { AutoReply, Phone } from "@prisma/client";
-import { Button, Dropdown, MenuProps, Space } from "antd";
-import { useTranslation } from "next-i18next";
+import { useUiTranslation } from "@/lib/uiTranslation";
+import ActionDropdown from "@/components/ActionDropdown";
+import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import { AutoReply } from "@prisma/client";
+import { MenuProps } from "antd";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import { MenuInfo } from "rc-menu/lib/interface";
 
 export interface ReplyTableButtonProps {
@@ -23,6 +16,7 @@ export default function ReplyTableButton({
   onEditClick,
   onDeleteClick,
 }: ReplyTableButtonProps) {
+  const uiText = useUiTranslation();
   const { t } = useTranslation("common");
   const items: MenuProps["items"] = [
     {
@@ -39,6 +33,7 @@ export default function ReplyTableButton({
     // },
     {
       label: t("delete"),
+      danger: true,
       key: "2",
       icon: <DeleteOutlined />,
       onClick: (e) => onDeleteClick && onDeleteClick(auto_replies, e),
@@ -82,18 +77,5 @@ export default function ReplyTableButton({
   //   // });
   // }
 
-  const menuProps = {
-    items,
-  };
-  return (
-    <Dropdown menu={menuProps} trigger={["click"]}>
-      <Button>
-        <Space>
-          <SettingOutlined />
-          Action
-          <DownOutlined />
-        </Space>
-      </Button>
-    </Dropdown>
-  );
+  return <ActionDropdown ariaLabel={uiText("Aksi balasan {{v0}}", { v0: auto_replies.keyword || auto_replies.id })} items={items} />;
 }

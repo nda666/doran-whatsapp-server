@@ -17,13 +17,8 @@ export const prisma =
     //   ? { log: [{ level: "query", emit: "event" }] }
     //   : {}),
   });
-// Listen for query events
-prisma.$on("query", (e) => {
-  const formattedQuery = formatSQLQuery(e.query, e.params);
-  console.log(`${chalk.blue("Query:")}: ${formattedQuery}`);
-  console.log("===============================================");
-});
-if (process.env.NODE_ENV != "production") globalForPrisma.prisma;
+// Reuse one pool across the custom server and Next.js route bundles, including production.
+globalForPrisma.prisma = prisma;
 
 const sqlKeywords = [
   "SELECT",

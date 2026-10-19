@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
+import { CountryCode } from "libphonenumber-js";
+import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 
 import { delay, WAMessage } from "@whiskeysockets/baileys";
 
@@ -51,14 +52,11 @@ const sendAttachmentMessage = async (
 ): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
   try {
-    const parsedTo = parsePhoneNumber(
-      _to,
-      (phoneCountry || "ID") as CountryCode
-    )!;
+    const recipient = normalizePhoneRecipient(_to, (phoneCountry || "ID") as CountryCode);
 
     if (image !== undefined && typeof image == "string") {
       return await createdWaSock.sendMessage(
-        `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+        `${recipient}@s.whatsapp.net`,
         {
           image: {
             url: image,
@@ -73,7 +71,7 @@ const sendAttachmentMessage = async (
       if (_file.mimetype?.startsWith("image/")) {
         const image64 = await toBase64(_file.filepath);
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             image: Buffer.from(image64),
             caption: caption,
@@ -83,7 +81,7 @@ const sendAttachmentMessage = async (
 
       if (_file.mimetype?.startsWith("video/")) {
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             video: readFileSync(_file.filepath),
             caption: caption,
@@ -93,7 +91,7 @@ const sendAttachmentMessage = async (
 
       if (_file.mimetype?.startsWith("audio/")) {
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             audio: readFileSync(_file.filepath),
             mimetype: _file.mimetype,
@@ -104,7 +102,7 @@ const sendAttachmentMessage = async (
 
       if (_file.mimetype == "application/pdf") {
         return await createdWaSock.sendMessage(
-          `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+          `${recipient}@s.whatsapp.net`,
           {
             document: readFileSync(_file.filepath),
             mimetype: _file.mimetype,
@@ -115,7 +113,7 @@ const sendAttachmentMessage = async (
 
       const image64 = await toBase64(image.filepath);
       return await createdWaSock.sendMessage(
-        `${parsedTo.countryCallingCode}${parsedTo.nationalNumber}@s.whatsapp.net`,
+        `${recipient}@s.whatsapp.net`,
         {
           image: Buffer.from(image64),
           caption: caption,

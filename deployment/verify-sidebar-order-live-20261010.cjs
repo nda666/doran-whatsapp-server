@@ -1,0 +1,20 @@
+const assert = require('node:assert/strict');
+const { createRequire } = require('node:module');
+const req = createRequire(process.cwd() + '/package.json');
+req('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = req('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  const owner = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+  assert(owner);
+  const jwt = await req('next-auth/jwt').encode({ token: { id: owner.id, token: owner.token, name: owner.name, email: owner.email }, secret: process.env.NEXTAUTH_SECRET });
+  const response = await fetch('https://dashboard.jeblast.com/dashboard/phone', { redirect: 'manual', headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const links = [...new Set([...html.matchAll(/href="(\/dashboard(?:\/[a-z-]+)?)"/g)].map(match => match[1]))];
+  const expected = ['/dashboard', '/dashboard/campaigns', '/dashboard/dispatch', '/dashboard/reports', '/dashboard/log', '/dashboard/contacts', '/dashboard/media', '/dashboard/phone', '/dashboard/api-docs'];
+  assert.deepEqual(links.slice(0, expected.length), expected, 'Public rendered sidebar order');
+  const source = require('node:fs').readFileSync('src/components/Layout.tsx', 'utf8');
+  assert.deepEqual([...source.matchAll(/href: "([^"]+)"/g)].map(match => match[1]), [...expected, '/dashboard/plans', '/dashboard/admin']);
+  console.log('LIVE_PUBLIC_SIDEBAR_ORDER_VERIFIED', expected.join(' -> '));
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => prisma.$disconnect());

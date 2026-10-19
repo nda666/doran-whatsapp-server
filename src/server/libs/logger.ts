@@ -12,10 +12,11 @@ export const logger = (saveLocation: string) =>
           options: {
             file: saveLocation,
             frequency: "daily",
+            size: "25m",
             colorize: false,
             mkdir: true,
             dateFormat: "yyyy-MM-dd",
-            symlink: true,
+            symlink: process.platform !== "win32",
           },
         },
       ],
@@ -30,3 +31,4 @@ export const logger = (saveLocation: string) =>
       },
     },
   });
+

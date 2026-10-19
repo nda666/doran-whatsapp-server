@@ -1,0 +1,120 @@
+--- live/src/lib/dashboardColors.ts
++++ new/src/lib/dashboardColors.ts
+@@ -1,10 +1,10 @@
+ export const dashboardColors = [
+-  { value: "green", label: "Hijau", primary: "#147d68", dark: "#79d5b5" },
+-  { value: "blue", label: "Biru", primary: "#1668c7", dark: "#85baff" },
+-  { value: "orange", label: "Oranye", primary: "#b95012", dark: "#ffb279" },
+-  { value: "purple", label: "Ungu", primary: "#7950bd", dark: "#c4a5ff" },
+-  { value: "rose", label: "Rose", primary: "#bc3868", dark: "#ff9dbd" },
+-  { value: "teal", label: "Teal", primary: "#087e8b", dark: "#73d4df" },
++  { value: "green", label: "Hijau", primary: "#34d399", dark: "#6ee7b7" },
++  { value: "blue", label: "Biru", primary: "#60b5fa", dark: "#93c5fd" },
++  { value: "orange", label: "Oranye", primary: "#ffb547", dark: "#ffd18a" },
++  { value: "purple", label: "Ungu", primary: "#b394f8", dark: "#d0baff" },
++  { value: "rose", label: "Rose", primary: "#fb91b5", dark: "#ffb4d0" },
++  { value: "teal", label: "Teal", primary: "#40d5d1", dark: "#80e8e4" },
+ ] as const;
+ 
+ export type DashboardColor = typeof dashboardColors[number]["value"];
+@@ -26,10 +26,12 @@
+   const primary = dark ? selected.dark : selected.primary;
+   return {
+     primary,
++    emphasis: dark ? primary : mix(primary, "#142c36", 0.46),
++    onPrimary: "#16313d",
+     surface: dark ? mix(selected.primary, "#171d24", 0.14) : "#ffffff",
+-    layout: dark ? mix(selected.primary, "#10151b", 0.12) : mix(selected.primary, "#fafbfc", 0.025),
+-    soft: dark ? mix(primary, "#17212b", 0.13) : mix(primary, "#ffffff", 0.065),
+-    selected: dark ? mix(primary, "#17212b", 0.23) : mix(primary, "#ffffff", 0.12),
++    layout: dark ? mix(selected.primary, "#10151b", 0.12) : mix(primary, "#ffffff", 0.045),
++    soft: dark ? mix(primary, "#17212b", 0.13) : mix(primary, "#ffffff", 0.10),
++    selected: dark ? mix(primary, "#17212b", 0.23) : mix(primary, "#ffffff", 0.22),
+     border: dark ? mix(primary, "#374151", 0.18) : mix(primary, "#e5e7eb", 0.08),
+     text: dark ? "#e7edf4" : "#263541",
+     secondary: dark ? "#b0becb" : "#61717e",
+--- live/src/lib/dashboardTheme.ts
++++ new/src/lib/dashboardTheme.ts
+@@ -3,11 +3,22 @@
+ import { DashboardColor, dashboardPalette } from "./dashboardColors";
+ 
+ export function dashboardTheme(dark: boolean, color: DashboardColor = "green"): ThemeConfig {
+-  const { primary, surface, soft, border, text, secondary, layout, selected } = dashboardPalette(dark, color);
++  const { primary, emphasis, onPrimary, surface, soft, border, text, secondary, layout, selected } = dashboardPalette(dark, color);
+   return {
+     algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+     token: {
+       colorPrimary: primary,
++      colorPrimaryBg: soft,
++      colorPrimaryBgHover: selected,
++      colorPrimaryText: emphasis,
++      colorPrimaryTextHover: emphasis,
++      colorPrimaryTextActive: emphasis,
++      colorTextLightSolid: onPrimary,
++      colorLink: emphasis,
++      colorLinkHover: emphasis,
++      colorLinkActive: emphasis,
++      controlItemBgActive: selected,
++      controlItemBgActiveHover: selected,
+       colorInfo: primary,
+       colorBgBase: surface,
+       colorBgContainer: surface,
+@@ -31,7 +42,7 @@
+       Menu: {
+         itemBg: "transparent", itemColor: secondary,
+         itemSelectedBg: selected,
+-        itemSelectedColor: primary,
++        itemSelectedColor: emphasis,
+         itemHoverBg: soft, itemHoverColor: text,
+         itemBorderRadius: 10, itemHeight: 42,
+       },
+@@ -45,12 +56,15 @@
+         footerBg: soft, footerColor: secondary, borderColor: border,
+         headerSplitColor: border, cellPaddingBlock: 14,
+       },
+-      Pagination: { itemActiveBg: soft, itemBg: surface },
+       Card: { headerBg: surface },
+       Notification: { colorBgElevated: surface, colorText: text, colorTextHeading: text },
+       Message: { contentBg: surface, colorText: text },
+       Input: { activeShadow: `0 0 0 3px ${primary}26` },
+       Select: { optionSelectedBg: soft },
++      Dropdown: { controlItemBgActive: selected, controlItemBgActiveHover: selected, colorPrimary: emphasis },
++      Checkbox: { colorPrimary: emphasis, colorPrimaryHover: emphasis, colorTextLightSolid: "#ffffff" },
++      Radio: { colorPrimary: emphasis, colorPrimaryHover: emphasis },
++      Pagination: { itemActiveBg: soft, itemBg: surface, colorPrimary: emphasis, colorPrimaryHover: emphasis },
+     },
+   };
+ }
+--- live/src/pages/_app.tsx
++++ new/src/pages/_app.tsx
+@@ -46,9 +46,10 @@
+     const variables = {
+       "--ui-text": colors.text, "--ui-muted": colors.secondary,
+       "--ui-surface": colors.surface, "--ui-soft": colors.layout,
+-      "--ui-border": colors.border, "--ui-accent": colors.primary,
++      "--ui-border": colors.border, "--ui-accent": colors.emphasis,
++      "--ui-color": colors.primary, "--ui-on-color": colors.onPrimary,
+       "--ui-selected": colors.selected, "--ui-sort-arrow": colors.secondary,
+-      "--ui-sort-active": colors.primary, "--ui-sort-header": colors.selected,
++      "--ui-sort-active": colors.emphasis, "--ui-sort-header": colors.selected,
+     };
+     Object.entries(variables).forEach(([name, value]) => document.documentElement.style.setProperty(name, value));
+     // Static message/notification calls are rendered outside the React provider.
+--- live/src/styles/globals.css
++++ new/src/styles/globals.css
+@@ -273,7 +273,7 @@
+ .dashboard-brand strong { font-size: 25px; letter-spacing: -1.2px; color: var(--ui-text); }
+ .dashboard-brand small { font-size: 10px; letter-spacing: .3px; margin-top: 2px; }
+ .dashboard-brand-dot { color: var(--ui-accent); }
+-.dashboard-brand-icon { background: var(--ui-accent); color: var(--ui-surface); border: 0; border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
++.dashboard-brand-icon { background: var(--ui-color, var(--ui-accent)); color: var(--ui-on-color, white); border: 0; border-radius: 12px; width: 38px; height: 38px; flex-basis: 38px; font-size: 23px; }
+ .dashboard-sidebar .ant-menu { padding: 8px 12px; font-size: 12px; }
+ .dashboard-sidebar .ant-menu-item { margin-block: 3px; }
+ .dashboard-sidebar .ant-menu-item-divider { margin: 16px 12px; border-color: var(--ui-border); }
+@@ -315,5 +315,5 @@
+ 
+ .dashboard-color-option { display: inline-flex; align-items: center; gap: 10px; min-width: 110px; padding-block: 3px; }
+ .dashboard-color-swatch { display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; border: 1px solid rgba(127, 127, 127, .25); }
+-.dashboard-color-current { background: var(--ui-accent); }
++.dashboard-color-current { background: var(--ui-color, var(--ui-accent)); }
+ @media (max-width: 380px) { .dashboard-header-actions { gap: 4px !important; } }

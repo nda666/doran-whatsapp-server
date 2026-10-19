@@ -1,0 +1,7 @@
+{
+  "src/pages/dashboard/contacts.tsx": "83105d26201db34ea0a3d7903630daabd467b477c57782c2dd1846a1df4b88bb",
+  "src/pages/api/contacts/sync.ts": "d04c1e7cd2920e70d95c457f3c20282565cc5536027f3d49e6d791bd381204d6",
+  "public/templates/kontak.csv": "6ae3f3fdb543624df7f129f91a220c057e0fe00a9bb629f886600b5b38438b0b",
+  "deployment/verify-contact-sync.cjs": "a7293a489a8efbc6e717fdaa036a4d323c7d16de04cb2371b8a3234e096790d7",
+  "deployment/deploy-contact-modals-20261010.py": "dcd407463bd62fa83d6af5801943896ab9ab6b0097ae25fdfac01622a54a6154"
+}

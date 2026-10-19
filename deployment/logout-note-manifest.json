@@ -1,0 +1,6 @@
+{
+  "src/components/WhatsAppCompatibilityNotice.tsx": "fb87a1b3a7b2781748f900fcdc2c7f7ededef80bd44eb2d9f1d1fdde103bb12a",
+  "src/components/auto-reply/AutoReplyFormModal.tsx": "59b3a40cc15d898ad7b2c3abcf74f6c48755b12e7ea7ec8885384b25c1b8f127",
+  "src/pages/dashboard/api-docs.tsx": "5ef6aa4c7288fae5600e98d7696ae29f01fa24716f4b47b3300f9389a3d6b115",
+  "src/styles/globals.css": "36782c6a8f00ecc66916ed3f5c30f0f90329232bc9319f770f43ec237488878f"
+}

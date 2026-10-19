@@ -1,0 +1,11 @@
+{
+  "tests\\Feature\\JeblastDeviceTokenServiceTest.php": false,
+  "tests\\Feature\\JeblastDispatchStatusWebhookTest.php": true,
+  "tests\\Unit\\SendMessageTokenRecoveryTest.php": false,
+  "app\\Console\\Commands\\SendMessageCommand.php": true,
+  "app\\Http\\Controllers\\Webhook\\JeblastDispatchStatusController.php": true,
+  "app\\Services\\JeblastMessageStatusService.php": true,
+  "app\\Services\\JeblastDeviceTokenService.php": false,
+  "resources\\views\\admin\\waMessagesHistory\\index.blade.php": true,
+  "app\\Http\\Requests\\Webhook\\JeblastDispatchStatusRequest.php": true
+}

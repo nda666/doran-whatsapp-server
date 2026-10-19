@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const db = new PrismaClient();
+(async () => {
+  const owner = await db.user.findFirst({ where: { role: 'ADMIN', email: 'admin@gmail.com' } }); assert(owner);
+  const base = 'https://dashboard.jeblast.com';
+  const headers = { Authorization: 'Bearer ' + owner.token };
+  const response = await fetch(base + '/api/phones?options=1', { headers }); assert.equal(response.status, 200);
+  const data = await response.json(); const phones = Array.isArray(data) ? data : data.data; assert(phones.length);
+  const phone = phones[0];
+  const files = await fetch(base + '/api/phones/' + phone.id + '/test-send', { headers }); assert.equal(files.status, 200); assert(Array.isArray((await files.json()).data));
+  const expected = await db.mediaAsset.findMany({ where: { userId: phone.userId }, select: { id: true } });
+  const again = await fetch(base + '/api/phones/' + phone.id + '/test-send', { headers });
+  const allowed = new Set(expected.map(file => file.id)); for (const file of (await again.json()).data) assert(allowed.has(file.id));
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: owner.id, token: owner.token, name: owner.name, email: owner.email }, secret: process.env.NEXTAUTH_SECRET });
+  const page = await fetch(base + '/dashboard/phone', { headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } }); assert.equal(page.status, 200);
+  const html = await page.text();
+  const chunks = [...html.matchAll(/<script[^>]*src="([^"]+\.js)"/g)].map(match => match[1]);
+  const js = (await Promise.all(chunks.map(async url => { const asset = await fetch(new URL(url, base)); assert.equal(asset.status, 200); return asset.text(); }))).join('\n');
+  for (const label of ['Tipe pengiriman', 'Gambar', 'Video', 'Audio', 'Dokumen', 'Sticker (WebP)', 'Button / tombol', 'List / daftar pilihan', 'Polling', 'Lokasi', 'Kontak / vCard', 'Muat ulang file']) assert(js.includes(label), label);
+  console.log('TEST_SEND_TYPES_LIVE_BUNDLE_AND_OWNER_SCOPED_MEDIA_OK_NO_MESSAGES_SENT');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

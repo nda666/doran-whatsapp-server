@@ -1,0 +1,8 @@
+{
+  "app/Console/Commands/SendMessageCommand.php": "1704bd8efcca4d55c5db14bca0a5f9358958881d163fff5771be22313cc25ec6",
+  "app/Http/Requests/Webhook/JeblastDispatchStatusRequest.php": "b226233ef6d3c5752d37ebf86535d40d99e80e0405b6817ed63657adb15bb39d",
+  "app/Http/Controllers/Webhook/JeblastDispatchStatusController.php": "b56ed524884159beb4cf0f920f051210baeb4fea1e58059768e1ec6232dae588",
+  "app/Services/JeblastMessageStatusService.php": "5567a18c79e69ded6b0312f3a19964bf34ac732d717aa27ba146ee25349b5575",
+  "resources/views/admin/waMessagesHistory/index.blade.php": "bacd9ee1d3e85077d25139bbe7fdeba1bbcb91670bc2c28ced79251273ee51e0",
+  "tests/Feature/JeblastDispatchStatusWebhookTest.php": "50ba7b82b030887e56108e49538d8688feccbb745b899cedd4b3f78f38faee32"
+}

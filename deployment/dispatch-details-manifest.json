@@ -1,0 +1,8 @@
+{
+  "src/pages/dashboard/dispatch.tsx": "e393fafe86fb6a18287aedaca0b2ab233e6ffc181a93e1bdd5f53580e080b15b",
+  "src/pages/api/dispatch.ts": "dcd3cc02b630d3ec6e15f03b4bca9e6d150b45051b6e95d6664a3bb5440a6446",
+  "src/lib/dispatchPresentation.ts": "dccf65fac728aad47b16147f1dec244e13bec7b5faf98c84584de75513b1dc96",
+  "src/components/DispatchMessageModal.tsx": "d3ada5ad9ac6381b1d25b59fb0019ed681ec2ad66287fb58c46aa35720c2b4dc",
+  "deployment/verify-dispatch-presentation.cjs": "b393f71e51d2dbb7b66995fa86f69eaee2603f9541a0c1d078f5b26154951dfe",
+  "deployment/verify-dispatch-details-live.cjs": "b15ff0e7ae387ca6d3cde0798d464ab2dc62567c982032de294654386838068d"
+}

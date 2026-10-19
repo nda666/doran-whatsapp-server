@@ -1,0 +1,53 @@
+// Read-only validation against built HTTP endpoints and the existing database.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const app = path.resolve(__dirname, '..');
+require('@next/env').loadEnvConfig(app, false, { info() {}, error() {} });
+const db = new (require('@prisma/client').PrismaClient)();
+const base = process.env.REPORT_TEST_BASE || 'https://dashboard.jeblast.com';
+(async () => {
+  const actor = await db.user.findUniqueOrThrow({ where: { email: 'admin@gmail.com' } });
+  const jwt = await require('next-auth/jwt').encode({ token: { id: actor.id, email: actor.email, sessionVersion: actor.sessionVersion }, secret: process.env.NEXTAUTH_SECRET, maxAge: 300 });
+  const cookieName = (process.env.NEXTAUTH_URL || base).startsWith('https:') ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
+  const headers = { Cookie: `${cookieName}=${jwt}` };
+  const query = '/api/reports?view=phones&start=2026-10-18&end=2026-10-18&limit=100';
+  const date = { gte: new Date('2026-10-18T00:00:00+07:00'), lt: new Date('2026-10-19T00:00:00+07:00') };
+  const sentWhere = { status: { in: ['SENT', 'DELIVERED', 'READ'] }, sentAt: date };
+  const sentBefore = await db.waDispatch.count({ where: sentWhere });
+  const reportResponse = await fetch(base + query, { headers });
+  assert.equal(reportResponse.status, 200, 'Authenticated report API');
+  const report = await reportResponse.json();
+  const sentAfter = await db.waDispatch.count({ where: sentWhere });
+  assert(report.counts.sent >= Math.min(sentBefore, sentAfter) && report.counts.sent <= Math.max(sentBefore, sentAfter), 'Report sent count matches stored send times');
+  assert.deepEqual(report.period, { start: '2026-10-18', end: '2026-10-18' });
+  for (const row of report.data) assert.equal(row.total, row.sent + row.failed + row.waiting + row.uncertain + row.suppressed);
+  assert.equal(report.counts.total, report.counts.sent + report.counts.failed + report.counts.waiting + report.counts.uncertain + report.counts.suppressed);
+  if (report.total <= 100) for (const key of ['total', 'sent', 'failed', 'waiting', 'uncertain', 'suppressed']) assert.equal(report.counts[key], report.data.reduce((sum, row) => sum + row[key], 0));
+  const exported = await fetch(base + query + '&export=csv&limit=1', { headers });
+  assert.equal(exported.status, 200, 'CSV export');
+  assert(exported.headers.get('content-type').includes('text/csv'));
+  const csv = await exported.text();
+  assert(csv.includes('"nomor_wa"') && csv.includes('"terkirim"'));
+  assert.equal((await fetch(base + query.replace('start=2026-10-18', 'start=2026-02-30'), { headers })).status, 400, 'Invalid date');
+  assert.equal((await fetch(base + query)).status, 401, 'Unauthenticated access denied');
+  if (report.data.length) {
+    const selected = report.data[0];
+    const response = await fetch(base + query + '&phoneId=' + encodeURIComponent(selected.phoneId), { headers });
+    assert.equal(response.status, 200);
+    const single = await response.json();
+    assert.equal(single.total, 1);
+    assert.equal(single.data[0].phoneId, selected.phoneId);
+  }
+  const detail = await fetch(base + '/api/reports?start=2026-10-18&end=2026-10-18&limit=1', { headers });
+  assert.equal(detail.status, 200, 'Existing detail API preserved');
+  assert('display_window' in await detail.json());
+  const page = await fetch(base + '/dashboard/reports?view=phones', { headers, redirect: 'manual' });
+  assert.equal(page.status, 200, 'Report page');
+  const html = await page.text();
+  assert(html.includes('Rekap per Nomor WA') && html.includes('Detail pengiriman'));
+  const build = fs.readFileSync(path.join(app, '.next/BUILD_ID'), 'utf8').trim();
+  assert(html.includes('"buildId":"' + build + '"'), 'Served build matches deployed build');
+  for (const url of new Set(Array.from(html.matchAll(/src="([^"]+\.js(?:\?[^"]*)?)"/g), match => match[1]))) assert.equal((await fetch(new URL(url, base))).status, 200, 'Production JS asset available');
+  console.log('REPORT_HTTP_DB_CSV_VALIDATION_PASSED', JSON.stringify({ base, build, devices: report.total, sent: report.counts.sent, period: report.period }));
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

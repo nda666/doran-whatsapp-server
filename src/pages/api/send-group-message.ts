@@ -1,8 +1,9 @@
 import { NextApiResponse } from "next";
 
-import { prisma } from "@/lib/prisma";
+import type { Phone } from "@prisma/client";
 import sendGroupMessageFromIo from "@/server/libs/sendGroupMessageFromIo";
 import { AuthNextApiRequest } from "@/types/global";
+import { DispatchAuthError, resolveDispatchDevice } from "@/server/dispatchAuth";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -10,6 +11,8 @@ interface SendMessageRequest extends AuthNextApiRequest {
     // number?: string;
     message?: string;
     api_key?: string;
+    token_api?: string;
+    device_id?: string;
     image?: any;
     phoneCountry?: string;
     id_group?: string;
@@ -18,14 +21,15 @@ interface SendMessageRequest extends AuthNextApiRequest {
 
 const handler = async (req: SendMessageRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
-    res.status(405).send("");
+    res.status(405).json({ result: false, curl_error: null, message: "Metode tidak diizinkan." });
     return;
   }
   // return res.status(2result00).json({'req': req.files});
   retry = 0;
+  req.body = { ...req.body };
   // const validation = await SendMessageValidation(req.body);
   // if (!validation?.result) {
-  //   res.status(200).json(validation?.error);
+  //   res.status(200).json({ result: false, curl_error: null, message: "Parameter pengiriman tidak valid." });
   //   return;
   // }
   await sendGroupMessage(req, res);
@@ -58,21 +62,22 @@ const sendGroupMessage = async (
   // const tos = (number as string).split(",");
   if (!id_group) {
     res.status(500).json({
+      result: false,
+      curl_error: null,
+      message: "ID grup wajib diisi.",
       status: false,
       response: "group ID number not included",
     });
     return;
   }
 
-  const phone = await prisma.phone.findUnique({
-    where: {
-      token: api_key,
-    },
-  });
-  if (!phone) {
-    res.status(200).json({ result: false, message: "Token tidak valid" });
-    return;
+  let phone: Phone;
+  try { phone = (await resolveDispatchDevice(req, req.body)).phone; }
+  catch (error) {
+    if (!(error instanceof DispatchAuthError)) throw error;
+    return res.status(error.invalidToken ? 200 : error.status).json({ result: false, curl_error: null, message: error.message });
   }
+  if (phone.active !== 1) return res.status(409).json({ result: false, curl_error: null, message: "Perangkat nonaktif. Aktifkan sebelum mengirim." });
 
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
 
@@ -88,7 +93,7 @@ const sendGroupMessage = async (
 
     res.status(200).json({ result: true, data: resSocket });
   } catch (err) {
-    res.status(200).json({ result: false, data: err });
+    res.status(200).json({ result: false, curl_error: null, message: "Pengiriman gagal. Periksa status perangkat sebelum mencoba lagi." });
   }
 };
 

@@ -1,0 +1,25 @@
+.section { width: 100%; min-width: 0; }
+.heading { margin-bottom: 14px; }
+.heading h2 { margin: 0 0 4px; color: var(--ui-text); font-size: 18px; font-weight: 700; }
+.heading p { margin: 0; color: var(--ui-muted); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.grid[data-count="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.card { position: relative; overflow: hidden; min-width: 0; padding: 14px 18px; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); box-shadow: var(--ui-shadow); border-top: 3px solid var(--summary-color); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; }
+.label { color: var(--ui-text); font-size: 14px; font-weight: 600; line-height: 1.5; }
+/* Lingkaran lembut memakai warna status, tanpa warna latar statis. */
+.icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; color: var(--summary-color); background: color-mix(in srgb, var(--summary-color) 14%, transparent); font-size: 18px; }
+.value { margin: 8px 0 3px; color: var(--ui-text); font-size: 36px; line-height: 1.15; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; letter-spacing: -1px; }
+.unit { display: flex; align-items: baseline; gap: 7px; color: var(--ui-muted); font-size: 12px; line-height: 1.6; }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--summary-color); }
+@media (max-width: 1100px) {
+  .grid, .grid[data-count="5"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .grid, .grid[data-count="5"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .card { padding: 10px 12px; border-radius: 12px; }
+  .top { align-items: flex-start; }
+  .icon { width: 30px; height: 30px; font-size: 17px; }
+  .label { font-size: 13px; }
+  .value { font-size: 30px; margin: 6px 0 2px; }
+}

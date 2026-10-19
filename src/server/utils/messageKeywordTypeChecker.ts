@@ -10,11 +10,11 @@ export function messageKeywordTypeChecker(
   }
 
   if (type == "Equal") {
-    return messageIn.toLowerCase() == compareWith.toLowerCase();
+    return compareWith.split("|").map(k => k.trim()).filter(Boolean).some(k => messageIn.toLowerCase() === k.toLowerCase());
   }
 
   if (type == "Contain") {
-    return messageIn.toLowerCase().includes(compareWith.toLowerCase());
+    return compareWith.split("|").map(k => k.trim()).filter(Boolean).some(k => messageIn.toLowerCase().includes(k.toLowerCase()));
   }
 
   return false;

@@ -1,54 +1,19 @@
-import {
-  useEffect,
-  useState,
-} from 'react';
-
-import {
-  Button,
-  Card,
-  Col,
-  Form,
-  Image,
-  Input,
-  Row,
-  Table,
-  TablePaginationConfig,
-  Tooltip,
-} from 'antd';
-import { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
-import { useTranslation } from 'react-i18next';
-
-import useWebhookLogData, { SearchWebhookLogParams } from '@/lib/useWebhookLog';
-import { InboxMessage } from '@prisma/client';
-
-export const LogTable = ({
-  token,
-  showSearch,
-}: {
-  token: string;
-  showSearch: boolean;
-}) => {
-  const [searchQuery, setSearchQuery] = useState<SearchWebhookLogParams>({
-    limit: 10,
-    page: 1,
-    recipient: "",
-    sender: "",
-  });
-
-  const log = useWebhookLogData(token, searchQuery);
-  const [pagination, setPagination] = useState<TablePaginationConfig>({
-    current: 1,
-    pageSize: 10,
-    total: 0,
-  });
-  useEffect(() => {
-    setPagination({
-      ...pagination,
-      total: log?.data.totalData,
-      current: log?.data.currentPage,
-    });
-  }, [log?.data.totalData, log?.data.currentPage, log?.data.totalPage]);
+import { useUiTranslation } from "@/lib/uiTranslation";
+import { useState } from "react";
+import { Alert, Button, Card, DatePicker, Form, Image, Input, Space, Tooltip } from "antd";
+import { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
+import Table from "@/components/DashboardTable";
+import { useTableState } from "@/lib/useTableState";
+import { useDashboardApi } from "@/lib/useDashboardApi";
+import { InboxMessage } from "@prisma/client";
+import { defaultDispatchDates } from "@/lib/dispatchDateFilter";
+export const LogTable = ({ token, showSearch }: { token: string; showSearch: boolean }) => {
+  const uiText = useUiTranslation();
+  const table = useTableState();
+  const [filters, setFilters] = useState(() => ({ sender: "", recipient: "", ...defaultDispatchDates() }));
+  const log = useDashboardApi(`/api/log?${table.params}&${new URLSearchParams(filters).toString()}`);
   const { t } = useTranslation("common");
   const dataColumn: ColumnsType<InboxMessage> = [
     {
@@ -157,88 +122,15 @@ export const LogTable = ({
     },
   ];
 
-  const onSearch = (val: any) => {
-    setSearchQuery({ ...searchQuery, ...val });
-  };
-  return (
-    <>
-      <Card
-        title={t("filter")}
-        className={`form-container ${showSearch ? "visible" : "hidden"}`}
-      >
-        {showSearch && (
-          <Form
-            layout="horizontal"
-            onFinish={onSearch}
-            // initialValues={initialValues}
-          >
-            <Row style={{ width: "100%" }}>
-              <Col xs={24} sm={24} md={12}>
-                <Form.Item
-                  label={t("sender")}
-                  name="sender"
-                  labelCol={{
-                    xs: { span: 24 },
-                    sm: { span: 24 },
-                    md: { span: 5 },
-                  }} // Control the label width
-                  wrapperCol={{
-                    xs: { span: 24 },
-                    sm: { span: 24 },
-                    md: { span: 19 },
-                  }} // Control the input width
-                >
-                  <Input placeholder={t("enter_sender")} />
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={24} md={12}>
-                <Form.Item
-                  label={t("recipient")}
-                  name="recipient"
-                  labelCol={{
-                    xs: { span: 24 },
-                    sm: { span: 24 },
-                    md: { span: 5 },
-                  }} // Control the label width
-                  wrapperCol={{
-                    xs: { span: 24 },
-                    sm: { span: 24 },
-                    md: { span: 19 },
-                  }} // Control the input width
-                >
-                  <Input placeholder={t("enter_recipient")} />
-                </Form.Item>
-                <Form.Item
-                  wrapperCol={{
-                    xs: { span: 24 },
-                    sm: { span: 24 },
-                    md: { span: 19, offset: 5 },
-                  }}
-                >
-                  <Button block type="primary" htmlType="submit">
-                    {t("search")}
-                  </Button>
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
-        )}
-      </Card>
-      <Table
-        loading={log.loading}
-        pagination={pagination} // Disable default pagination
-        onChange={(pagination: TablePaginationConfig) => {
-          setSearchQuery({
-            ...searchQuery,
-            limit: pagination.pageSize,
-            page: pagination.current || 1,
-          });
-        }}
-        dataSource={log.data?.data}
-        columns={dataColumn}
-        rowKey="id"
-      />
-    </>
-  );
+  return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    {showSearch && <Card title={uiText("Pencarian")}><Form layout="vertical" colon={false} className="dashboard-filter-grid" initialValues={{ start_date: dayjs(filters.start_date), end_date: dayjs(filters.end_date) }} onFinish={values => { setFilters({ sender: values.sender || "", recipient: values.recipient || "", start_date: values.start_date.format("YYYY-MM-DD"), end_date: values.end_date.format("YYYY-MM-DD") }); table.reset(); }}>
+      <Form.Item name="start_date" label={uiText("Tanggal mulai")} tooltip={uiText("Berdasarkan tanggal Diterima, mulai pukul 00:00 WIB.")} rules={[{ required: true, message: uiText("Pilih tanggal mulai.") }]}><DatePicker allowClear={false} format="DD/MM/YYYY" style={{ width: "100%" }} /></Form.Item>
+      <Form.Item name="end_date" label={uiText("Tanggal selesai")} tooltip={uiText("Mencakup seluruh hari pada tanggal selesai (WIB). Default 3 hari terakhir.")} dependencies={["start_date"]} rules={[{ required: true, message: uiText("Pilih tanggal selesai.") }, ({ getFieldValue }) => ({ validator(_, value) { const start = getFieldValue("start_date"); return !value || !start || !value.isBefore(start, "day") ? Promise.resolve() : Promise.reject(new Error(uiText("Tanggal selesai harus sama atau setelah tanggal mulai."))); } })]}><DatePicker allowClear={false} format="DD/MM/YYYY" style={{ width: "100%" }} /></Form.Item>
+      <Form.Item name="sender" label={t("sender")}><Input allowClear placeholder={t("enter_sender")} /></Form.Item>
+      <Form.Item name="recipient" label={t("recipient")}><Input allowClear placeholder={t("enter_recipient")} /></Form.Item>
+      <div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">{uiText("Cari")}</Button></div>
+    </Form></Card>}
+    {log.error && <Alert type="error" message={uiText(log.error)} />}
+    <Table table={table} total={log.data?.totalData} className="table-with-data-count" scroll={{ x: true }} dataSource={log.data?.data || []} columns={dataColumn} rowKey="id" />
+  </Space>;
 };

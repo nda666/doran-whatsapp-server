@@ -1,0 +1,11 @@
+.trigger:global(.ant-btn) { flex-shrink: 0; width: 42px; height: 42px; font-size: 22px; color: var(--ui-muted, #64748b); }
+.trigger:global(.ant-btn):not(:disabled):hover, .trigger:global(.ant-popover-open) { color: #14866b; background: color-mix(in srgb, #14866b 10%, transparent); }
+.panel { width: 304px; max-width: calc(100vw - 56px); }
+.heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.groups { margin-block: 10px; }
+.grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; max-height: 220px; overflow-y: auto; }
+.emoji { display: flex; align-items: center; justify-content: center; min-width: 0; height: 35px; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; font-size: 25px; line-height: 1; }
+.emoji:hover { background: color-mix(in srgb, #14866b 12%, transparent); }
+.emoji:focus-visible { outline: 2px solid #14866b; outline-offset: -2px; }
+.note { display: block; margin-top: 10px; max-width: 100%; font-size: 11px; color: var(--ui-muted, #64748b); }
+@media (max-width: 700px) { .trigger:global(.ant-btn) { width: 36px; } }

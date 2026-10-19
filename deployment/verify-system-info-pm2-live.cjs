@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  const admin = await p.user.findFirst({ where: { email: 'admin@gmail.com', role: 'ADMIN', approvalStatus: 'APPROVED', isActive: true } });
+  assert(admin);
+  const url = 'http://127.0.0.1:3000/api/admin/system-info';
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + admin.token } });
+  assert.equal(r.status, 200); assert.match(r.headers.get('cache-control'), /no-store/);
+  const { pm2 } = await r.json();
+  assert(pm2.available); assert.equal(pm2.status, 'online'); assert.equal(pm2.memoryRestartMiB, 6144);
+  assert.equal(pm2.heapMiB, 4096); assert.equal(pm2.backoffMs, 1000); assert.equal(pm2.killTimeoutMs, 65000);
+  assert.equal(pm2.savedMatches, true); assert.equal(pm2.instances, 1); assert.equal(pm2.mode, 'fork');
+  assert(pm2.memoryMiB > 0); assert(pm2.version); assert.equal(pm2.autoRestart, true); assert.equal(pm2.watch, false);
+  const live = JSON.parse(execFileSync('/usr/local/bin/pm2', ['jlist'], { encoding: 'utf8' })).find(row => row.name === 'doran-whatsapp');
+  assert.equal(pm2.pid, live.pid); assert.equal(pm2.restarts, live.pm2_env.restart_time);
+  assert.deepEqual(Object.keys(pm2).sort(), ['available','checkedAt','version','name','id','pid','status','mode','instances','startedAt','memoryMiB','cpu','restarts','unstableRestarts','memoryRestartMiB','heapMiB','backoffMs','killTimeoutMs','autoRestart','watch','logDateFormat','savedMatches'].sort());
+  assert.equal((await fetch(url)).status, 401);
+  const user = await p.user.findFirst({ where: { role: 'USER', approvalStatus: 'APPROVED', isActive: true } });
+  if (user) assert.equal((await fetch(url, { headers: { Authorization: 'Bearer ' + user.token } })).status, 403);
+  console.log('LIVE_PM2_ADMIN_SNAPSHOT_SETTINGS_AND_ACCESS_PASSED');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => p.$disconnect());

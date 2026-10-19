@@ -1,17 +1,30 @@
+import { SUPER_ADMIN_ROOM } from "../../lib/access";
 import * as fs from "fs";
+import { join } from "path";
 
 import {
   ConnectionState,
   DisconnectReason,
   WASocket,
 } from "@whiskeysockets/baileys";
-import { PhoneStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import { broadcastPhoneStatusUpdate } from "../../services/webhookService";
 import { WaSockQrTimeout } from "../constant";
-import makeWASocket, { deleteSession } from "../libs/makeWASocket";
+import makeWASocket, { deleteSession, getAllSession, waitForAuthSave } from "../libs/makeWASocket";
 import { getSocketIO } from "../libs/socket";
+import { recordPairingProgress } from "../libs/pairingState";
+import { updateDevice } from "../deviceWebhook/events";
+import { phoneMaintenance, retiredSockets } from "../libs/phoneMaintenance";
+import { waRecovery } from "../libs/waRecoveryState";
+
+const reconnectAttempts = waRecovery.attempts;
+const reconnectTimers = waRecovery.timers;
+
+export function stopReconnectTimers() {
+  for (const timer of Array.from(reconnectTimers.values())) clearTimeout(timer);
+  reconnectTimers.clear();
+  reconnectAttempts.clear();
+}
 
 export default async function connectionUpdate(
   waSock: WASocket,
@@ -19,123 +32,126 @@ export default async function connectionUpdate(
   phoneId: string,
   update: Partial<ConnectionState>
 ) {
+  if (phoneMaintenance.has(phoneId) || retiredSockets.has(waSock)) return;
+  if (process.env.DORAN_SHUTTING_DOWN === "true") return;
+  const current = getAllSession().get(phoneId);
+  if (current && current !== waSock) return;
   const io = getSocketIO;
-  if (waSock.user) {
-    io?.to(userId).emit("waUser", { phoneId, waUser: waSock.user });
-  }
-  io?.to(userId).emit("isOnline", {
-    isOnline: update.isOnline,
-    phoneId: phoneId,
+  const phase = recordPairingProgress(phoneId, update);
+  if (phase && phase !== "qr") io?.to(userId).to(SUPER_ADMIN_ROOM).emit("connectionState", {
+    phoneId,
+    connection: phase === "connected" ? "open" : phase === "error" ? "close" : "pairing",
+    status: (update.lastDisconnect?.error as any)?.output?.statusCode,
   });
+  if (waSock.user) {
+    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("waUser", { phoneId, waUser: waSock.user });
+  }
 
   if (update.qr) {
-    io?.to(userId).emit(`qr`, {
+    io?.to(userId).to(SUPER_ADMIN_ROOM).emit(`qr`, {
       phoneId,
       qr: update.qr,
       timeout: WaSockQrTimeout,
     });
-
-    broadcastPhoneStatusUpdate({
-      phoneId,
-      qr: update.qr,
-      connection: update.connection,
-    });
+    // await prisma.phone.update({
+    //   where: {
+    //     id: phoneId,
+    //   },
+    //   data: {
+    //     qrCode: update.qr,
+    //   },
+    // });
   }
 
   const { connection, lastDisconnect } = update;
+  if (connection === "open" || connection === "close") {
+    console.info("WA_CONNECTION_STATE", JSON.stringify({ phoneId, connection, status: (lastDisconnect?.error as any)?.output?.statusCode }));
+    // Device connectivity is independent of WhatsApp presence/showOnline.
+    // Persist before notifying clients so their refetch sees the new state.
+    const isOnline = connection === "open";
+    let persisted = false;
+    try {
+      await prisma.phone.update({ where: { id: phoneId }, data: { isOnline, status: isOnline ? "OPEN" : "CLOSE" } });
+      persisted = true;
+    } catch (error) {
+      // A database outage must not prevent transport recovery.
+      console.error("WA_CONNECTION_PERSIST_FAILED", phoneId, error instanceof Error ? error.message : "Unknown error");
+    }
+    if (getAllSession().get(phoneId) && getAllSession().get(phoneId) !== waSock) return;
+    if (persisted) io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", { phoneId, isOnline });
+  }
+  if (connection === "open") {
+    waRecovery.disconnects?.delete(phoneId);
+    waRecovery.blocked.delete(phoneId);
+    const health = waRecovery.sockets.get(waSock);
+    if (health) health.connected = true;
+    reconnectAttempts.delete(phoneId);
+    const pending = reconnectTimers.get(phoneId);
+    if (pending) clearTimeout(pending);
+    reconnectTimers.delete(phoneId);
+    const waUser = waSock.user;
+    if (waUser) await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
+      number: waUser.id.split(":")[0].split("@")[0], account_name: waUser.name,
+    }));
+  }
   if (update.isNewLogin) {
     // waSock.ev.flush(true);
     // whatsappSocket(io, userId, phoneId);
   }
 
-  if (connection === "open" || update.isOnline) {
-    io?.to(userId).emit("isOnline", {
-      isOnline: true,
-      phoneId: phoneId,
-    });
-
-    await prisma.phone.update({
-      where: {
-        id: phoneId,
-      },
-      data: {
-        isOnline: true,
-        status: PhoneStatus.OPEN,
-      },
-    });
-
-    broadcastPhoneStatusUpdate({
-      phoneId,
-      isOnline: true,
-      status: PhoneStatus.OPEN,
-      connection: connection || "open",
-    });
-  }
-
-  if (connection === "connecting") {
-    await prisma.phone.update({
-      where: {
-        id: phoneId,
-      },
-      data: {
-        status: PhoneStatus.CONNECTING,
-      },
-    });
-
-    broadcastPhoneStatusUpdate({
-      phoneId,
-      status: PhoneStatus.CONNECTING,
-      connection: "connecting",
-    });
-  }
-
   if (connection === "close") {
-    await prisma.phone.update({
-      where: {
-        id: phoneId,
-      },
-      data: {
-        isOnline: false,
-        status: PhoneStatus.CLOSE,
-      },
-    });
-    io?.to(userId).emit("connectionState", {
-      update: "lalalala",
-      t: (lastDisconnect?.error as any)?.output?.statusCode,
-    });
-
-    broadcastPhoneStatusUpdate({
-      phoneId,
-      isOnline: false,
-      status: PhoneStatus.CLOSE,
-      connection: "close",
-      lastDisconnect,
-    });
-
-    const shouldReconnectStatus = [
-      DisconnectReason.loggedOut,
-      DisconnectReason.restartRequired,
-      DisconnectReason.timedOut,
-    ];
-
-    const shouldReconnect = shouldReconnectStatus.includes(
-      (lastDisconnect?.error as any)?.output?.statusCode
-    );
+    const status = (lastDisconnect?.error as any)?.output?.statusCode;
+    waRecovery.disconnects?.set(phoneId, { code: status, at: Date.now() });
+    retiredSockets.add(waSock);
+    deleteSession(phoneId);
+    const pending = reconnectTimers.get(phoneId);
+    if (pending) clearTimeout(pending);
+    reconnectTimers.delete(phoneId);
 
     // reconnect if not logged out
     if (
       (lastDisconnect?.error as any)?.output?.statusCode ==
       DisconnectReason.loggedOut
     ) {
-      fs.rmSync(`./storage/whatsapp-auth/${userId}-${phoneId}`, {
+      waRecovery.blocked.add(phoneId);
+      fs.rmSync(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${userId}-${phoneId}`), {
         recursive: true,
         force: true,
       });
+      reconnectAttempts.delete(phoneId);
+      return;
     }
-    if (shouldReconnect) {
-      deleteSession(phoneId);
+    if (process.env.WHATSAPP_ENABLED === "false" ||
+        status === DisconnectReason.connectionReplaced ||
+        status === DisconnectReason.badSession ||
+        status === DisconnectReason.forbidden ||
+        status === DisconnectReason.multideviceMismatch) {
+      waRecovery.blocked.add(phoneId);
+      return;
     }
-    makeWASocket(userId, phoneId);
+    // Expired QR sessions need a user scan, not an endless background QR loop.
+    if (!waSock.authState?.creds.me?.id && status !== DisconnectReason.restartRequired) return;
+    const attempts = (reconnectAttempts.get(phoneId) || 0) + 1;
+    reconnectAttempts.set(phoneId, attempts);
+    const delay = status === DisconnectReason.restartRequired ? 500 : Math.min(60_000, 2_000 * 2 ** Math.min(attempts - 1, 5));
+    const timer = setTimeout(() => {
+      reconnectTimers.delete(phoneId);
+      if (process.env.WHATSAPP_ENABLED === "false" || process.env.DORAN_SHUTTING_DOWN === "true") return;
+      waitForAuthSave(waSock).then(() => {
+        if (phoneMaintenance.has(phoneId) || waRecovery.blocked.has(phoneId) || process.env.DORAN_SHUTTING_DOWN === "true") return;
+        return makeWASocket(userId, phoneId);
+      }).catch(error => {
+        console.error("WhatsApp reconnect failed:", error.message);
+      });
+    }, delay);
+    timer.unref();
+    reconnectTimers.set(phoneId, timer);
   }
 }
 
+export function clearPhoneReconnect(phoneId: string) {
+  const timer = reconnectTimers.get(phoneId);
+  if (timer) clearTimeout(timer);
+  reconnectTimers.delete(phoneId);
+  reconnectAttempts.delete(phoneId);
+}

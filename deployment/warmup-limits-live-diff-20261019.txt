@@ -1,0 +1,393 @@
+--- live/src/lib/warmupSettings.ts
++++ new/src/lib/warmupSettings.ts
+@@ -0,0 +1,12 @@
++export const WARMUP_DAILY_LIMITS_KEY = "warmup-daily-limits";
++export const WARMUP_DAILY_LIMITS_LABEL = "Batas percobaan pemanasan per hari";
++export const DEFAULT_WARMUP_DAILY_LIMITS = [25, 50, 100, 200, 350, 500];
++export const WARMUP_LIMITS_ERROR = "Masukkan bilangan bulat 1–100000 dipisahkan koma, dengan urutan meningkat. Contoh: 25,50,100,200,350,500.";
++
++export function parseWarmupDailyLimits(value: string): number[] | null {
++  if (!value.trim() || value.length > 16000) return null;
++  const parts = value.split(",").map(part => part.trim());
++  if (parts.some(part => !/^\d+$/.test(part))) return null;
++  const limits = parts.map(Number);
++  return limits.every((limit, index) => Number.isSafeInteger(limit) && limit >= 1 && limit <= 100000 && (index === 0 || limit > limits[index - 1])) ? limits : null;
++}
+--- live/src/components/GlobalSettings.tsx
++++ new/src/components/GlobalSettings.tsx
+@@ -1,5 +1,6 @@
+-import { useUiTranslation, type UiTranslator } from "@/lib/uiTranslation";
++import { useUiTranslation, type UiTranslator } from "@/lib/uiTranslation";
+ import { DEVICE_DAILY_QUOTA_KEY } from "@/lib/deviceQuota";
++import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
+ import { useState } from "react";
+ import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Popover, Select, Space, Table, message } from "antd";
+ import { EditOutlined, InfoCircleOutlined, PlusOutlined } from "@ant-design/icons";
+@@ -27,6 +28,7 @@
+ type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[] };
+ const generalHelp = (uiText: UiTranslator) => (uiText("Pengaturan global berlaku untuk seluruh aplikasi. Key dibuat sebagai slug dan tidak dapat diubah setelah disimpan."));
+ const settingHelp = (uiText: UiTranslator): Record<string, string> => ({
++  [WARMUP_DAILY_LIMITS_KEY]: uiText("Batas percobaan per hari untuk setiap tahap pemanasan, dipisahkan koma. Contoh: 25,50,100,200,350,500. Setiap tahap berlangsung dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum. Perubahan berlaku pada pengiriman berikutnya tanpa mengulang tanggal mulai pemanasan."),
+   [DEVICE_DAILY_QUOTA_KEY]: uiText("Kuota percobaan pengiriman per nomor per hari (WIB). Berlaku untuk nomor yang mengikuti kuota global. Nomor custom memakai batasnya sendiri; batas pemanasan tetap berlaku. Perubahan berlaku pada pengiriman berikutnya tanpa restart."),
+   [EMAIL_FROM_KEY]: uiText("Alamat pengirim untuk seluruh email aplikasi, termasuk reset password, notifikasi admin, dan proses lain yang memerlukan pengiriman email. Gunakan alamat atau domain pengirim yang sudah diverifikasi pada server Postmark. Perubahan berlaku untuk pengiriman berikutnya tanpa restart."),
+   [PHONE_FORM_FIELDS_KEY]: uiText("Centang input yang ingin ditampilkan pada form tambah dan edit perangkat untuk semua pengguna. Mengosongkan pilihan menyembunyikan keenam input. Nilai pengaturan perangkat yang sudah tersimpan tidak berubah; perangkat baru menggunakan nilai default. Perubahan berlaku saat form dibuka kembali."),
+@@ -35,13 +37,13 @@
+   [DISPATCH_MAX_AGE_DAYS_KEY]: uiText("Batas data yang boleh dikirim dan rentang data pengiriman pada dashboard, diagram, antrean, campaign, laporan, dan export CSV dihitung sejak masuk antrean (1 hari = 24 jam). Berlaku untuk seluruh perangkat, API, dan campaign, termasuk antrean yang masih menunggu, tanpa restart. Data yang melewati batas ditandai gagal dan tidak dikirim; data yang sudah gagal tidak otomatis diantrekan ulang. Untuk campaign terjadwal, pastikan batas hari mencakup waktu menunggu jadwal."),
+   "postmark-server-token": uiText("Token server Postmark untuk seluruh pengiriman email aplikasi, termasuk reset password, notifikasi admin, dan proses lain yang memerlukan email. Gunakan Server API Token dari server Postmark yang digunakan aplikasi. Nilai token disimpan terenkripsi; ganti melalui Edit setting."),
+ });
+-function SettingInfo({ label, help }: { label: string; help: string }) {
++function SettingInfo({ label, help }: { label: string; help: string }) {
+   const uiText = useUiTranslation();
+   return <Popover title={label} content={<div style={{ width: 360, maxWidth: "calc(100vw - 48px)", whiteSpace: "normal", overflowWrap: "anywhere" }}>{help}</div>} trigger={["hover", "focus", "click"]}>
+     <Button type="text" size="small" icon={<InfoCircleOutlined />} aria-label={uiText("Informasi {{v0}}", { v0: label })} style={{ color: "#1677ff", width: 24, minWidth: 24, height: 24, padding: 0 }} />
+   </Popover>;
+ }
+-export default function GlobalSettings() {
++export default function GlobalSettings() {
+   const uiText = useUiTranslation();
+   const api = useDashboardApi("/api/admin/global-settings");
+   const [form] = Form.useForm<Values>();
+@@ -50,6 +52,7 @@
+   const [busy, setBusy] = useState(false);
+   const selectedFields = Form.useWatch("visibleFields", form) || [];
+   const formKey = Form.useWatch("key", form);
++  const warmupSetting = (editing?.key || formKey) === WARMUP_DAILY_LIMITS_KEY;
+   const quotaSetting = (editing?.key || formKey) === DEVICE_DAILY_QUOTA_KEY;
+   const ageSetting = (editing?.key || formKey) === DISPATCH_MAX_AGE_DAYS_KEY;
+   const orderSetting = (editing?.key || formKey) === DISPATCH_QUEUE_ORDER_KEY;
+@@ -110,8 +113,8 @@
+         </> : delaySetting ? <>
+           <Form.Item name="minSeconds" label={uiText("Mulai (detik)")} rules={[{ required: true, message: uiText("Isi jeda minimum.") }, { type: "number", min: 1, max: MAX_DISPATCH_DELAY_SECONDS }]}><InputNumber min={1} max={MAX_DISPATCH_DELAY_SECONDS} precision={0} style={{ width: "100%" }} /></Form.Item>
+           <Form.Item name="maxSeconds" label={uiText("Hingga (detik)")} dependencies={["minSeconds"]} extra={uiText("1–30 detik. Hingga harus sama atau lebih besar dari Mulai.")} rules={[{ required: true, message: uiText("Isi jeda maksimum.") }, { type: "number", min: 1, max: MAX_DISPATCH_DELAY_SECONDS }, ({ getFieldValue }) => ({ validator(_, value) { return value == null || value >= getFieldValue("minSeconds") ? Promise.resolve() : Promise.reject(new Error(uiText("Hingga harus sama atau lebih besar dari Mulai."))); } })]}><InputNumber min={1} max={MAX_DISPATCH_DELAY_SECONDS} precision={0} style={{ width: "100%" }} /></Form.Item>
+-        </> : <Form.Item name="value" label={quotaSetting ? uiText("Kuota per nomor per hari") : senderSetting ? uiText("Email pengirim") : orderSetting ? uiText("Urutan pengiriman") : ageSetting ? uiText("Maksimal usia data (hari)") : "Value"} extra={quotaSetting ? settingHelp(uiText)[DEVICE_DAILY_QUOTA_KEY] : senderSetting ? settingHelp(uiText)[EMAIL_FROM_KEY] : orderSetting ? uiText("Berdasarkan waktu masuk antrean. Berlaku pada pemilihan pesan berikutnya tanpa restart.") : ageSetting ? uiText("Masukkan bilangan bulat 1–3650 hari. Batas berlaku untuk data yang masih menunggu.") : uiText("Disimpan sebagai teks. Karakter kontrol dibersihkan; HTML tidak dijalankan.")} rules={quotaSetting ? [{ required: true, message: uiText("Kuota wajib diisi.") }, { validator: (_, value) => /^\d+$/.test(String(value)) && Number(value) >= 1 && Number(value) <= 100000 ? Promise.resolve() : Promise.reject(new Error(uiText("Masukkan bilangan bulat 1–100000."))) }] : senderSetting ? [{ required: true, message: uiText("Email pengirim wajib diisi.") }, { type: "email", message: uiText("Masukkan alamat email yang valid.") }, { max: 254 }] : orderSetting ? [{ required: true, message: uiText("Pilih urutan pengiriman.") }] : ageSetting ? [{ required: true, message: uiText("Jumlah hari wajib diisi.") }] : [{ required: true, message: uiText("Value wajib diisi.") }, { max: 16000 }]}>
+-          {quotaSetting ? <InputNumber min={1} max={100000} precision={0} style={{ width: "100%" }} /> : senderSetting ? <Input type="email" maxLength={254} placeholder={uiText("wa@dorandev.com")} /> : orderSetting ? <Select options={DISPATCH_QUEUE_ORDER_OPTIONS.map(option => ({ ...option, label: uiText(option.label) }))} /> : ageSetting ? <InputNumber min={1} max={MAX_DISPATCH_MAX_AGE_DAYS} precision={0} stringMode addonAfter={uiText("hari")} style={{ width: "100%" }} /> : editing?.secret ? <Input.Password autoComplete="new-password" maxLength={16000} /> : <Input.TextArea autoSize={{ minRows: 3, maxRows: 10 }} maxLength={16000} />}
++        </> : <Form.Item name="value" label={warmupSetting ? uiText("Batas percobaan pemanasan per hari") : quotaSetting ? uiText("Kuota per nomor per hari") : senderSetting ? uiText("Email pengirim") : orderSetting ? uiText("Urutan pengiriman") : ageSetting ? uiText("Maksimal usia data (hari)") : "Value"} extra={warmupSetting ? settingHelp(uiText)[WARMUP_DAILY_LIMITS_KEY] : quotaSetting ? settingHelp(uiText)[DEVICE_DAILY_QUOTA_KEY] : senderSetting ? settingHelp(uiText)[EMAIL_FROM_KEY] : orderSetting ? uiText("Berdasarkan waktu masuk antrean. Berlaku pada pemilihan pesan berikutnya tanpa restart.") : ageSetting ? uiText("Masukkan bilangan bulat 1–3650 hari. Batas berlaku untuk data yang masih menunggu.") : uiText("Disimpan sebagai teks. Karakter kontrol dibersihkan; HTML tidak dijalankan.")} rules={warmupSetting ? [{ validator: (_, value) => typeof value === "string" && parseWarmupDailyLimits(value) ? Promise.resolve() : Promise.reject(new Error(uiText(WARMUP_LIMITS_ERROR))) }] : quotaSetting ? [{ required: true, message: uiText("Kuota wajib diisi.") }, { validator: (_, value) => /^\d+$/.test(String(value)) && Number(value) >= 1 && Number(value) <= 100000 ? Promise.resolve() : Promise.reject(new Error(uiText("Masukkan bilangan bulat 1–100000."))) }] : senderSetting ? [{ required: true, message: uiText("Email pengirim wajib diisi.") }, { type: "email", message: uiText("Masukkan alamat email yang valid.") }, { max: 254 }] : orderSetting ? [{ required: true, message: uiText("Pilih urutan pengiriman.") }] : ageSetting ? [{ required: true, message: uiText("Jumlah hari wajib diisi.") }] : [{ required: true, message: uiText("Value wajib diisi.") }, { max: 16000 }]}>
++          {warmupSetting ? <Input placeholder={DEFAULT_WARMUP_DAILY_LIMITS.join(",")} maxLength={16000} /> : quotaSetting ? <InputNumber min={1} max={100000} precision={0} style={{ width: "100%" }} /> : senderSetting ? <Input type="email" maxLength={254} placeholder={uiText("wa@dorandev.com")} /> : orderSetting ? <Select options={DISPATCH_QUEUE_ORDER_OPTIONS.map(option => ({ ...option, label: uiText(option.label) }))} /> : ageSetting ? <InputNumber min={1} max={MAX_DISPATCH_MAX_AGE_DAYS} precision={0} stringMode addonAfter={uiText("hari")} style={{ width: "100%" }} /> : editing?.secret ? <Input.Password autoComplete="new-password" maxLength={16000} /> : <Input.TextArea autoSize={{ minRows: 3, maxRows: 10 }} maxLength={16000} />}
+         </Form.Item>}
+         {!fieldsSetting && <Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan setting")}</Button>}
+       </Form>
+--- live/src/components/phone/PhoneFormModal.tsx
++++ new/src/components/phone/PhoneFormModal.tsx
+@@ -1,3 +1,4 @@
++import { DEFAULT_WARMUP_DAILY_LIMITS, parseWarmupDailyLimits } from "@/lib/warmupSettings";
+ import SettingToggle from "./SettingToggle";
+ import { useUiTranslation } from "@/lib/uiTranslation";
+ import React, {
+@@ -46,6 +47,7 @@
+     const { t } = useTranslation("common");
+     const [form] = Form.useForm();
+     const [visibleFields, setVisibleFields] = useState<PhoneFormField[]>([]);
++    const [warmupLimits, setWarmupLimits] = useState(DEFAULT_WARMUP_DAILY_LIMITS);
+     const [warmupStartedAt, setWarmupStartedAt] = useState<string | null>(null);
+     const [fieldsReady, setFieldsReady] = useState(false);
+     const [fieldsError, setFieldsError] = useState("");
+@@ -60,7 +62,8 @@
+           if (!response.ok) throw new Error();
+           const data = await response.json();
+           const fields = parsePhoneFormFields(JSON.stringify(data.fields));
+-          if (!fields) throw new Error();
++          const limits = Array.isArray(data.warmupLimits) ? parseWarmupDailyLimits(data.warmupLimits.join(",")) : null;
++          if (!fields || !limits) throw new Error();
+           let startedAt: string | null = null;
+           if (editPhone) {
+             const policyResponse = await fetch("/api/device-policies", { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+@@ -71,6 +74,7 @@
+             startedAt = policy.warmupStartedAt;
+           }
+           if (!controller.signal.aborted) {
++            setWarmupLimits(limits);
+             setWarmupStartedAt(startedAt);
+             form.setFieldValue("warmupEnabled", !!startedAt);
+             setVisibleFields(fields); setFieldsReady(true);
+@@ -161,7 +165,7 @@
+             }}><Input placeholder="https://..." /></Form.Item>
+           <div className="device-settings-list">
+             <SettingToggle name="warmupEnabled" label={uiText("Pemanasan nomor")}
+-              description={uiText("Batasi pengiriman bertahap: 25 → 50 → 100 → 200 → 350 → 500 percobaan per hari, masing-masing selama dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum.")} />
++              description={uiText("Batasi pengiriman bertahap: {{v0}} percobaan per hari, masing-masing selama dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum.", { v0: warmupLimits.join(" → ") })} />
+             {fieldsReady && warmupStartedAt && <p>{uiText("Pemanasan aktif sejak {{v0}}. Tetap aktif tidak mengulang tanggal mulai. Matikan lalu Simpan untuk mengakhiri pemanasan.", { v0: new Date(warmupStartedAt).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta" }) })}</p>}
+             <SettingToggle hidden={!fieldsReady || !visibleFields.includes("saveIncomingMessages")} name="saveIncomingMessages" label={uiText("Simpan Pesan Masuk")}
+               description={uiText("Simpan pesan baru agar bisa dibaca dan dibalas melalui menu Percakapan. Pesan lama sebelum fitur aktif tidak ikut diambil.")} />
+--- live/src/components/phone/PhonePolicyControls.tsx
++++ new/src/components/phone/PhonePolicyControls.tsx
+@@ -142,6 +142,6 @@
+   const uiText = useUiTranslation();
+   return <Collapse items={[{ key: "policy-help", label: uiText("Tentang kesehatan, kuota, dan pemanasan nomor"), children: <Space direction="vertical" size="middle">
+     <Alert type="info" showIcon message={uiText("Skor ini merupakan indikator operasional internal, bukan skor resmi WhatsApp atau jaminan bebas pembatasan. Batas harian menghitung percobaan pengiriman, termasuk retry, dan direset pukul 00.00 WIB.")} />
+-    <Typography.Paragraph style={{ margin: 0 }}>{uiText("Pemanasan menggunakan batas 25 → 50 → 100 → 200 → 350 → 500 percobaan per hari, masing-masing selama dua hari, lalu mengikuti batas perangkat. Batas perangkat tetap menjadi batas maksimum. Perlambatan dimulai saat kesalahan transport mencapai 10%; pengiriman dihentikan pada 30%, setelah minimal 20 percobaan. Penghentian otomatis berlangsung sampai evaluasi hari berikutnya atau dinonaktifkan oleh admin. Buka Aksi → Atur batas untuk mengubah kebijakan. Kelola pemanasan nomor melalui form Tambah/Edit perangkat.")}</Typography.Paragraph>
++    <Typography.Paragraph style={{ margin: 0 }}>{uiText("Pemanasan menggunakan batas percobaan per hari dari Setting global, masing-masing tahap selama dua hari, lalu mengikuti batas perangkat. Batas perangkat tetap menjadi batas maksimum. Perlambatan dimulai saat kesalahan transport mencapai 10%; pengiriman dihentikan pada 30%, setelah minimal 20 percobaan. Penghentian otomatis berlangsung sampai evaluasi hari berikutnya atau dinonaktifkan oleh admin. Buka Aksi → Atur batas untuk mengubah kebijakan. Kelola pemanasan nomor melalui form Tambah/Edit perangkat.")}</Typography.Paragraph>
+   </Space> }]} />;
+ }
+--- live/src/server/messaging/safety.ts
++++ new/src/server/messaging/safety.ts
+@@ -1,9 +1,10 @@
++import { DEFAULT_WARMUP_DAILY_LIMITS } from "../../lib/warmupSettings";
+ import { dispatchErrorLabels } from "../../lib/dispatchPresentation";
+ import { updateDispatches } from "../dispatchWebhook/events";
+ import { prisma } from "../../lib/prisma";
+ import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
+ import { deviceDailyQuota } from "../../lib/deviceQuota";
+-import { getGlobalDeviceQuota, getDispatchDelayRange } from "../dispatch/settings";
++import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits } from "../dispatch/settings";
+ import { randomDispatchDelay } from "../dispatch/timing";
+ import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
+ 
+@@ -12,10 +13,10 @@
+ }
+ 
+ export const usageDay = (now = new Date()) => new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10);
+-export function warmupLimit(start: Date | null, maximum: number, now = Date.now()) {
++export function warmupLimit(start: Date | null, maximum: number, now = Date.now(), limits: readonly number[] = DEFAULT_WARMUP_DAILY_LIMITS) {
+   if (!start) return maximum;
+   const days = Math.max(0, Math.floor((now - start.getTime()) / 86400000));
+-  return Math.min(maximum, [25, 50, 100, 200, 350, 500, maximum][Math.min(6, Math.floor(days / 2))]);
++  return Math.min(maximum, limits[Math.floor(days / 2)] ?? maximum);
+ }
+ export function healthAssessment(attempts: number, failures: number) {
+   if (attempts < 20) return { score: null, reason: "Data belum cukup (minimal 20 percobaan hari ini)", multiplier: 1, stop: false };
+@@ -45,6 +46,7 @@
+   if (number && await recipientBlocked(userId, number)) throw new SendGuardError("RECIPIENT_OPTED_OUT");
+   const globalQuota = await getGlobalDeviceQuota();
+   const globalRange = await getDispatchDelayRange();
++  const warmupLimits = await getWarmupDailyLimits();
+   await prisma.deviceSendPolicy.createMany({ data: [{ phoneId }], skipDuplicates: true });
+   return prisma.$transaction(async tx => {
+     await tx.$queryRaw`SELECT phoneId FROM device_send_policies WHERE phoneId = ${phoneId} FOR UPDATE`;
+@@ -53,7 +55,7 @@
+     const usage = await tx.deviceDailyUsage.upsert({ where: { phoneId_day: { phoneId, day } }, create: { phoneId, day }, update: {} });
+     const health = healthAssessment(usage.attempts, usage.failures);
+     if (policy.paused || (policy.adaptiveEnabled && health.stop)) throw new SendGuardError("DEVICE_SAFETY_PAUSED", new Date(Date.now() + 300000));
+-    if (usage.attempts >= warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota))) throw new SendGuardError("DEVICE_DAILY_LIMIT", new Date(`${day}T17:00:00Z`));
++    if (usage.attempts >= warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits)) throw new SendGuardError("DEVICE_DAILY_LIMIT", new Date(`${day}T17:00:00Z`));
+     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
+     await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
+     const multiplier = policy.adaptiveEnabled ? health.multiplier : 1;
+--- live/src/server/dispatch/settings.ts
++++ new/src/server/dispatch/settings.ts
+@@ -1,3 +1,4 @@
++import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, parseWarmupDailyLimits } from "../../lib/warmupSettings";
+ import { prisma } from "../../lib/prisma";
+ import { decryptSetting } from "../../lib/globalSettings";
+ import { DEFAULT_DISPATCH_MAX_AGE_DAYS, DISPATCH_MAX_AGE_DAYS_KEY, dispatchAgeCutoff, parseDispatchMaxAgeDays } from "../../lib/dispatchSettings";
+@@ -47,3 +48,10 @@
+ // API jobs use the current global limit, including jobs queued before it changed.
+ // Campaigns retain their scheduled delivery deadline in addition to the age limit.
+ export const dispatchDeadline = () => ({ OR: [{ campaignId: null }, { expiresAt: { gt: new Date() } }] });
++
++export async function getWarmupDailyLimits() {
++  const setting = await prisma.globalSetting.findUnique({ where: { key: WARMUP_DAILY_LIMITS_KEY } });
++  const limits = setting ? parseWarmupDailyLimits(decryptSetting(setting.value)) : DEFAULT_WARMUP_DAILY_LIMITS;
++  if (!limits) throw new Error("Invalid warmup daily limits setting");
++  return limits;
++}
+--- live/src/pages/api/device-policies.ts
++++ new/src/pages/api/device-policies.ts
+@@ -6,18 +6,18 @@
+ import { ownerScope } from "@/lib/access";
+ import { healthAssessment, usageDay, warmupLimit } from "@/server/messaging/safety";
+ import { DEFAULT_DEVICE_DAILY_QUOTA, deviceDailyQuota } from "@/lib/deviceQuota";
+-import { getGlobalDeviceQuota, getDispatchDelayRange } from "@/server/dispatch/settings";
++import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits } from "@/server/dispatch/settings";
+ const input = z.object({ phoneId: z.string().uuid(), useGlobalQuota: z.boolean(), dailyLimit: z.number().int().min(1).max(100000), minIntervalSeconds: z.number().int().min(1).max(3600).nullable().default(null), maxIntervalSeconds: z.number().int().min(1).max(30).nullable().default(null), adaptiveEnabled: z.boolean(), paused: z.boolean(), warmupAction: z.enum(["start", "stop"]).optional() }).refine(value => value.maxIntervalSeconds === null || (value.minIntervalSeconds !== null && value.maxIntervalSeconds >= value.minIntervalSeconds), "Hingga harus sama atau lebih besar dari Mulai.");
+ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiResponse) => {
+   res.setHeader("Cache-Control", "no-store");
+   if (req.method === "GET") {
+     const phones = await prisma.phone.findMany({ where: ownerScope(req.user!), select: { id: true, name: true, number: true, isOnline: true } });
+     const ids = phones.map(p => p.id);
+-    const [policies, usage, globalInterval, globalQuota] = await Promise.all([prisma.deviceSendPolicy.findMany({ where: { phoneId: { in: ids } } }), prisma.deviceDailyUsage.findMany({ where: { phoneId: { in: ids }, day: usageDay() } }), getDispatchDelayRange(), getGlobalDeviceQuota()]);
++    const [policies, usage, globalInterval, globalQuota, warmupLimits] = await Promise.all([prisma.deviceSendPolicy.findMany({ where: { phoneId: { in: ids } } }), prisma.deviceDailyUsage.findMany({ where: { phoneId: { in: ids }, day: usageDay() } }), getDispatchDelayRange(), getGlobalDeviceQuota(), getWarmupDailyLimits()]);
+     return res.json(phones.map(phone => {
+       const policy = policies.find(p => p.phoneId === phone.id) || { dailyLimit: DEFAULT_DEVICE_DAILY_QUOTA, useGlobalQuota: true, minIntervalSeconds: null, maxIntervalSeconds: null, adaptiveEnabled: true, paused: false, warmupStartedAt: null };
+       const used = usage.find(u => u.phoneId === phone.id);
+-      return { ...policy, ...phone, globalInterval, globalQuota, used: used?.attempts || 0, effectiveLimit: warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota)), health: healthAssessment(used?.attempts || 0, used?.failures || 0) };
++      return { ...policy, ...phone, globalInterval, globalQuota, used: used?.attempts || 0, effectiveLimit: warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits), health: healthAssessment(used?.attempts || 0, used?.failures || 0) };
+     }));
+   }
+   if (req.method !== "PUT") return res.status(405).end();
+--- live/src/pages/api/admin/global-settings.ts
++++ new/src/pages/api/admin/global-settings.ts
+@@ -1,5 +1,6 @@
+ import type { NextApiResponse } from "next";
+ import { DEFAULT_EMAIL_FROM, EMAIL_FROM_KEY, EMAIL_FROM_LABEL, emailFromInput } from "@/lib/emailSettings";
++import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_DAILY_LIMITS_LABEL, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
+ import { z } from "zod";
+ import { prisma } from "@/lib/prisma";
+ import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
+@@ -17,6 +18,7 @@
+   const decode = (row: { id: string; label: string; key: string; value: string }) => ({ ...row, value: decryptSetting(row.value), secret: secretSetting(row.key) });
+   if (req.method === "GET") {
+     await prisma.globalSetting.createMany({ data: [
++      { key: WARMUP_DAILY_LIMITS_KEY, label: WARMUP_DAILY_LIMITS_LABEL, value: encryptSetting(DEFAULT_WARMUP_DAILY_LIMITS.join(",")) },
+       { key: DEVICE_DAILY_QUOTA_KEY, label: DEVICE_DAILY_QUOTA_LABEL, value: encryptSetting(String(DEFAULT_DEVICE_DAILY_QUOTA)) },
+       { key: EMAIL_FROM_KEY, label: EMAIL_FROM_LABEL, value: encryptSetting(DEFAULT_EMAIL_FROM) },
+       { key: PHONE_FORM_FIELDS_KEY, label: PHONE_FORM_FIELDS_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_PHONE_FORM_FIELDS)) },
+@@ -43,13 +45,14 @@
+   if (previous && parsed.data.key !== undefined && parsed.data.key !== previous.key) return res.status(409).json({ message: "Key tidak dapat diubah setelah dibuat." });
+   if (key === DISPATCH_MAX_AGE_DAYS_KEY && parseDispatchMaxAgeDays(value) === null) return res.status(400).json({ message: "Maksimal usia data antrean harus berupa bilangan bulat 1–3650 hari." });
+   if (key === DISPATCH_QUEUE_ORDER_KEY && parseDispatchQueueOrder(value) === null) return res.status(400).json({ message: "Pilih data terlama dahulu atau data terbaru dahulu." });
++  if (key === WARMUP_DAILY_LIMITS_KEY && parseWarmupDailyLimits(value) === null) return res.status(400).json({ message: WARMUP_LIMITS_ERROR });
+   if (key === DEVICE_DAILY_QUOTA_KEY && parseDeviceDailyQuota(value) === null) return res.status(400).json({ message: "Kuota harian harus berupa bilangan bulat 1–100000." });
+   if (key === DISPATCH_DELAY_KEY && parseDispatchDelayRange(value) === null) return res.status(400).json({ message: "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai." });
+   if (key === PHONE_FORM_FIELDS_KEY && parsePhoneFormFields(value) === null) return res.status(400).json({ message: "Pilih input form perangkat yang valid, tanpa duplikasi." });
+   if (key === POSTMARK_TOKEN_KEY && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) return res.status(400).json({ message: "Format token server Postmark tidak valid." });
+   if (key === EMAIL_FROM_KEY && !emailFromInput.safeParse(value).success) return res.status(400).json({ message: "Masukkan alamat email pengirim yang valid." });
+   try {
+-    const data = { label, value: encryptSetting(value) };
++    const data = { label, value: encryptSetting(key === WARMUP_DAILY_LIMITS_KEY ? parseWarmupDailyLimits(value)!.join(",") : value) };
+     const row = id ? await prisma.globalSetting.update({ where: { id }, data }) : await prisma.globalSetting.create({ data: { ...data, key } });
+     return res.status(id ? 200 : 201).json(decode(row));
+   } catch (error: unknown) {
+--- live/src/pages/api/phones/form-fields.ts
++++ new/src/pages/api/phones/form-fields.ts
+@@ -1,16 +1,17 @@
+-import type { NextApiResponse } from "next";
+-import type { AuthNextApiRequest } from "@/types/global";
+-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+-import { prisma } from "@/lib/prisma";
+-import { decryptSetting } from "@/lib/globalSettings";
+-import { DEFAULT_PHONE_FORM_FIELDS, PHONE_FORM_FIELDS_KEY, parsePhoneFormFields } from "@/lib/phoneFormFields";
+-
+-async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
+-  res.setHeader("Cache-Control", "no-store");
+-  if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).end(); }
+-  const setting = await prisma.globalSetting.findUnique({ where: { key: PHONE_FORM_FIELDS_KEY } });
+-  const fields = setting ? parsePhoneFormFields(decryptSetting(setting.value)) : DEFAULT_PHONE_FORM_FIELDS;
+-  if (!fields) return res.status(500).json({ message: "Pengaturan form perangkat tidak valid." });
+-  return res.json({ fields });
+-}
+-export default apiAuthMiddleware(handler);
++import type { NextApiResponse } from "next";
++import type { AuthNextApiRequest } from "@/types/global";
++import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
++import { getWarmupDailyLimits } from "@/server/dispatch/settings";
++import { prisma } from "@/lib/prisma";
++import { decryptSetting } from "@/lib/globalSettings";
++import { DEFAULT_PHONE_FORM_FIELDS, PHONE_FORM_FIELDS_KEY, parsePhoneFormFields } from "@/lib/phoneFormFields";
++
++async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
++  res.setHeader("Cache-Control", "no-store");
++  if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).end(); }
++  const setting = await prisma.globalSetting.findUnique({ where: { key: PHONE_FORM_FIELDS_KEY } });
++  const fields = setting ? parsePhoneFormFields(decryptSetting(setting.value)) : DEFAULT_PHONE_FORM_FIELDS;
++  if (!fields) return res.status(500).json({ message: "Pengaturan form perangkat tidak valid." });
++  return res.json({ fields, warmupLimits: await getWarmupDailyLimits() });
++}
++export default apiAuthMiddleware(handler);
+--- live/deployment/verify-warmup-limits.cjs
++++ new/deployment/verify-warmup-limits.cjs
+@@ -0,0 +1,81 @@
++// Synthetic checks only; no database writes or WhatsApp messages.
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const ts = require('typescript');
++function load(path, mocks = {}) {
++  const mod = { exports: {} };
++  const source = ts.transpileModule(fs.readFileSync(path, 'utf8'), {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
++  }).outputText;
++  new Function('require', 'module', 'exports', source)(key => key in mocks ? mocks[key] : require(key), mod, mod.exports);
++  return mod.exports;
++}
++const settings = load('src/lib/warmupSettings.ts');
++const { parseWarmupDailyLimits: parse } = settings;
++assert.deepEqual(parse('25,50,100,200,350,500'), settings.DEFAULT_WARMUP_DAILY_LIMITS);
++assert.deepEqual(parse(' 10, 20 , 100000 '), [10, 20, 100000]);
++assert.deepEqual(parse('50'), [50]);
++for (const value of ['', ' ', ',25', '25,', '25,,50', '0,25', '-1,25', '1.5,25', '25,25', '50,25', '1,100001', '1e2', 'NaN', '25;50']) assert.equal(parse(value), null, value);
++const dispatchSettings = {};
++const { warmupLimit } = load('src/server/messaging/safety.ts', {
++  '../../lib/warmupSettings': settings,
++  '../../lib/dispatchPresentation': {}, '../dispatchWebhook/events': {}, '../../lib/prisma': {},
++  '../../utils/normalizePhoneRecipient': {}, '../../lib/deviceQuota': {},
++  '../dispatch/settings': dispatchSettings, '../dispatch/timing': {}, '../../lib/deviceSendInterval': {},
++});
++const start = new Date('2026-10-01T00:00:00Z');
++const at = day => start.getTime() + day * 86400000;
++for (let day = 0; day < 12; day++) assert.equal(warmupLimit(start, 1000, at(day)), settings.DEFAULT_WARMUP_DAILY_LIMITS[Math.floor(day / 2)]);
++assert.equal(warmupLimit(start, 1000, at(12)), 1000);
++assert.equal(warmupLimit(null, 1000, at(0), [10, 40]), 1000);
++assert.equal(warmupLimit(start, 1000, at(-1), [10, 40]), 10);
++assert.equal(warmupLimit(start, 1000, at(1.99), [10, 40]), 10);
++assert.equal(warmupLimit(start, 1000, at(2), [10, 40]), 40);
++assert.equal(warmupLimit(start, 1000, at(4), [10, 40]), 1000);
++assert.equal(warmupLimit(start, 30, at(2), [10, 40]), 30);
++assert.equal(warmupLimit(start, 1000, at(0), [5]), 5);
++assert.equal(warmupLimit(start, 1000, at(0), [15]), 15);
++console.log('Warmup limits: parsing, defaults, custom stages, two-day boundaries, completion, device caps and setting changes passed.');
++const globalSettings = load('src/lib/globalSettings.ts');
++process.env.SETTINGS_ENCRYPTION_KEY = 'synthetic-warmup-test-only';
++let rows = [];
++const db = { globalSetting: {
++  createMany: async ({ data }) => { for (const row of data) if (!rows.some(existing => existing.key === row.key)) rows.push({ id: '74b07541-f69b-4f25-b125-b39006ae2d99', ...row }); },
++  findMany: async () => rows,
++  findUnique: async ({ where }) => rows.find(row => where.key ? row.key === where.key : row.id === where.id) || null,
++  update: async ({ where, data }) => { const row = rows.find(row => row.id === where.id); Object.assign(row, data); return row; },
++} };
++const handler = load('src/pages/api/admin/global-settings.ts', {
++  '@/lib/warmupSettings': settings, '@/lib/globalSettings': globalSettings, '@/lib/prisma': { prisma: db },
++  '@/middleware/apiSuperAdminMiddleware': { __esModule: true, default: fn => fn },
++  '@/lib/emailSettings': load('src/lib/emailSettings.ts'),
++  '@/lib/deviceQuota': load('src/lib/deviceQuota.ts'),
++  '@/lib/dispatchSettings': load('src/lib/dispatchSettings.ts'),
++  '@/lib/phoneFormFields': load('src/lib/phoneFormFields.ts'),
++}).default;
++const reader = load('src/server/dispatch/settings.ts', {
++  '../../lib/warmupSettings': settings, '../../lib/globalSettings': globalSettings, '../../lib/prisma': { prisma: db },
++  '../../lib/deviceQuota': load('src/lib/deviceQuota.ts'), '../../lib/dispatchSettings': load('src/lib/dispatchSettings.ts'),
++});
++async function request(method, body) {
++  const res = { code: 200, setHeader() {}, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; }, end() {} };
++  await handler({ method, body }, res); return res;
++}
++(async () => {
++  assert.deepEqual(await reader.getWarmupDailyLimits(), settings.DEFAULT_WARMUP_DAILY_LIMITS);
++  await request('GET');
++  const row = rows.find(row => row.key === settings.WARMUP_DAILY_LIMITS_KEY);
++  assert(row);
++  assert.equal(globalSettings.decryptSetting(row.value), '25,50,100,200,350,500');
++  const body = { id: row.id, label: row.label, value: ' 10, 40, 90 ' };
++  assert.equal((await request('PATCH', body)).code, 200);
++  assert.equal(globalSettings.decryptSetting(row.value), '10,40,90');
++  assert.deepEqual(await reader.getWarmupDailyLimits(), [10, 40, 90]);
++  await request('GET');
++  assert.deepEqual(await reader.getWarmupDailyLimits(), [10, 40, 90]);
++  for (const value of ['40,10', '0,40', '10,', '10,100001']) assert.equal((await request('PATCH', { ...body, value })).code, 400);
++  assert.deepEqual(await reader.getWarmupDailyLimits(), [10, 40, 90]);
++  row.value = globalSettings.encryptSetting('bad');
++  await assert.rejects(reader.getWarmupDailyLimits(), /Invalid warmup/);
++  console.log('Warmup settings API: default creation, encrypted save, comma normalization, immediate reading, preserving custom values and rejecting invalid input passed.');
++})().catch(error => { console.error(error); process.exitCode = 1; });
+--- live/deployment/verify-warmup-limits-live.cjs
++++ new/deployment/verify-warmup-limits-live.cjs
+@@ -0,0 +1,31 @@
++// Authenticated reads and invalid input only; no messages or valid policy changes.
++const assert = require('node:assert/strict');
++require('@next/env').loadEnvConfig(process.cwd(), false, { info() {}, error() {} });
++const db = new (require('@prisma/client').PrismaClient)();
++(async () => {
++  const admin = await db.user.findFirstOrThrow({ where: { email: 'admin@gmail.com', role: 'ADMIN', isActive: true } });
++  const token = await require('next-auth/jwt').encode({ token: { id: admin.id, email: admin.email, sessionVersion: admin.sessionVersion }, secret: process.env.NEXTAUTH_SECRET, maxAge: 120 });
++  const base = process.env.WARMUP_TEST_BASE || 'http://127.0.0.1:3000';
++  const headers = { Cookie: '__Secure-next-auth.session-token=' + token + '; next-auth.session-token=' + token, Origin: new URL(process.env.NEXTAUTH_URL).origin, 'Content-Type': 'application/json' };
++  const response = await fetch(base + '/api/admin/global-settings', { headers });
++  assert.equal(response.status, 200);
++  const setting = (await response.json()).find(row => row.key === 'warmup-daily-limits');
++  assert(setting && !setting.secret);
++  const limits = setting.value.split(',').map(Number);
++  assert(limits.length > 0 && limits.every((n, i) => Number.isInteger(n) && n > 0 && n <= 100000 && (!i || n > limits[i - 1])));
++  const fields = await fetch(base + '/api/phones/form-fields', { headers });
++  assert.equal(fields.status, 200);
++  assert.deepEqual((await fields.json()).warmupLimits, limits);
++  const policies = await fetch(base + '/api/device-policies', { headers });
++  assert.equal(policies.status, 200);
++  for (const policy of await policies.json()) {
++    const maximum = policy.useGlobalQuota ? policy.globalQuota : policy.dailyLimit;
++    const stage = policy.warmupStartedAt ? Math.max(0, Math.floor((Date.now() - new Date(policy.warmupStartedAt).getTime()) / 172800000)) : limits.length;
++    assert.equal(policy.effectiveLimit, Math.min(maximum, limits[stage] ?? maximum));
++  }
++  const invalid = await fetch(base + '/api/admin/global-settings', { method: 'PATCH', headers, body: JSON.stringify({ id: setting.id, label: setting.label, value: '25,,50' }) });
++  assert.equal(invalid.status, 400);
++  const anonymous = await fetch(base + '/api/admin/global-settings');
++  assert.equal(anonymous.status, 401);
++  console.log('WARMUP_LIVE_PASSED: global comma input, form limits, effective policy limits, invalid input and anonymous access checks. Limits=' + setting.value);
++})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => db.$disconnect());

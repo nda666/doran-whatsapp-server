@@ -1,0 +1,10 @@
+{
+  "src/components/ActionDropdown.tsx": "947fd32b48194557ca803c2f54da4b17df047043969627450b4c8dbeff807102",
+  "src/components/phone/PhoneTableButton.tsx": "dbfdbe08f35e4daee8fb292be5ad8022b3c486a815d1e8d703a2caa7eb480365",
+  "src/components/auto-reply/ReplyTableButton.tsx": "9f8525aedf92295cd29fc7904e42460c2399a47f9af9a108a94e33dfa57110e1",
+  "src/pages/dashboard/media.tsx": "d377f9af8fa7188f5fce8fe4016cc0b4d47aaef4c3f48c0d0cea1fb15c6519b3",
+  "src/pages/dashboard/contacts.tsx": "55b47ec56bcd371b9ab64af9b609d4449ae4e484297421466079e90f679be740",
+  "src/pages/dashboard/campaigns.tsx": "b152c54a58cd6545dc753b468eaaa61aecd59f61caf626e817d43e1de09b9a6c",
+  "src/pages/dashboard/admin.tsx": "e1d57e3741b6bc0baaf41a8ea0da1628cfdc3acb65973b5feaa2be7c8202b8d5",
+  "src/pages/dashboard/plans.tsx": "af4b0c2e56190150210bfc3670b4c80d92a12fb4dc9064da735da47bb0b44cad"
+}

@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import axios, { AxiosError } from "axios";
 import { File } from "buffer";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/router";
 
 import { AutoReplyFormData } from "@/types/components/IAutoReplyFormModal";
 import { AutoReply } from "@prisma/client";
@@ -27,45 +25,44 @@ type ResponseResult = {
 export type useAutoReplyDataType = {
   // phones: Phone[] | undefined;
   auto_replies: AutoReply[] | undefined;
+  loading: boolean;
+  error: string;
   // setPhones: Dispatch<SetStateAction<Phone[] | undefined>>;
   save: (data: AutoReplyFormData) => Promise<ResponseResult>;
   deleteById: (id: number, phoneId: string) => Promise<ResponseResult>;
   refetchReply: () => void;
+  updatingIds: number[];
+  setStatus: (reply: AutoReply, status: "active" | "inactive") => Promise<ResponseResult>;
 };
 export default function useAutoReplyData(
   token: string,
   phone_id?: string | undefined
 ): useAutoReplyDataType {
-  const [runRefetchReplies, setRunRefetchReplies] = useState(false);
-  //   const [phones, setPhones] = useState<Phone[] | undefined>([]);
-  const [auto_replies, setAutoReplies] = useState<AutoReply[] | undefined>([]);
-  // const socketRef = useRef<any>();
-  const { data: session } = useSession();
-  const router = useRouter();
-  const imgExt = ["jpg", "jpeg", "png", "gif"];
-  const refetchReply = () => {
-    setRunRefetchReplies(true);
-  };
+  const [version, setVersion] = useState(0);
+  const [rows, setRows] = useState<{ phoneId?: string; data: AutoReply[] }>({ data: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [updatingIds, setUpdatingIds] = useState<number[]>([]);
+  const updating = useRef(new Set<number>());
+  const refetchReply = () => setVersion(value => value + 1);
 
   useEffect(() => {
-    setRunRefetchReplies(true);
-  }, []);
-
-  useEffect(() => {
-    const fetchAutoReplies = async () => {
-      setRunRefetchReplies(false);
-
-      const response = await axios.get(`/api/auto_reply?phone_id=${phone_id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = response.data;
-      setAutoReplies(result);
-    };
-
-    runRefetchReplies && phone_id && token && fetchAutoReplies();
-  }, [runRefetchReplies, token, phone_id]);
+    const controller = new AbortController();
+    setRows({ phoneId: phone_id, data: [] });
+    setError("");
+    if (!phone_id || !token) { setLoading(false); return; }
+    setLoading(true);
+    void axios.get(`/api/auto_reply?phone_id=${encodeURIComponent(phone_id)}`, {
+      headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, timeout: 15000,
+    }).then(response => {
+      if (!controller.signal.aborted) setRows({ phoneId: phone_id, data: response.data });
+    }).catch(() => {
+      if (!controller.signal.aborted) setError("Balasan Otomatis belum dapat dimuat. Silakan coba lagi.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
+  }, [version, token, phone_id]);
 
   //   const deleteById = async (phoneId: string) => {
   //     const result: {
@@ -157,7 +154,7 @@ export default function useAutoReplyData(
 
     // Handle non-image message types
     if (
-      ["text", "button", "webhook"].includes(data.type_message) ||
+      ["text", "button", "list", "webhook", "ai"].includes(data.type_message) ||
       uploadStatus
     ) {
       uploadStatus = true;
@@ -173,12 +170,12 @@ export default function useAutoReplyData(
         result.success = true;
         result.data = resp.data;
 
-        setRunRefetchReplies(true);
+        refetchReply();
       } else {
         throw new Error("failed insert");
       }
     } catch (e) {
-      result.error = e instanceof AxiosError ? e : e;
+      result.error = e instanceof AxiosError && e.response?.data?.message ? new Error(e.response.data.message) : e;
     }
 
     return result;
@@ -209,7 +206,7 @@ export default function useAutoReplyData(
       // result.data = resp.json();
       result.data = resp.data;
       //
-      setRunRefetchReplies(true);
+      refetchReply();
     } catch (e: any) {
       result.error = e;
     }
@@ -217,12 +214,36 @@ export default function useAutoReplyData(
     return result;
   };
 
+  const setStatus = async (reply: AutoReply, status: "active" | "inactive"): Promise<ResponseResult> => {
+    if (updating.current.has(reply.id)) return { success: false, error: undefined, data: undefined };
+    updating.current.add(reply.id);
+    setUpdatingIds(Array.from(updating.current));
+    try {
+      const response = await axios.patch(`/api/auto_reply/${reply.id}?phone_id=${encodeURIComponent(reply.phoneId)}`, { reply_status: status }, {
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
+      });
+      setRows(previous => previous.phoneId === reply.phoneId ? {
+        ...previous, data: previous.data.map(row => row.id === reply.id ? { ...row, reply_status: response.data.reply_status } : row),
+      } : previous);
+      return { success: true, error: undefined, data: response.data };
+    } catch (error) {
+      return { success: false, error, data: undefined };
+    } finally {
+      updating.current.delete(reply.id);
+      setUpdatingIds(Array.from(updating.current));
+    }
+  };
+
   return {
     // phones,
-    auto_replies,
+    auto_replies: rows.phoneId === phone_id ? rows.data : [],
+    loading,
+    error,
     // setPhones,
     save,
     deleteById,
     refetchReply,
+    updatingIds,
+    setStatus,
   };
 }

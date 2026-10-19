@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const db = new PrismaClient();
+(async () => {
+  const user = await db.user.findFirstOrThrow({ where: { email: 'admin@gmail.com', role: 'ADMIN', isActive: true } });
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: user.id, token: user.token, name: user.name, email: user.email, role: user.role, approvalStatus: user.approvalStatus, sessionVersion: user.sessionVersion }, secret: process.env.NEXTAUTH_SECRET });
+  const base = 'https://dashboard.jeblast.com';
+  const response = await fetch(base + '/dashboard/auto-reply', { headers: { Cookie: '__Secure-next-auth.session-token=' + jwt + '; next-auth.session-token=' + jwt } });
+  assert.equal(response.status, 200);
+  assert.equal(new URL(response.url).pathname, '/dashboard/auto-reply');
+  const html = await response.text();
+  const asset = [...html.matchAll(/src="([^" ]+\/pages\/dashboard\/auto-reply-[^" ]+\.js)"/g)][0];
+  assert(asset, 'Auto-reply bundle missing');
+  const bundleResponse = await fetch(new URL(asset[1], base)); assert.equal(bundleResponse.status, 200);
+  const bundle = await bundleResponse.text();
+  for (const text of ['Tekan Enter untuk menambahkan kata kunci', 'Ketik kata kunci', 'Hapus kata kunci', 'Hapus semua tag']) assert(bundle.includes(text), text);
+  assert(!bundle.includes('pisahkan beberapa kata kunci dengan |'));
+  console.log('KEYWORD_TAGS_LIVE_OK: authenticated page and production bundle');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

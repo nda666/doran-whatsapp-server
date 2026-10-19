@@ -1,5 +1,6 @@
 import { Callback } from "i18next";
-import { CountryCode, parsePhoneNumber } from "libphonenumber-js";
+import { CountryCode } from "libphonenumber-js";
+import { normalizePhoneRecipient } from "../utils/normalizePhoneRecipient";
 import { NextApiResponse } from "next";
 import { i18n } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
@@ -11,6 +12,7 @@ export const SendMessageValidation = async (data: any) => {
       number: z.string({
         required_error: "Field to is required",
       }),
+      phoneCountry: z.string().optional(),
       phoneCode: z.string().optional(),
       message: z.string({
         required_error: "Field text is required",
@@ -22,25 +24,11 @@ export const SendMessageValidation = async (data: any) => {
     })
     .refine(
       (data) => {
-        const tos = data.number.split(",");
-        let result = true;
-        tos.forEach((x) => {
-          try {
-            let _res = parsePhoneNumber(
-              x,
-              data.phoneCode ? (data.phoneCode as CountryCode) : "ID"
-            ).isValid();
-
-            if (!_res) {
-              result = false;
-              return false;
-            }
-          } catch (e) {
-            result = false;
-            return false;
-          }
-        });
-        return result;
+        try {
+          return data.number.split(",").every(number => !!normalizePhoneRecipient(
+            number, (data.phoneCountry || data.phoneCode || "ID") as CountryCode,
+          ));
+        } catch { return false; }
       },
       {
         message: "Number wrong formated",

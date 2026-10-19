@@ -1,0 +1,12 @@
+{
+  "src/pages/dashboard/phone.tsx": "0493013fd0a4aeec3aedc3ece63e1b544ef762242892a9acb1fa0005137e5ced",
+  "src/pages/dashboard/api-docs.tsx": "47bcaf8fffc54c42220fc9074c842dc5a2e9ee10001077a392dec8f23abd5a85",
+  "src/components/phone/PhoneFormModal.tsx": "184a4bae2f7dca3830eccf52900ebf99c89ee5f36edb230837e938c46e330ef0",
+  "src/components/phone/SearchPhoneForm.tsx": "535d82ce15251fa1159778441aa21e25caa9b9cade0d7c68c0bd6d7b650392a7",
+  "src/components/phone/PhoneTableButton.tsx": "dbfdbe08f35e4daee8fb292be5ad8022b3c486a815d1e8d703a2caa7eb480365",
+  "public/locales/id/common.json": "a1bba2adf0a7ab05deb62c6d68a70c0f34c0e14e807b1a550dd9b279c07ed782",
+  "public/locales/en/common.json": "8c29bd2a59d422557f7c365f2e8618bae5d83aa8c18dd46fb34ce1dc405d2190",
+  "public/locales/ar/common.json": "23d261c4e9cab2f33fc42e0ac807246cae6a762976abb95de0c9451450945e14",
+  "public/locales/hi/common.json": "2d4e1d31f312cb266bc16de5ea342dc57feb6c12c26b044e308a273d896fd456",
+  "public/locales/es/common.json": "59753c6de5964218ac0a97ba8e96ed54ec8f7ced620e862ff56abbb334b3418d"
+}

@@ -1,0 +1,15 @@
+# Webhook perubahan data perangkat
+
+Deployed 10 October 2026 at https://dashboard.jeblast.com/dashboard/admin → Webhook Perangkat. Only the approved designated main admin may view/edit global webhook configuration and delivery history. API keys remain masked on all GET responses. Initial config is disabled with empty URL/key; no destination has been assumed and no external webhook has been sent.
+
+Triggers: device create/update/delete, active toggle, group toggle, per-device settings, token rotation (one event per device for bulk), public API disconnect, WhatsApp number/account-name changes. Identical updates and online/offline-only changes do not emit events. Customer message webhook behavior is preserved separately.
+
+Prisma migration 20261010100000_device_change_webhook creates device_webhook_settings and device_webhook_events without altering existing tables. Mutations and outbox insertion are atomic. Consistent configuration-first locks serialize bulk and individual device edits. Durable FIFO delivery with database leases, bounded attempts/expiry, authentication, SSRF/redirect protection and payload scrubbing is implemented in src/server/deviceWebhook. Configuration changes cancel pending events. The worker runs independently of WhatsApp dispatch and starts from the custom server. Integration contract: deployment/device-webhook-api.md.
+
+Validation: TypeScript, ESLint and Prisma validation; isolated event/access/no-op/rollback/FIFO/retry/lease/exhaustion/config cancellation/key masking/test-event regressions; mocked native HTTP authentication, 2xx response, redirect rejection and private/mixed-address rejection. Existing token generation, ownership, registered directory, QR and pairing regressions passed. Linux staging complete Next/server build passed. Real database tests exercised new schema and synthetic devices in a deliberately rolled-back transaction, leaving no user/device/event/config changes. No existing devices were modified in these tests.
+
+Production verification passed eight authenticated HTTPS pages and thirteen read-only APIs, webhook settings API/JS UI/auth/disabled-test/invalid-input checks, and unchanged hashes of existing device IDs/tokens. 68 devices, 65 active, 16 online; WhatsApp and durable dispatch remain enabled. Telegram process PID unchanged. Existing lint/i18n/Prisma env-path warnings do not affect test results.
+
+Backup: /home/jeblast/backups/doran-device-webhook-20261010; database-before.sql (mode 600), source-before.tar.gz, changed-source-before, previous-runtime, changed-files.json and existing-files.json. Runtime rollback preserves the additive migration/schema and webhook/outbox data, then restores saved source/runtime while doran-whatsapp is stopped. Never drop queue tables after events are accepted. Temporary staging/upload files removed after successful verification; backups retained.
+
+Actual cashier delivery cannot be validated until the cashier URL/key is configured. Use Tes Webhook Tersimpan and confirm DELIVERED in history; 202 alone means queued. The first activation does not replay old device data.

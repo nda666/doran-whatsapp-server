@@ -1,0 +1,9 @@
+Deployed 10 October 2026 to https://dashboard.jeblast.com/dashboard/phone.
+
+The device table now shows a Kepemilikan column after Nama Akun for the designated super-admin only, following src/lib/access.ts. It displays the owner's name with email below, falling back to email/user id when needed. It supports sorting by owner name and preserves that sort across page navigation through the existing URL state. Other users do not see the column or receive the owner relation from the dashboard API.
+
+The dashboard GET /api/phones adds only owner id/name/email for super-admin requests. Owner passwords and user tokens are excluded. Device data, pagination, filtering, options requests and write operations retain existing behavior. No database migration or ownership changes.
+
+Verification: TypeScript and ESLint passed with the two existing React Hook warnings. Offline tests rendered the page for admin/normal/non-designated/rejected users and checked server projection/scoping, admin-only owner sorting and URL state. Linux staging regression tests and full production build passed. Source baselines/build ID guarded against concurrent deployment. Eight authenticated pages and thirteen dashboard APIs passed live verification. Public owner rows and sorting matched database results; deployed phone JavaScript contains the new column. Windows external HTTPS verification returned all 68 device rows with owner id/name/email. There were no normal approved accounts for live normal-user testing; that behavior was verified with offline fixtures rather than creating a production account.
+
+Production build: YceLjnziPZRi4qZL9MJJk. Backup: /home/jeblast/backups/doran-phone-ownership-20261010. Previous runtime/source retained for automatic rollback. All 68 devices retained, 65 active and 16 online after deployment; WhatsApp and durable dispatch enabled. Telegram process PID unchanged. No test WhatsApp message sent.

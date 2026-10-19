@@ -1,0 +1,13 @@
+# Generate token per nomor, pilihan, dan semua nomor
+
+Deployed to https://dashboard.jeblast.com/dashboard/phone on 10 October 2026.
+
+Each row has Generate Token beside Copy. Checkboxes preserve selections across pagination and filters; Generate Token Terpilih rotates only those IDs. Hapus Pilihan clears selection. Generate Token Semua Nomor includes every accessible device, outside filters/pagination. The designated approved main admin can rotate across owners; other accounts are scoped to their own devices. The confirmation explicitly describes replacement of old tokens and the all-device scope. No tokens rotate automatically on deployment.
+
+POST /api/phones/generate-token accepts either {scope: "selected", ids: [UUIDs]} or {scope: "all"}. Existing authentication/approval middleware applies. Selected IDs are deduplicated, validated and checked before mutation. Unknown/inaccessible selections return 409 with no changes. A transaction assigns distinct cryptographic UUIDs and rolls back the entire batch on failure. Only counts are returned; responses are no-store. The UI clears stale token rows and reloads after success; failed/ambiguous requests are not automatically retried.
+
+Validation: local TypeScript and ESLint (existing React Hook warnings only), server TypeScript, isolated single/multiple/all/ownership/admin/validation/atomic rollback regressions, existing ownership and search-return regressions. Linux staging full Next/server production build passed. Public HTTPS authenticated UI and JS include controls/confirmation/selection. Live checks verify anonymous rejection, invalid payloads, unknown-ID rejection and unchanged hashes of all existing device tokens. General verification passed eight authenticated pages and thirteen read-only API endpoints. 68 devices, 65 active and 16 online; WhatsApp/dispatch enabled, Telegram PID unchanged. No real token rotated and no message sent during verification.
+
+Backup: /home/jeblast/backups/doran-phone-token-20261010. Previous .next/dist retained under previous-runtime, original sources in changed-source-before and source-before.tar.gz; existing-files.json distinguishes added files. Rollback restores those sources/runtime while doran-whatsapp is stopped. No schema migration. Rolling back code does not restore any token deliberately rotated by a user after deployment. Temporary staging/upload files removed after successful verification.
+
+The Windows Next wrapper attempted dependency installation because its package detection failed; those attempts were stopped. Production build verification used the Linux staging environment with existing dependencies.

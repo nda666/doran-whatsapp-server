@@ -1,0 +1,8 @@
+[
+  "src/pages/dashboard/dispatch.tsx",
+  "src/pages/api/dispatch.ts",
+  "src/lib/dispatchPresentation.ts",
+  "src/components/DispatchMessageModal.tsx",
+  "deployment/verify-dispatch-presentation.cjs",
+  "deployment/verify-dispatch-details-live.cjs"
+]

@@ -1,0 +1,35 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const maintenance = require('./maintenance.cjs');
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doran-maintenance-test-'));
+try {
+  const old = path.join(root, 'old.log');
+  const recent = path.join(root, 'recent.log');
+  const active = path.join(root, 'active.log');
+  for (const p of [old, recent, active]) fs.writeFileSync(p, 'test');
+  const past = new Date(Date.now() - 40 * 86400000);
+  for (const p of [old, active]) fs.utimesSync(p, past, past);
+  maintenance.opened.add(active);
+  maintenance.remove(old, 'test', 30);
+  maintenance.remove(recent, 'test', 30);
+  maintenance.remove(active, 'test', 30);
+  assert.equal(fs.existsSync(old), false);
+  assert.equal(fs.existsSync(recent), true);
+  assert.equal(fs.existsSync(active), true);
+  const link = path.join(root, 'link');
+  fs.symlinkSync(recent, link);
+  assert.equal(maintenance.inspect(link), null);
+  assert.equal(maintenance.safe(link), false);
+  const dir = path.join(root, 'old-folder');
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'fresh'), 'fresh');
+  fs.utimesSync(dir, past, past);
+  maintenance.remove(dir, 'test', 30);
+  assert.equal(fs.existsSync(dir), true);
+  fs.symlinkSync(dir, path.join(root, 'linked-parent'));
+  assert.equal(maintenance.safe(path.join(root, 'linked-parent/fresh')), false);
+  console.log('MAINTENANCE_RETENTION_OPEN_FILE_AND_SYMLINK_TESTS_OK');
+} finally { fs.rmSync(root, { recursive: true, force: true }); }

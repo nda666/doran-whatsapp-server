@@ -1,0 +1,491 @@
+--- live/.env.example
++++ local/.env.example
+@@ -1,18 +1,30 @@
+-DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/DATABASE"
++# One shared application pool: concurrency 32 plus headroom for dashboard/webhooks.
++DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/DATABASE?connection_limit=40&pool_timeout=10"
+ NEXTAUTH_SECRET="REPLACE_WITH_EXISTING_SECRET"
+ PORT=3000
+ HOST=127.0.0.1
+ APP_URL=https://dashboard.jeblast.com
+ NEXTAUTH_URL=https://dashboard.jeblast.com
++NEXTAUTH_URL_INTERNAL=http://127.0.0.1:3000
+ NEXT_PUBLIC_APP_URL=https://dashboard.jeblast.com
++# Preserve this key across deployments/backups. Changing it makes existing encrypted settings unreadable.
++SETTINGS_ENCRYPTION_KEY="REPLACE_WITH_A_STABLE_RANDOM_SECRET"
++# Used only by deployment/initialize-postmark-setting.cjs; runtime reads postmark-server-token from Global Settings.
++POSTMARK_SERVER_TOKEN="REPLACE_WITH_POSTMARK_SERVER_TOKEN"
++# Enable only behind a trusted proxy that overwrites X-Forwarded-For.
++AUTH_TRUST_PROXY=false
+ WHATSAPP_ENABLED=false
+ QUEUE_ENABLED=false
+ DISPATCH_QUEUE_ENABLED=true
+-DISPATCH_CONCURRENCY=4
+-DISPATCH_INTERVAL_MS=1000
++DISPATCH_CONCURRENCY=32
++DISPATCH_INTERVAL_MIN_MS=2000
++DISPATCH_INTERVAL_MAX_MS=5000
+ SSL_CERTBOT_ENABLED=false
+ # Only enable on a VPS with certbot installed and a configured ACME webroot.
+ # SSL_WEBROOT=/home/jeblast/public_html/dashboard.jeblast.com
+ WHATSAPP_AUTH_FOLDER=./storage/whatsapp-auth
+ WHATSAPP_LOG=./storage/logs/whatsapp-logs
++# 32 random bytes encoded as 64 hex characters. Preserve across deployments/backups.
++# Generate once: node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
++AI_SECRET_KEY=
+ WEBSITE_LOG=./storage/logs/website
+
+--- live/tsconfig.json
++++ local/tsconfig.json
+@@ -22,5 +22,5 @@
+   },
+   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "prisma/seeds/seeder.js"],
+   // "exclude": ["node_modules"]
+-  "exclude": ["node_modules"]
++  "exclude": ["node_modules", "tmp", "output", "deployment"]
+ }
+
+--- live/prisma/schema.prisma
++++ local/prisma/schema.prisma
+@@ -268,6 +268,50 @@
+   template
+   list
+   webhook
++  ai
++}
++
++model MessageTemplate {
++  id        String   @id @default(uuid()) @db.VarChar(36)
++  userId    String   @db.VarChar(36)
++  name      String   @db.VarChar(200)
++  content   String   @db.Text
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  @@index([userId, updatedAt])
++  @@map("message_templates")
++}
++
++model AiPlugin {
++  id                String   @id @default(uuid()) @db.VarChar(36)
++  userId            String   @db.VarChar(36)
++  provider          String   @db.VarChar(16)
++  enabled           Boolean  @default(false)
++  encryptedKey      String   @db.Text
++  model             String   @db.VarChar(120)
++  systemPrompt      String   @db.Text
++  maxOutputTokens   Int      @default(1024)
++  requestsPerMinute Int      @default(10)
++  dailyLimit        Int      @default(1000)
++  updatedAt         DateTime @updatedAt
++
++  @@unique([userId, provider])
++  @@map("ai_plugins")
++}
++
++model AiRequest {
++  id         String   @id @default(uuid()) @db.VarChar(36)
++  userId     String   @db.VarChar(36)
++  provider   String   @db.VarChar(16)
++  dedupeKey  String   @unique @db.Char(64)
++  status     String   @db.VarChar(16)
++  error      String?  @db.VarChar(100)
++  createdAt  DateTime @default(now())
++  updatedAt  DateTime @updatedAt
++
++  @@index([userId, provider, createdAt])
++  @@map("ai_requests")
+ }
+ 
+ enum KeywordType {
+
+--- live/src/lib/useAutoReplyData.ts
++++ local/src/lib/useAutoReplyData.ts
+@@ -154,7 +154,7 @@
+ 
+     // Handle non-image message types
+     if (
+-      ["text", "button", "list", "webhook"].includes(data.type_message) ||
++      ["text", "button", "list", "webhook", "ai"].includes(data.type_message) ||
+       uploadStatus
+     ) {
+       uploadStatus = true;
+@@ -175,7 +175,7 @@
+         throw new Error("failed insert");
+       }
+     } catch (e) {
+-      result.error = e instanceof AxiosError ? e : e;
++      result.error = e instanceof AxiosError && e.response?.data?.message ? new Error(e.response.data.message) : e;
+     }
+ 
+     return result;
+
+--- live/src/pages/api/auto_reply/index.ts
++++ local/src/pages/api/auto_reply/index.ts
+@@ -7,6 +7,7 @@
+ import { ButtonMessage } from "@/types/components/IAutoReplyFormModal";
+ import { AuthNextApiRequest } from "@/types/global";
+ import { publicPayload } from "@/server/campaigns/content";
++import { aiRuleInput } from "@/lib/aiPlugins";
+ 
+ async function handler(req: NextApiRequest, res: NextApiResponse) {
+   switch (req.method) {
+@@ -40,8 +41,9 @@
+ };
+ 
+ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
++  if (req.body?.reply_when !== undefined && !["Personal", "Group", "All"].includes(req.body.reply_when)) return res.status(400).json({ message: "Cakupan balasan tidak valid." });
+   if (req.body?.reply_status !== undefined && !["active", "inactive"].includes(req.body.reply_status)) return res.status(400).json({ message: "Status balasan tidak valid." });
+-  if (!req.body || !["text", "image", "button", "list", "webhook"].includes(req.body.type_message) || !["Equal", "Contain", "Any"].includes(req.body.type_keyword)) return res.status(400).json({ message: "Jenis balasan/kata kunci tidak valid." });
++  if (!req.body || !["text", "image", "button", "list", "webhook", "ai"].includes(req.body.type_message) || !["Equal", "Contain", "Any"].includes(req.body.type_keyword)) return res.status(400).json({ message: "Jenis balasan/kata kunci tidak valid." });
+   for (const field of ["isi_param_1", "isi_param_2", "isi_param_3"]) {
+     const value = req.body[field];
+     if (value === undefined || value === null || value === "") {
+@@ -176,6 +178,13 @@
+       replies = JSON.stringify(checked);
+     } catch { return res.status(400).json({ message: "JSON list menu tidak valid." }); }
+   }
++  if (req.body.type_message === "ai") {
++    const parsed = aiRuleInput.safeParse({ provider: req.body.aiProvider, instructions: req.body.aiInstructions || "" });
++    if (!parsed.success) return res.status(400).json({ message: "Provider atau instruksi AI tidak valid." });
++    const plugin = await prisma.aiPlugin.findUnique({ where: { userId_provider: { userId: replyOwnerId, provider: parsed.data.provider } } });
++    if (!plugin?.enabled || !plugin.encryptedKey) return res.status(400).json({ message: "Aktifkan provider dan simpan API key di menu Plugin AI pada akun pemilik perangkat." });
++    replies = JSON.stringify(parsed.data);
++  }
+   if (req.body.id) {
+     auto_replies = await prisma.autoReply.update({
+       where: {
+@@ -183,6 +192,7 @@
+       },
+       data: {
+         reply_status: req.body.reply_status,
++        reply_when: req.body.reply_when,
+         delaySeconds,
+         is_quoted: !!req.body.is_quoted,
+         type_keyword: req.body.type_keyword,
+@@ -213,6 +223,7 @@
+     auto_replies = await prisma.autoReply.create({
+       data: {
+         reply_status: req.body.reply_status ?? "inactive",
++        reply_when: req.body.reply_when ?? (req.body.type_message === "ai" ? "Personal" : "All"),
+         delaySeconds,
+         is_quoted: !!req.body.is_quoted,
+         userId: replyOwnerId,
+
+--- live/src/components/Layout.tsx
++++ local/src/components/Layout.tsx
+@@ -44,6 +44,8 @@
+     { href: "/dashboard/log", label: t("log"), icon: <HistoryOutlined /> },
+     { href: "/dashboard/contacts", label: ui("Kontak"), icon: <ContactsOutlined /> },
+     { href: "/dashboard/media", label: ui("File Manager"), icon: <FolderOpenOutlined /> },
++    { href: "/dashboard/message-templates", label: "Template Pesan", icon: <MessageOutlined /> },
++    { href: "/dashboard/ai-plugins", label: "Plugin AI", icon: <SettingOutlined /> },
+     { href: "/dashboard/phone", label: t("phone_devices"), icon: <WhatsAppOutlined /> },
+     { href: "/dashboard/api-docs", label: ui("API Docs"), icon: <ApiOutlined /> },
+     { href: "/dashboard/plans", label: "Master Paket", icon: <FolderOpenOutlined /> },
+
+--- live/src/pages/dashboard/campaigns.tsx
++++ local/src/pages/dashboard/campaigns.tsx
+@@ -11,6 +11,7 @@
+ import dayjs from "dayjs";
+ import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+ import Layout from "@/components/Layout";
++import MessageTemplatePicker from "@/components/MessageTemplatePicker";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+ const labels: Record<string, string> = { WAITING: "Menunggu", PROCESSING: "Memproses", COMPLETED: "Selesai", PAUSED: "Dijeda", CLEARED: "Dikosongkan" };
+ export default function Campaigns() {
+@@ -82,6 +83,7 @@
+         <Form.Item name="id" hidden><Input /></Form.Item>
+         <Form.Item name="name" label={ui("Nama campaign")} rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>
+         <Form.Item name="phoneIds" label="Perangkat pengirim (pilih beberapa untuk rotasi)" rules={[{ required: true, message: "Pilih perangkat pengirim." }]}><Select mode="multiple" showSearch optionFilterProp="label" placeholder="Pilih perangkat pengirim campaign" options={phoneOptions} /></Form.Item>
++        <Form.Item label="Gunakan pesan tersimpan"><MessageTemplatePicker disabled={busy} preserveRecipient onApply={text => form.setFieldValue("message", text)} /></Form.Item>
+         <Form.Item name="message" label={ui("Pesan / caption")} extra={<>
+           <div>Tulis <code>{"{nama}"}</code> untuk nama penerima atau <code>{"{nomor}"}</code> untuk nomor WhatsApp penerima.</div>
+           <div>Contoh: <code>{"Halo {nama}, terima kasih sudah menghubungi kami."}</code></div>
+
+--- live/src/pages/dashboard/conversations.tsx
++++ local/src/pages/dashboard/conversations.tsx
+@@ -6,6 +6,7 @@
+ import { useRouter } from "next/router";
+ import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+ import Layout from "@/components/Layout";
++import MessageTemplatePicker from "@/components/MessageTemplatePicker";
+ import { useDashboardApi } from "@/lib/useDashboardApi";
+ import { createChatTypingReporter } from "@/lib/chatTyping";
+ import styles from "@/styles/Conversations.module.css";
+@@ -224,6 +225,7 @@
+     {!canSend && <Alert type="warning" showIcon message={!device.saveIncomingMessages ? "Penyimpanan pesan pada perangkat ini nonaktif. Aktifkan untuk membalas." : "Perangkat belum terhubung. Hubungkan melalui menu Perangkat HP untuk membalas."} />}
+     {sendError && <Alert closable onClose={() => setSendError("")} type="warning" message={sendError} />}
+     <div className={styles.composer}>
++      <MessageTemplatePicker disabled={!canSend || busy || !!pending || deleting || deleteOpen} defaults={{ nama: conversation.name, ...(/^\d+@s\.whatsapp\.net$/.test(conversation.jid) ? { nomor: conversation.jid.split("@")[0] } : {}) }} onApply={setText} />
+       {replyTo && <div className={styles.quote}><strong>Membalas pesan</strong><p className={styles.messageText}>{replyTo.text.slice(0, 200) || `[${replyTo.type}]`}</p><Button size="small" type="text" disabled={busy || !!pending} onClick={() => setReplyTo(undefined)}>Batal membalas</Button></div>}
+       {file && <div className={styles.fileLabel}><PaperClipOutlined /> {file.name}<Button type="text" size="small" disabled={busy || !!pending} onClick={() => { setFile(undefined); if (fileRef.current) fileRef.current.value = ""; }}>Hapus</Button></div>}
+       <div className={styles.composerRow}>
+
+--- live/src/pages/dashboard/auto-reply.tsx
++++ local/src/pages/dashboard/auto-reply.tsx
+@@ -157,10 +157,10 @@
+         ),
+     },
+     {
+-      title: "type",
++      title: "Jenis balasan",
+       key: "type",
+       dataIndex: "type",
+-      //   render: (v) => (v ? "Online" : "Offline"),
++      render: (value, row) => value === "ai" ? `AI · ${(row.reply as any)?.provider || ""}` : value,
+     },
+     {
+       title: t("created_at"),
+
+--- live/src/components/phone/TestSendModal.tsx
++++ local/src/components/phone/TestSendModal.tsx
+@@ -4,6 +4,7 @@
+ import type { Phone } from "@prisma/client";
+ import { normalizePhoneRecipient } from "@/utils/normalizePhoneRecipient";
+ import { matchesTestMedia, testSendTypes } from "@/lib/testSend";
++import MessageTemplatePicker from "@/components/MessageTemplatePicker";
+ 
+ const required = [{ required: true, message: "Isi bagian ini." }];
+ const requiredText = [{ required: true, whitespace: true, message: "Isi bagian ini." }];
+@@ -13,6 +14,7 @@
+   const [form] = Form.useForm();
+   const phoneId = phone?.id;
+   const type = Form.useWatch("type", form) || "text";
++  const recipient = Form.useWatch("number", form) || "";
+   const [sending, setSending] = useState(false);
+   const [media, setMedia] = useState<MediaOption[]>([]);
+   const [loadingMedia, setLoadingMedia] = useState(false);
+@@ -88,6 +90,7 @@
+           {mediaError && <Alert type="warning" message={mediaError} style={{ marginBottom: 16 }} />}
+           {!loadingMedia && !mediaError && !options.length && <Alert type="info" message="Belum ada file dengan format sesuai. Upload melalui File Manager lalu muat ulang file." style={{ marginBottom: 16 }} />}
+         </>}
++        {hasMessage && <Form.Item label="Gunakan pesan tersimpan"><MessageTemplatePicker maxLength={1000} disabled={sending} defaults={recipient ? { nomor: recipient } : {}} onApply={text => { form.setFieldValue("message", text); setResult(undefined); }} /></Form.Item>}
+         {hasMessage && <Form.Item name="message" label={needsMessage ? "Pesan test" : "Caption (opsional)"} rules={needsMessage ? requiredText : []}>
+           <Input.TextArea rows={3} maxLength={1000} showCount />
+         </Form.Item>}
+
+--- live/src/components/auto-reply/AutoReplyFormModal.tsx
++++ local/src/components/auto-reply/AutoReplyFormModal.tsx
+@@ -31,6 +31,9 @@
+ import { UploadOutlined } from "@ant-design/icons";
+ import WhatsAppCompatibilityNotice from "@/components/WhatsAppCompatibilityNotice";
+ import KeywordTagsInput from "./KeywordTagsInput";
++import MessageTemplatePicker from "@/components/MessageTemplatePicker";
++import { aiProviders, providerNames } from "@/lib/aiPlugins";
++import { Alert } from "antd";
+ 
+ const AutoReplyFormModal = forwardRef<
+   AutoReplyFormModalRef,
+@@ -118,6 +121,11 @@
+         form.setFieldValue("delaySeconds", editReply.delaySeconds);
+         form.setFieldValue("is_quoted", editReply.is_quoted);
+         if (editReply.type === "list") form.setFieldValue("listPayload", JSON.stringify(editReply.reply, null, 2));
++        if (editReply.type === "ai") {
++          form.setFieldValue("aiProvider", reply?.provider);
++          form.setFieldValue("aiInstructions", reply?.instructions || "");
++          form.setFieldValue("reply_when", editReply.reply_when);
++        }
+         if (reply) {
+           form.setFieldValue("reply", reply.text);
+         }
+@@ -364,6 +372,7 @@
+                   value: "webhook",
+                   label: "Webhook",
+                 },
++                { value: "ai", label: "Balasan AI (OpenAI / Gemini / Claude)" },
+               ]}
+             />
+           </Form.Item>
+@@ -374,6 +383,7 @@
+ 
+           {typeMessage == "text" && (
+             <>
++              <Form.Item label="Gunakan template tersimpan"><MessageTemplatePicker disabled={props.loading} onApply={text => form.setFieldValue("reply", text)} /></Form.Item>
+               <Form.Item
+                 name={"reply"}
+                 label={t("text_message")}
+@@ -390,6 +400,12 @@
+               </Form.Item>
+             </>
+           )}
++          {typeMessage === "ai" && <>
++            <Alert type="info" showIcon style={{ marginBottom: 16 }} message="Konfigurasi di menu Plugin AI pada akun pemilik perangkat" description="AI membalas pesan baru yang cocok dengan kata kunci di atas. Jika beberapa aturan AI cocok, satu pesan hanya diproses sekali. Instruksi sistem provider berlaku bersama instruksi tambahan aturan ini. Riwayat chat dan lampiran tidak dikirim ke AI." />
++            <Form.Item name="aiProvider" label="Provider AI" rules={[{ required: true, message: "Pilih provider AI." }]}><Select options={aiProviders.map(value => ({ value, label: providerNames[value] }))} /></Form.Item>
++            <Form.Item name="reply_when" label="Balas AI pada" initialValue="Personal" rules={[{ required: true }]}><Select options={[{ value: "Personal", label: "Pesan pribadi" }, { value: "Group", label: "Pesan grup" }, { value: "All", label: "Pesan pribadi dan grup" }]} /></Form.Item>
++            <Form.Item name="aiInstructions" label="Instruksi tambahan untuk aturan ini (opsional)"><Input.TextArea rows={4} maxLength={4000} showCount placeholder="Contoh: bantu pelanggan memilih produk dan arahkan pertanyaan harga ke admin." /></Form.Item>
++          </>}
+           {typeMessage == "image" && (
+             <>
+               <Flex vertical justify="center" align="center" gap={5}>
+
+--- live/src/types/components/IAutoReplyFormModal.ts
++++ local/src/types/components/IAutoReplyFormModal.ts
+@@ -27,6 +27,9 @@
+   reply_status?: "active" | "inactive";
+   is_quoted?: boolean;
+   listPayload?: string;
++  aiProvider?: string;
++  aiInstructions?: string;
++  reply_when?: "Personal" | "Group" | "All";
+   reply: string;
+   image?: any;
+   image_type: string;
+
+--- live/src/services/autoReply.ts
++++ local/src/services/autoReply.ts
+@@ -8,6 +8,7 @@
+  */
+ export const getAutoReplyByPhoneId = async (phoneId: any) =>
+   await prisma.autoReply.findMany({
++    orderBy: { id: "asc" },
+     where: {
+       phoneId: phoneId,
+       reply_status: "active",
+
+--- live/src/server/libs/makeWASocket.ts
++++ local/src/server/libs/makeWASocket.ts
+@@ -141,16 +141,16 @@
+     // onCreated && onCreated(_waSocket);
+ 
+     // for reply
+-    _waSocket.ev.on("messages.upsert", async ({ messages, type }) => {
++    _waSocket.ev.on("messages.upsert", async ({ messages: batch, type }) => {
+       if (phoneMaintenance.has(phoneId) || retiredSockets.has(_waSocket)) return;
+       if (process.env.DORAN_SHUTTING_DOWN === "true") return;
+       // Store every new message in a batch, including messages sent from the phone.
+-      if (type === "notify" || type === "append") for (const message of messages) {
++      if (type === "notify" || type === "append") for (const message of batch) {
+         await captureChatMessage(phoneId, message, _waSocket).catch(() => console.error("CHAT_INCOMING_SAVE_FAILED", phoneId));
+       }
+-      if (!messages.length || messages[0].key.fromMe) {
+-        return;
+-      }
++      for (const incoming of batch) {
++      if (incoming.key.fromMe) continue;
++      const messages = [incoming];
+       try {
+       const { messageIn, messageType, quotedMessage } = getWaMesage(messages);
+ 
+@@ -172,6 +172,7 @@
+           messageIn: messageIn,
+           messages: messages,
+           userId: userId,
++          allowAi: type === "notify",
+         });
+       }
+ 
+@@ -183,10 +184,12 @@
+           quotedMessage: quotedMessage,
+           waSocket: _waSocket,
+           userId,
++          allowAi: type === "notify",
+         });
+       }
+       } catch (error) {
+         console.error("WhatsApp message handler failed:", error instanceof Error ? error.message : "Unknown error");
++      }
+       }
+     });
+   }
+
+--- live/src/server/events/handleMessageInEvent.ts
++++ local/src/server/events/handleMessageInEvent.ts
+@@ -19,6 +19,7 @@
+ import toBase64 from "../libs/toBase64";
+ import { sendAutoReply } from "../campaigns/autoReply";
+ import { webhookSender } from "../utils/webhookSender";
++import { sendAiAutoReply } from "../ai/service";
+ 
+ type HandleMessageInEventProps = {
+   phone: Phone;
+@@ -26,6 +27,7 @@
+   messageIn: string;
+   messages: WAMessage[];
+   userId: string;
++  allowAi?: boolean;
+ };
+ 
+ export const handleMessageInEvent = async (
+@@ -50,6 +52,10 @@
+     if (
+       !messageKeywordTypeChecker(messageIn, item.keyword, item.type_keyword)
+     ) {
++      continue;
++    }
++    if (item.type === "ai") {
++      if (props.allowAi && messages[0]) await sendAiAutoReply(item, phone, _waSocket, messages[0], messageIn);
+       continue;
+     }
+     if (item.type !== "webhook" && messages[0]) {
+
+--- live/src/server/events/handleQuotedMessageEvent.ts
++++ local/src/server/events/handleQuotedMessageEvent.ts
+@@ -16,6 +16,7 @@
+ } from "../../services/inboxMessage";
+ import { sendAutoReply } from "../campaigns/autoReply";
+ import { webhookSender } from "../utils/webhookSender";
++import { sendAiAutoReply } from "../ai/service";
+ 
+ export type HandleQuotedMessageEventProps = {
+   messageType: string;
+@@ -24,6 +25,7 @@
+   waSocket: WASocket;
+   messages: WAMessage[];
+   userId: string;
++  allowAi?: boolean;
+ };
+ export const handleQuotedMessageEvent = async (
+   props: HandleQuotedMessageEventProps
+@@ -39,16 +41,10 @@
+ 
+   if (messages[0].message!.extendedTextMessage?.text) {
+     clientMessage = messages[0].message!.extendedTextMessage!.text;
+-    participantNum = String(
+-      messages[0].message!.extendedTextMessage!.contextInfo!.participant!.split(
+-        "@"
+-      )[0]
+-    );
++    participantNum = messages[0].message!.extendedTextMessage!.contextInfo?.participant?.split("@")[0] || phone.number || "";
+   } else if (messages[0].message!.imageMessage?.caption) {
+     clientMessage = messages[0].message!.imageMessage?.caption;
+-    participantNum = String(
+-      messages[0].message!.imageMessage!.contextInfo!.participant!.split("@")[0]
+-    );
++    participantNum = messages[0].message!.imageMessage!.contextInfo?.participant?.split("@")[0] || phone.number || "";
+   }
+ 
+   const finalFilePath = await getImageFromWaMessage(messages, waSocket);
+@@ -64,6 +60,12 @@
+ 
+   for (const val of replies_list) {
+     try {
++    if (val.type === "ai") {
++      if (props.allowAi && clientMessage && messageKeywordTypeChecker(clientMessage, val.keyword, val.type_keyword)) {
++        await sendAiAutoReply(val, phone, waSocket, messages[0], clientMessage);
++      }
++      continue;
++    }
+     if (
+       !conversation_quote ||
+       !messageKeywordTypeChecker(
+
+--- live/deployment/verify-auto-reply-controls.cjs
++++ local/deployment/verify-auto-reply-controls.cjs
+@@ -26,6 +26,7 @@
+     '../../services/group': {saveToGrup:async()=>{}},
+     '../../services/inboxMessage': {}, '../libs/toBase64': {},
+     '../campaigns/autoReply': {sendAutoReply:async()=>{sent++;}},
++    '../ai/service': {sendAiAutoReply:async()=>{throw new Error('AI must not run for legacy control tests');}},
+   };
+   const phone = {id:'phone',userId:'owner',autoReplyEnabled:false};
+   await load('src/server/events/handleMessageInEvent.ts',stubs).handleMessageInEvent({phone,messages:[],messageIn:'harga'});
+@@ -45,7 +46,7 @@
+   prisma.autoReply.findFirst=async()=>({id:1,userId:'owner'});
+   prisma.autoReply.create=async args=>(saved=args.data);
+   prisma.autoReply.update=async args=>(saved=args.data);
+-  const api = load('src/pages/api/auto_reply/index.ts', {'@/lib/access':{ownerScope:()=>({userId:'owner'})},'next-auth/jwt':{getToken:async()=>null},'@/lib/prisma':{prisma},'@/middleware/apiAuthMiddleware':{default:handler=>handler,__esModule:true},'@/server/campaigns/content':{publicPayload:{parse:v=>v}}}).default;
++  const api = load('src/pages/api/auto_reply/index.ts', {'@/lib/access':{ownerScope:()=>({userId:'owner'})},'next-auth/jwt':{getToken:async()=>null},'@/lib/prisma':{prisma},'@/middleware/apiAuthMiddleware':{default:handler=>handler,__esModule:true},'@/server/campaigns/content':{publicPayload:{parse:v=>v}},'@/lib/aiPlugins':load('src/lib/aiPlugins.ts',{})}).default;
+   const base = {phoneId:'phone',type_message:'text',type_keyword:'Equal',keyword:'harga',reply:'test'};
+   const res={code:200,status(code){this.code=code;return this;},json(data){this.data=data;return this;},end(){}};
+   await api({method:'POST',user:{id:'owner'},body:{...base}},res); assert.equal(saved.reply_status,'inactive');

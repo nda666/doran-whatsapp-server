@@ -19,11 +19,16 @@ declare module "next-auth" {
     id: string;
     token: string;
     email: string;
+    role?: string;
+    approvalStatus?: string;
+    isActive?: boolean;
+    sessionVersion?: number;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
+    sessionVersion?: number;
     id: string;
     token: string;
     email: string;

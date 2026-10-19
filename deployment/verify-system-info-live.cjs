@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  const admin = await p.user.findFirst({ where: { email: 'admin@gmail.com', role: 'ADMIN', approvalStatus: 'APPROVED', isActive: true } });
+  assert(admin);
+  const url = 'http://127.0.0.1:3000/api/admin/system-info';
+  const response = await fetch(url, { headers: { Authorization: 'Bearer ' + admin.token } });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('cache-control'), /no-store/);
+  const body = await response.json();
+  assert.match(body.node, /^v24\./);
+  assert.equal(body.versions.next, require('next/package.json').version);
+  assert(body.database.version);
+  assert.equal(body.dispatchEnabled, true);
+  assert.equal(body.redisQueueEnabled, false);
+  assert.deepEqual(Object.keys(body).sort(), ['checkedAt', 'concurrency', 'database', 'dispatchEnabled', 'intervalMs', 'node', 'redisQueueEnabled', 'versions', 'pm2'].sort());
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + admin.token } })).status, 405);
+  const user = await p.user.findFirst({ where: { role: 'USER', approvalStatus: 'APPROVED', isActive: true } });
+  if (user) assert.equal((await fetch(url, { headers: { Authorization: 'Bearer ' + user.token } })).status, 403);
+  console.log('SYSTEM_INFO_RUNTIME_AND_ACCESS_PASSED_READ_ONLY');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => p.$disconnect());

@@ -1,7 +1,7 @@
 import Bull from "bull";
 
 // Inisialisasi queue
-const sendWaQueue = new Bull("sendWaQueue", {
+const sendWaQueue = process.env.QUEUE_ENABLED === "false" ? null : new Bull("sendWaQueue", {
   redis: {
     host: "127.0.0.1",
     port: 6379,

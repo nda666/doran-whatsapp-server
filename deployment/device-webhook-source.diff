@@ -1,0 +1,897 @@
+--- live/prisma/schema.prisma
++++ prisma/schema.prisma
+@@ -327,6 +327,38 @@
+   @@map("server_settings")
+ }
+ 
++model DeviceWebhookSetting {
++  id        Int      @id @default(1)
++  enabled   Boolean  @default(false)
++  url       String   @default("") @db.Text
++  secret    String   @default("") @db.Text
++  revision  String   @db.VarChar(36)
++  updatedAt DateTime @updatedAt
++
++  @@map("device_webhook_settings")
++}
++
++model DeviceWebhookEvent {
++  id            Int       @id @default(autoincrement())
++  eventId       String    @unique @db.VarChar(36)
++  deviceId      String?   @db.VarChar(36)
++  event         String    @db.VarChar(64)
++  revision      String    @db.VarChar(36)
++  payload       String?   @db.LongText
++  status        String    @default("PENDING") @db.VarChar(16)
++  attempts      Int       @default(0)
++  nextAttemptAt DateTime  @default(now())
++  leaseToken    String?   @db.VarChar(36)
++  leaseUntil    DateTime?
++  lastError     String?   @db.VarChar(100)
++  createdAt     DateTime  @default(now())
++  deliveredAt   DateTime?
++
++  @@index([status, nextAttemptAt])
++  @@index([createdAt])
++  @@map("device_webhook_events")
++}
++
+ model DeviceContact {
+   id      String @id @default(uuid()) @db.VarChar(36)
+   userId  String @db.VarChar(36)
+--- live/src/pages/dashboard/admin.tsx
++++ src/pages/dashboard/admin.tsx
+@@ -1,65 +1,71 @@
+-import ActionDropdown from "@/components/ActionDropdown";
+-import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
+-import FilterSelect from "@/components/FilterSelect";
+-import Table from "@/components/DashboardTable";
+-import { useTableState } from "@/lib/useTableState";
+-import { useTranslation } from "next-i18next";
+-import { ReactElement, useState } from "react";
+-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, DatePicker, Tabs, Tag, message } from "antd";
+-import axios from "axios";
+-import dayjs from "dayjs";
+-import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+-import Layout from "@/components/Layout";
+-import { useDashboardApi } from "@/lib/useDashboardApi";
+-export default function Admin() {
+-  const { t: ui } = useTranslation("upgrade");
+-  const [approvalStatus, setApprovalStatus] = useState("");
+-  const table = useTableState();
+-  const [modal, modalContext] = Modal.useModal();
+-  const [q, setQ] = useState(""), [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
+-  const users = useDashboardApi(`/api/admin/users?${table.params}&q=${encodeURIComponent(q)}&status=${approvalStatus}`), settings = useDashboardApi("/api/admin/settings"), update = useDashboardApi("/api/admin/update");
+-  const plans = useDashboardApi("/api/admin/plans?options=1");
+-  const [form] = Form.useForm(), [settingsForm] = Form.useForm();
+-  const editedEmail = Form.useWatch("email", form), editedRole = Form.useWatch("role", form);
+-  const editingSuperAdmin = editedEmail === "admin@gmail.com" && editedRole === "ADMIN";
+-  const save = async (url: string, data: any) => {
+-    setBusy(true); try { const r = await axios.post(url, data, { headers: users.headers, timeout: 100000 }); message.success(r.data.message || "Tersimpan."); return true; }
+-    catch (e: any) { message.error(e.response?.data?.message || "Aksi gagal."); return false; } finally { setBusy(false); }
+-  };
+-  const approve = async (id: string, status: "APPROVED" | "REJECTED") => {
+-    setBusy(true);
+-    try {
+-      const response = await axios.patch(`/api/admin/users/${id}/approval`, { approvalStatus: status }, { headers: users.headers });
+-      message.success(response.data.message); users.reload();
+-    } catch (error: any) { message.error(error.response?.data?.message || "Persetujuan gagal disimpan."); }
+-    finally { setBusy(false); }
+-  };
+-  return <Space direction="vertical" style={{ width: "100%" }}>
+-    {users.error && <Alert type="error" message={users.error} />}
+-    <Tabs items={[
+-      { key: "users", label: ui("Manage Users"), children: <Space direction="vertical" style={{ width: "100%" }}><Alert type="info" showIcon message="Pendaftaran mandiri perlu persetujuan admin. Pengguna yang ditambahkan admin langsung dapat masuk." /><Space wrap><Button type="primary" onClick={() => { form.resetFields(); setOpen(true); }}>{ui("Tambah Pengguna")}</Button></Space><Card title="Pencarian"><Form layout="vertical" colon={false} className="dashboard-filter-grid" onFinish={values => { setApprovalStatus(values.status || ""); setQ(values.q || ""); table.reset(); users.reload(); }}><Form.Item name="status" label="Status akun"><FilterSelect allLabel="Semua status akun" options={[{ value: "PENDING", label: "Menunggu persetujuan" }, { value: "APPROVED", label: "Disetujui" }, { value: "REJECTED", label: "Ditolak" }]} /></Form.Item><Form.Item name="q" label="Nama / email"><Input allowClear placeholder="Cari pengguna" /></Form.Item><div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">Cari</Button></div></Form></Card>
++import ActionDropdown from "@/components/ActionDropdown";
++import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
++import FilterSelect from "@/components/FilterSelect";
++import Table from "@/components/DashboardTable";
++import { useTableState } from "@/lib/useTableState";
++import { useTranslation } from "next-i18next";
++import { ReactElement, useState } from "react";
++import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, DatePicker, Tabs, Tag, message } from "antd";
++import axios from "axios";
++import dayjs from "dayjs";
++import { serverSideTranslations } from "next-i18next/serverSideTranslations";
++import Layout from "@/components/Layout";
++import { useDashboardApi } from "@/lib/useDashboardApi";
++import DeviceWebhookSettings from "@/components/phone/DeviceWebhookSettings";
++import { useSession } from "next-auth/react";
++import { isSuperAdmin } from "@/lib/access";
++export default function Admin() {
++  const { data: session } = useSession();
++  const mainAdmin = !!session?.user && isSuperAdmin({ id: session.user.id, email: session.user.email, role: session.user.role || "USER", approvalStatus: session.user.approvalStatus || "" });
++  const { t: ui } = useTranslation("upgrade");
++  const [approvalStatus, setApprovalStatus] = useState("");
++  const table = useTableState();
++  const [modal, modalContext] = Modal.useModal();
++  const [q, setQ] = useState(""), [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
++  const users = useDashboardApi(`/api/admin/users?${table.params}&q=${encodeURIComponent(q)}&status=${approvalStatus}`), settings = useDashboardApi("/api/admin/settings"), update = useDashboardApi("/api/admin/update");
++  const plans = useDashboardApi("/api/admin/plans?options=1");
++  const [form] = Form.useForm(), [settingsForm] = Form.useForm();
++  const editedEmail = Form.useWatch("email", form), editedRole = Form.useWatch("role", form);
++  const editingSuperAdmin = editedEmail === "admin@gmail.com" && editedRole === "ADMIN";
++  const save = async (url: string, data: any) => {
++    setBusy(true); try { const r = await axios.post(url, data, { headers: users.headers, timeout: 100000 }); message.success(r.data.message || "Tersimpan."); return true; }
++    catch (e: any) { message.error(e.response?.data?.message || "Aksi gagal."); return false; } finally { setBusy(false); }
++  };
++  const approve = async (id: string, status: "APPROVED" | "REJECTED") => {
++    setBusy(true);
++    try {
++      const response = await axios.patch(`/api/admin/users/${id}/approval`, { approvalStatus: status }, { headers: users.headers });
++      message.success(response.data.message); users.reload();
++    } catch (error: any) { message.error(error.response?.data?.message || "Persetujuan gagal disimpan."); }
++    finally { setBusy(false); }
++  };
++  return <Space direction="vertical" style={{ width: "100%" }}>
++    {users.error && <Alert type="error" message={users.error} />}
++    <Tabs items={[
++      ...(mainAdmin ? [{ key: "device-webhook", label: "Webhook Perangkat", children: <DeviceWebhookSettings /> }] : []),
++      { key: "users", label: ui("Manage Users"), children: <Space direction="vertical" style={{ width: "100%" }}><Alert type="info" showIcon message="Pendaftaran mandiri perlu persetujuan admin. Pengguna yang ditambahkan admin langsung dapat masuk." /><Space wrap><Button type="primary" onClick={() => { form.resetFields(); setOpen(true); }}>{ui("Tambah Pengguna")}</Button></Space><Card title="Pencarian"><Form layout="vertical" colon={false} className="dashboard-filter-grid" onFinish={values => { setApprovalStatus(values.status || ""); setQ(values.q || ""); table.reset(); users.reload(); }}><Form.Item name="status" label="Status akun"><FilterSelect allLabel="Semua status akun" options={[{ value: "PENDING", label: "Menunggu persetujuan" }, { value: "APPROVED", label: "Disetujui" }, { value: "REJECTED", label: "Ditolak" }]} /></Form.Item><Form.Item name="q" label="Nama / email"><Input allowClear placeholder="Cari pengguna" /></Form.Item><div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">Cari</Button></div></Form></Card>
+         <Table className="table-with-data-count" rowKey="id" scroll={{ x: true }} dataSource={users.data?.data || []} table={table} total={users.data?.total} columns={[{ title: ui("Nama"), dataIndex: "name" }, { title: "Email", dataIndex: "email" }, { title: "Role", dataIndex: "role" }, { title: "Status akun", dataIndex: "approvalStatus", render: value => <Tag color={value === "APPROVED" ? "green" : value === "REJECTED" ? "red" : "gold"}>{value === "APPROVED" ? "Disetujui" : value === "REJECTED" ? "Ditolak" : "Menunggu persetujuan"}</Tag> }, { title: "Device / Limit", dataIndex: "deviceLimit", render: (_, r: any) => r.email === "admin@gmail.com" && r.role === "ADMIN" ? String(r._count.phones) : `${r._count.phones} / ${r.deviceLimit}` }, { title: ui("Paket"), dataIndex: "plan" }, { title: ui("Aksi"), key: "aksi", width: 120, render: (_, r: any) => <ActionDropdown ariaLabel={`Aksi pengguna ${r.name || r.email}`} items={[
+           ...(r.approvalStatus !== "APPROVED" ? [{ key: "approve", label: "Setujui", icon: <CheckOutlined />, disabled: busy, onClick: () => approve(r.id, "APPROVED") }] : []),
+           ...(r.approvalStatus === "PENDING" ? [{ key: "reject", label: "Tolak", icon: <CloseOutlined />, danger: true, disabled: busy, onClick: () => modal.confirm({ title: "Tolak pendaftaran pengguna ini?", content: r.name || r.email, okText: "Tolak", cancelText: "Batal", okButtonProps: { danger: true }, onOk: () => approve(r.id, "REJECTED") }) }] : []),
+           { key: "edit", label: ui("Edit"), icon: <EditOutlined />, onClick: () => { form.setFieldsValue({ ...r, password: undefined, subscriptionExpiresAt: r.subscriptionExpiresAt ? dayjs(r.subscriptionExpiresAt) : null }); setOpen(true); } },
+-        ]} /> }]} /></Space> },
+-      { key: "server", label: ui("Server Settings"), children: <Space direction="vertical" style={{ width: "100%" }}>
+-        {settings.error && <Alert type="error" message={settings.error} />}
+-        <Alert type="info" message={`Node ${settings.data?.runtime.nodeVersion || "—"} · Koneksi: ${settings.data?.runtime.connected ? "Terhubung" : "—"} · Port aktif: ${settings.data?.runtime.port || "—"}`} description="Konfigurasi ini menyimpan profil server. Perubahan port/URL runtime perlu diterapkan melalui environment dan restart terkontrol." />
+-        <Button onClick={() => settingsForm.setFieldsValue(settings.data?.settings || { serverType: "VPS", nodeUrl: "http://127.0.0.1", nodePort: 3000 })}>{ui("Muat konfigurasi")}</Button>
+-        <Form form={settingsForm} layout="vertical" onFinish={async v => { if (await save("/api/admin/settings", v)) settings.reload(); }}><Form.Item name="serverType" label="Server type" rules={[{ required: true }]}><Select options={["VPS", "LOCALHOST", "SHARED_HOSTING"].map(value => ({ value, label: value }))} /></Form.Item><Form.Item name="nodeUrl" label="Node URL" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="nodePort" label="Node port" rules={[{ required: true }]}><InputNumber min={1} max={65535} /></Form.Item><Button htmlType="submit" loading={busy}>{ui("Simpan")}</Button></Form>
+-        <Card title="SSL Certificate (VPS)"><Form layout="vertical" onFinish={v => save("/api/admin/settings", { ...v, action: "ssl" })}><Form.Item name="domain" label="Domain" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Button htmlType="submit" loading={busy}>Generate Certificate</Button></Form></Card></Space> },
+-      { key: "update", label: ui("Update Sistem"), children: <Card title={`Versi ${update.data?.version || "—"}`}>
+-        {update.error && <Alert type="error" message={update.error} />}
+-        <p>Migration belum diterapkan: {(update.data?.pendingMigrations || []).join(", ") || "Tidak ada"}</p>
+-        <Button onClick={update.reload}>{ui("Periksa status")}</Button><p>Update dilakukan melalui deployment: backup database/source, pasang dependency terkunci, jalankan migration, build, lalu restart aplikasi. Panduan ada di deployment/upgrade-jeblast.md.</p>
+-      </Card> },
+-    ]} />
+-    <Modal title={ui("Pengguna")} open={open} onCancel={() => !busy && setOpen(false)} footer={null}><Form form={form} layout="vertical" initialValues={{ role: "USER", deviceLimit: 100, plan: "Standard" }} onFinish={async values => { if (await save("/api/admin/users", { ...values, password: values.password || undefined, subscriptionExpiresAt: values.subscriptionExpiresAt?.toISOString() || null })) { setOpen(false); users.reload(); } }}>
+-      <Form.Item name="id" hidden><Input /></Form.Item><Form.Item name="name" label={ui("Nama")} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Form.Item name="password" label="Password baru (min. 12 karakter; kosong = pertahankan)"><Input.Password /></Form.Item><Form.Item name="role" label="Role"><Select options={[{ value: "USER", label: "User" }, { value: "ADMIN", label: "Admin" }]} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="deviceLimit" label={ui("Limit device")}><InputNumber min={0} max={10000} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="plan" label={ui("Paket")} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={(plans.data || []).map((plan: any) => ({ value: plan.name, label: `${plan.name} (${plan.deviceLimit} device)`, disabled: !plan.active && form.getFieldValue("plan") !== plan.name }))} onChange={name => { const plan = (plans.data || []).find((item: any) => item.name === name); if (plan) form.setFieldValue("deviceLimit", plan.deviceLimit); }} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="subscriptionExpiresAt" label={ui("Tanggal berakhir paket")}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" style={{ width: "100%" }} /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{ui("Simpan")}</Button>
+-    </Form></Modal>
+-    {modalContext}
+-  </Space>;
+-}
+-Admin.getLayout = (page: ReactElement) => <Layout title="ADMIN PANEL">{page}</Layout>;
+-export const getStaticProps = async ({ locale }: { locale: string }) => ({ props: { ...(await serverSideTranslations(locale, ["common", "upgrade"])) } });
++        ]} /> }]} /></Space> },
++      { key: "server", label: ui("Server Settings"), children: <Space direction="vertical" style={{ width: "100%" }}>
++        {settings.error && <Alert type="error" message={settings.error} />}
++        <Alert type="info" message={`Node ${settings.data?.runtime.nodeVersion || "â€”"} Â· Koneksi: ${settings.data?.runtime.connected ? "Terhubung" : "â€”"} Â· Port aktif: ${settings.data?.runtime.port || "â€”"}`} description="Konfigurasi ini menyimpan profil server. Perubahan port/URL runtime perlu diterapkan melalui environment dan restart terkontrol." />
++        <Button onClick={() => settingsForm.setFieldsValue(settings.data?.settings || { serverType: "VPS", nodeUrl: "http://127.0.0.1", nodePort: 3000 })}>{ui("Muat konfigurasi")}</Button>
++        <Form form={settingsForm} layout="vertical" onFinish={async v => { if (await save("/api/admin/settings", v)) settings.reload(); }}><Form.Item name="serverType" label="Server type" rules={[{ required: true }]}><Select options={["VPS", "LOCALHOST", "SHARED_HOSTING"].map(value => ({ value, label: value }))} /></Form.Item><Form.Item name="nodeUrl" label="Node URL" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="nodePort" label="Node port" rules={[{ required: true }]}><InputNumber min={1} max={65535} /></Form.Item><Button htmlType="submit" loading={busy}>{ui("Simpan")}</Button></Form>
++        <Card title="SSL Certificate (VPS)"><Form layout="vertical" onFinish={v => save("/api/admin/settings", { ...v, action: "ssl" })}><Form.Item name="domain" label="Domain" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Button htmlType="submit" loading={busy}>Generate Certificate</Button></Form></Card></Space> },
++      { key: "update", label: ui("Update Sistem"), children: <Card title={`Versi ${update.data?.version || "â€”"}`}>
++        {update.error && <Alert type="error" message={update.error} />}
++        <p>Migration belum diterapkan: {(update.data?.pendingMigrations || []).join(", ") || "Tidak ada"}</p>
++        <Button onClick={update.reload}>{ui("Periksa status")}</Button><p>Update dilakukan melalui deployment: backup database/source, pasang dependency terkunci, jalankan migration, build, lalu restart aplikasi. Panduan ada di deployment/upgrade-jeblast.md.</p>
++      </Card> },
++    ]} />
++    <Modal title={ui("Pengguna")} open={open} onCancel={() => !busy && setOpen(false)} footer={null}><Form form={form} layout="vertical" initialValues={{ role: "USER", deviceLimit: 100, plan: "Standard" }} onFinish={async values => { if (await save("/api/admin/users", { ...values, password: values.password || undefined, subscriptionExpiresAt: values.subscriptionExpiresAt?.toISOString() || null })) { setOpen(false); users.reload(); } }}>
++      <Form.Item name="id" hidden><Input /></Form.Item><Form.Item name="name" label={ui("Nama")} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}><Input /></Form.Item><Form.Item name="password" label="Password baru (min. 12 karakter; kosong = pertahankan)"><Input.Password /></Form.Item><Form.Item name="role" label="Role"><Select options={[{ value: "USER", label: "User" }, { value: "ADMIN", label: "Admin" }]} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="deviceLimit" label={ui("Limit device")}><InputNumber min={0} max={10000} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="plan" label={ui("Paket")} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={(plans.data || []).map((plan: any) => ({ value: plan.name, label: `${plan.name} (${plan.deviceLimit} device)`, disabled: !plan.active && form.getFieldValue("plan") !== plan.name }))} onChange={name => { const plan = (plans.data || []).find((item: any) => item.name === name); if (plan) form.setFieldValue("deviceLimit", plan.deviceLimit); }} /></Form.Item><Form.Item hidden={editingSuperAdmin} name="subscriptionExpiresAt" label={ui("Tanggal berakhir paket")}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" style={{ width: "100%" }} /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{ui("Simpan")}</Button>
++    </Form></Modal>
++    {modalContext}
++  </Space>;
++}
++Admin.getLayout = (page: ReactElement) => <Layout title="ADMIN PANEL">{page}</Layout>;
++export const getStaticProps = async ({ locale }: { locale: string }) => ({ props: { ...(await serverSideTranslations(locale, ["common", "upgrade"])) } });
+--- live/src/pages/api/phones/index.ts
++++ src/pages/api/phones/index.ts
+@@ -1,53 +1,56 @@
+-import { tableQuery } from "@/lib/tableQuery";
+-import { isSuperAdmin, ownerScope } from "@/lib/access";
+-import type { NextApiResponse } from "next";
+-import { z } from "zod";
+-import { prisma } from "@/lib/prisma";
+-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+-import { AuthNextApiRequest } from "@/types/global";
+-const input = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
+-  webhookUrl: z.string().max(2000).refine(v => !v || /^https?:\/\//.test(v), "Webhook URL tidak valid").nullable().optional(),
+-  readReceipt: z.boolean().optional(), rejectCall: z.boolean().optional(), showOnline: z.boolean().optional(), showTyping: z.boolean().optional() });
+-async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
+-  res.setHeader("Cache-Control", "no-store"); const userId = req.user!.id;
+-  if (req.method === "GET") {
+-    const admin = isSuperAdmin(req.user!);
+-    if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, name: true, number: true, active: true, isOnline: true } }));
+-    const { number, name, is_online, active } = req.query;
+-    const where = { ...ownerScope(req.user!),
+-      ...(typeof number === "string" && number ? { number: { contains: number.slice(0, 100) } } : {}),
+-      ...(typeof name === "string" && name ? { OR: [
+-        { name: { contains: name.slice(0, 200) } },
+-        { account_name: { contains: name.slice(0, 200) } },
+-      ] } : {}),
+-      ...(is_online === "0" || is_online === "1" ? { isOnline: is_online === "1" } : {}),
+-      ...(active === "0" || active === "1" ? { active: Number(active) } : {}) };
+-    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
+-    const [data, total] = await Promise.all([prisma.phone.findMany({ where, take: limit, skip, orderBy,
+-      ...(admin ? { include: { user: { select: { id: true, name: true, email: true } } } } : {}),
+-    }), prisma.phone.count({ where })]);
+-    const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...ownerScope(req.user!), phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
+-    const rows = data.map(p => ({ ...p, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 }));
+-    // Preserve array shape for integrations that don't request pagination.
+-    return res.json(req.query.page ? { data: rows, total, page, pageSize: limit } : rows);
+-  }
+-  if (req.method !== "POST") return res.status(405).end();
+-  const parsed = input.safeParse(req.body);
+-  if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
+-  const { id, ...data } = parsed.data;
+-  if (id) {
+-    const result = await prisma.phone.updateMany({ where: { id, ...ownerScope(req.user!) }, data });
+-    if (!result.count) return res.status(404).end();
+-    return res.json(await prisma.phone.findFirst({ where: { id, ...ownerScope(req.user!) } }));
+-  }
+-  try {
+-    const phone = await prisma.$transaction(async tx => {
+-      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+-      const owner = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+-      if (!isSuperAdmin(owner) && await tx.phone.count({ where: { userId } }) >= owner.deviceLimit) throw new Error("Limit device telah tercapai.");
+-      return tx.phone.create({ data: { ...data, userId } });
+-    });
+-    return res.status(201).json(phone);
+-  } catch (e) { return res.status(409).json({ message: e instanceof Error ? e.message : "Device gagal dibuat." }); }
+-}
+-export default apiAuthMiddleware(handler);
++import { tableQuery } from "@/lib/tableQuery";
++import { isSuperAdmin, ownerScope } from "@/lib/access";
++import type { NextApiResponse } from "next";
++import { z } from "zod";
++import { prisma } from "@/lib/prisma";
++import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
++import { AuthNextApiRequest } from "@/types/global";
++import { enqueueDeviceEvent, updateDevice } from "@/server/deviceWebhook/events";
++const input = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
++  webhookUrl: z.string().max(2000).refine(v => !v || /^https?:\/\//.test(v), "Webhook URL tidak valid").nullable().optional(),
++  readReceipt: z.boolean().optional(), rejectCall: z.boolean().optional(), showOnline: z.boolean().optional(), showTyping: z.boolean().optional() });
++async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
++  res.setHeader("Cache-Control", "no-store"); const userId = req.user!.id;
++  if (req.method === "GET") {
++    const admin = isSuperAdmin(req.user!);
++    if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, name: true, number: true, active: true, isOnline: true } }));
++    const { number, name, is_online, active } = req.query;
++    const where = { ...ownerScope(req.user!),
++      ...(typeof number === "string" && number ? { number: { contains: number.slice(0, 100) } } : {}),
++      ...(typeof name === "string" && name ? { OR: [
++        { name: { contains: name.slice(0, 200) } },
++        { account_name: { contains: name.slice(0, 200) } },
++      ] } : {}),
++      ...(is_online === "0" || is_online === "1" ? { isOnline: is_online === "1" } : {}),
++      ...(active === "0" || active === "1" ? { active: Number(active) } : {}) };
++    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
++    const [data, total] = await Promise.all([prisma.phone.findMany({ where, take: limit, skip, orderBy,
++      ...(admin ? { include: { user: { select: { id: true, name: true, email: true } } } } : {}),
++    }), prisma.phone.count({ where })]);
++    const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...ownerScope(req.user!), phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
++    const rows = data.map(p => ({ ...p, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 }));
++    // Preserve array shape for integrations that don't request pagination.
++    return res.json(req.query.page ? { data: rows, total, page, pageSize: limit } : rows);
++  }
++  if (req.method !== "POST") return res.status(405).end();
++  const parsed = input.safeParse(req.body);
++  if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
++  const { id, ...data } = parsed.data;
++  if (id) {
++    const phone = await prisma.$transaction(tx => updateDevice(tx, { id, ...ownerScope(req.user!) }, data));
++    if (!phone) return res.status(404).end();
++    return res.json(phone);
++  }
++  try {
++    const phone = await prisma.$transaction(async tx => {
++      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
++      const owner = await tx.user.findUniqueOrThrow({ where: { id: userId } });
++      if (!isSuperAdmin(owner) && await tx.phone.count({ where: { userId } }) >= owner.deviceLimit) throw new Error("Limit device telah tercapai.");
++      const created = await tx.phone.create({ data: { ...data, userId } });
++      await enqueueDeviceEvent(tx, "device.created", created);
++      return created;
++    });
++    return res.status(201).json(phone);
++  } catch (e) { return res.status(409).json({ message: e instanceof Error ? e.message : "Device gagal dibuat." }); }
++}
++export default apiAuthMiddleware(handler);
+--- live/src/pages/api/phones/[id].ts
++++ src/pages/api/phones/[id].ts
+@@ -1,12 +1,23 @@
+-import { prisma } from "@/lib/prisma";
+-import { ownerScope } from "@/lib/access";
+-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+-import { AuthNextApiRequest } from "@/types/global";
+-import type { NextApiResponse } from "next";
+-async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
+-  if (req.method !== "DELETE") return res.status(405).end();
+-  const result = await prisma.phone.deleteMany({ where: { id: String(req.query.id),  ...ownerScope(req.user!) } });
+-  if (!result.count) return res.status(404).json({ message: "Data tidak ditemukan." });
+-  return res.json({ result: true });
+-}
+-export default apiAuthMiddleware(handler);
++import { prisma } from "@/lib/prisma";
++import { ownerScope } from "@/lib/access";
++import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
++import { AuthNextApiRequest } from "@/types/global";
++import type { NextApiResponse } from "next";
++import { enqueueDeviceEvent } from "@/server/deviceWebhook/events";
++async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
++  if (req.method !== "DELETE") return res.status(405).end();
++  const deleted = await prisma.$transaction(async tx => {
++    await tx.$queryRaw`SELECT id FROM device_webhook_settings WHERE id = 1 FOR UPDATE`;
++    const where = { id: String(req.query.id), ...ownerScope(req.user!) };
++    await tx.$queryRaw`SELECT id FROM phones WHERE id = ${where.id} FOR UPDATE`;
++    const phone = await tx.phone.findFirst({ where });
++    if (!phone) return false;
++    const result = await tx.phone.deleteMany({ where });
++    if (!result.count) return false;
++    await enqueueDeviceEvent(tx, "device.deleted", phone);
++    return true;
++  });
++  if (!deleted) return res.status(404).json({ message: "Data tidak ditemukan." });
++  return res.json({ result: true });
++}
++export default apiAuthMiddleware(handler);
+--- live/src/pages/api/phones/generate-token.ts
++++ src/pages/api/phones/generate-token.ts
+@@ -5,6 +5,7 @@
+ import { ownerScope } from "@/lib/access";
+ import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+ import type { AuthNextApiRequest } from "@/types/global";
++import { updateDevice } from "@/server/deviceWebhook/events";
+ 
+ const input = z.discriminatedUnion("scope", [
+   z.object({ scope: z.literal("selected"), ids: z.array(z.string().uuid()).min(1).max(1000) }).strict(),
+@@ -28,10 +29,8 @@
+       });
+       if (ids && phones.length !== ids.length) throw new Error("PHONE_SELECTION_CHANGED");
+       for (const phone of phones) {
+-        const result = await tx.phone.updateMany({
+-          where: { id: phone.id, ...ownerScope(req.user!) }, data: { token: randomUUID() },
+-        });
+-        if (result.count !== 1) throw new Error("PHONE_SELECTION_CHANGED");
++        const updated = await updateDevice(tx, { id: phone.id, ...ownerScope(req.user!) }, { token: randomUUID() }, "device.token_rotated");
++        if (!updated) throw new Error("PHONE_SELECTION_CHANGED");
+       }
+       return phones.length;
+     }, { timeout: 60000 });
+--- live/src/pages/api/phones/[id]/toggle-active/index.ts
++++ src/pages/api/phones/[id]/toggle-active/index.ts
+@@ -1,31 +1,27 @@
+-import { ownerScope } from "@/lib/access";
+-import { prisma } from "@/lib/prisma";
+-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+-import { NextApiRequest, NextApiResponse } from "next";
+-import { AuthNextApiRequest } from "@/types/global";
+-
+-const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
+-  if (req.method !== "PATCH") {
+-    res.setHeader("Allow", "PATCH");
+-    return res.status(405).json({ message: "Method not allowed" });
+-  }
+-  if (req.body?.active !== 0 && req.body?.active !== 1) return res.status(400).json({ message: "Status perangkat harus 0 atau 1." });
+-
+-  const phoneId = req.query.id;
+-  const active = req.body.active;
+-
+-  const result = await prisma.phone.updateMany({
+-    where: {
+-      id: String(phoneId),
+-      ...ownerScope(req.user!),
+-    },
+-    data: {
+-      active: Number(active),
+-    },
+-  });
+-
+-  if (!result.count) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
+-  return res.status(200).json(result);
+-};
+-
+-export default apiAuthMiddleware(handler);
++import { ownerScope } from "@/lib/access";
++import { prisma } from "@/lib/prisma";
++import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
++import { NextApiRequest, NextApiResponse } from "next";
++import { AuthNextApiRequest } from "@/types/global";
++import { updateDevice } from "@/server/deviceWebhook/events";
++
++const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
++  if (req.method !== "PATCH") {
++    res.setHeader("Allow", "PATCH");
++    return res.status(405).json({ message: "Method not allowed" });
++  }
++  if (req.body?.active !== 0 && req.body?.active !== 1) return res.status(400).json({ message: "Status perangkat harus 0 atau 1." });
++
++  const phoneId = req.query.id;
++  const active = req.body.active;
++
++  const result = await prisma.$transaction(tx => updateDevice(tx, {
++      id: String(phoneId),
++      ...ownerScope(req.user!),
++    }, { active: Number(active) }, "device.active_changed"));
++
++  if (!result) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
++  return res.status(200).json({ count: 1 });
++};
++
++export default apiAuthMiddleware(handler);
+--- live/src/pages/api/phones/[id]/toggle-group/index.ts
++++ src/pages/api/phones/[id]/toggle-group/index.ts
+@@ -1,26 +1,25 @@
+-import { ownerScope } from "@/lib/access";
+-import { prisma } from "@/lib/prisma";
+-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+-import { NextApiRequest, NextApiResponse } from "next";
+-import { AuthNextApiRequest } from "@/types/global";
+-
+-const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
+-
+-  const phoneId = req.query.id;
+-  const is_save_group = req.body.is_save_group;
+-  // return res.status(200).json({ok: 'ok', phoneId: phoneId});
+-  //
+-  const result = await prisma.phone.updateMany({
+-    where: {
+-      id: String(phoneId),
+-      ...ownerScope(req.user!),
+-    },
+-    data: {
+-      is_save_group: is_save_group,
+-    },
+-  });
+-
+-  return res.status(200).json(result);
+-};
+-
+-export default apiAuthMiddleware(handler);
++import { ownerScope } from "@/lib/access";
++import { prisma } from "@/lib/prisma";
++import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
++import { NextApiRequest, NextApiResponse } from "next";
++import { AuthNextApiRequest } from "@/types/global";
++import { updateDevice } from "@/server/deviceWebhook/events";
++
++const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
++  if (req.method !== "PATCH") { res.setHeader("Allow", "PATCH"); return res.status(405).end(); }
++  if (typeof req.body?.is_save_group !== "boolean") return res.status(400).json({ message: "Status simpan grup tidak valid." });
++
++  const phoneId = req.query.id;
++  const is_save_group = req.body.is_save_group;
++  // return res.status(200).json({ok: 'ok', phoneId: phoneId});
++  //
++  const result = await prisma.$transaction(tx => updateDevice(tx, {
++      id: String(phoneId),
++      ...ownerScope(req.user!),
++    }, { is_save_group }));
++
++  if (!result) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
++  return res.status(200).json({ count: 1 });
++};
++
++export default apiAuthMiddleware(handler);
+--- live/src/pages/api/public/[action].ts
++++ src/pages/api/public/[action].ts
+@@ -8,6 +8,7 @@
+ import { waitForQr } from "@/server/libs/qrState";
+ import { isPairingInProgress } from "@/server/libs/pairingState";
+ import { registeredPhones } from "@/server/registeredPhones";
++import { updateDevice } from "@/server/deviceWebhook/events";
+ 
+ export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+   res.setHeader("Cache-Control", "no-store"); res.setHeader("Referrer-Policy", "no-referrer");
+@@ -25,7 +26,7 @@
+     if (action === "session") return res.json({ active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number });
+     if (action === "disconnect") {
+       // Inactivate first so periodic reconnect cannot undo explicit disconnection.
+-      await prisma.phone.update({ where: { id: phone.id }, data: { active: 0, isOnline: false, status: "CLOSE" } });
++      await prisma.$transaction(tx => updateDevice(tx, { id: phone.id, userId: phone.userId }, { active: 0, isOnline: false, status: "CLOSE" }, "device.active_changed"));
+       session.get(phone.id)?.end(new Error("DEVICE_DISCONNECTED")); session.delete(phone.id);
+       return res.json({ result: true });
+     }
+--- live/src/server/index.ts
++++ src/server/index.ts
+@@ -14,6 +14,8 @@
+ import makeWASocket from "./libs/makeWASocket";
+ import { getSocketIO } from "./libs/socket";
+ import { startDispatchWorker } from "./dispatch/worker";
++import { startDeviceWebhookWorker } from "./deviceWebhook/worker";
++let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
+ let stopDispatchWorker: (() => Promise<void>) | undefined;
+ 
+ const hostname = process.env.HOST || "127.0.0.1";
+@@ -64,6 +66,7 @@
+   io.attach(server);
+   const host = hostname;
+   server.listen(port, host, async () => {
++    stopDeviceWebhookWorker = startDeviceWebhookWorker();
+     if (process.env.DISPATCH_QUEUE_ENABLED === "true" && process.env.WHATSAPP_ENABLED !== "false") stopDispatchWorker = startDispatchWorker();
+     if (process.env.NODE_ENV !== "production") {
+       console.info(
+@@ -123,6 +126,7 @@
+ };
+ 
+ process.on("SIGINT", async function () {
++  await stopDeviceWebhookWorker?.();
+   await stopDispatchWorker?.();
+   await nextApp.close();
+   await io.close();
+--- live/src/server/libs/makeWASocket.ts
++++ src/server/libs/makeWASocket.ts
+@@ -19,6 +19,7 @@
+ import { recordDispatchReceipt } from "../dispatch/receipts";
+ import { cacheDeviceContacts } from "../campaigns/contacts";
+ import { sendDeviceWebhook } from "../utils/sendDeviceWebhook";
++import { updateDevice } from "../deviceWebhook/events";
+ 
+ const shared = globalThis as typeof globalThis & {
+   doranWaSessions?: Map<string, WASocket>;
+@@ -163,15 +164,11 @@
+   }
+ 
+   if (_waSocket.user) {
+-    await prisma.phone.update({
+-      where: {
+-        id: phoneId,
+-      },
+-      data: {
+-        number: _waSocket.user.id.split(":")[0],
+-        account_name: _waSocket.user.name,
+-      },
+-    });
++    const waUser = _waSocket.user;
++    await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
++        number: waUser.id.split(":")[0],
++        account_name: waUser.name,
++      }));
+   }
+ 
+   session.set(phoneId, _waSocket);
+--- live/src/server/events/connectionUpdate.ts
++++ src/server/events/connectionUpdate.ts
+@@ -1,140 +1,145 @@
+-import { SUPER_ADMIN_ROOM } from "../../lib/access";
+-import * as fs from "fs";
+-import { join } from "path";
+-
+-import {
+-  ConnectionState,
+-  DisconnectReason,
+-  WASocket,
+-} from "@whiskeysockets/baileys";
+-
+-import { prisma } from "../../lib/prisma";
+-import { WaSockQrTimeout } from "../constant";
+-import makeWASocket, { deleteSession, getAllSession, waitForAuthSave } from "../libs/makeWASocket";
+-import { getSocketIO } from "../libs/socket";
+-import { recordPairingProgress } from "../libs/pairingState";
+-
+-const reconnectAttempts = new Map<string, number>();
+-const reconnectTimers = new Map<string, NodeJS.Timeout>();
+-
+-export default async function connectionUpdate(
+-  waSock: WASocket,
+-  userId: string,
+-  phoneId: string,
+-  update: Partial<ConnectionState>
+-) {
+-  const current = getAllSession().get(phoneId);
+-  if (current && current !== waSock) return;
+-  const io = getSocketIO;
+-  const phase = recordPairingProgress(phoneId, update);
+-  if (phase && phase !== "qr") io?.to(userId).to(SUPER_ADMIN_ROOM).emit("connectionState", {
+-    phoneId,
+-    connection: phase === "connected" ? "open" : phase === "error" ? "close" : "pairing",
+-    status: (update.lastDisconnect?.error as any)?.output?.statusCode,
+-  });
+-  if (waSock.user) {
+-    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("waUser", { phoneId, waUser: waSock.user });
+-  }
+-  io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", {
+-    isOnline: update.isOnline,
+-    phoneId: phoneId,
+-  });
+-
+-  if (update.qr) {
+-    io?.to(userId).to(SUPER_ADMIN_ROOM).emit(`qr`, {
+-      phoneId,
+-      qr: update.qr,
+-      timeout: WaSockQrTimeout,
+-    });
+-    // await prisma.phone.update({
+-    //   where: {
+-    //     id: phoneId,
+-    //   },
+-    //   data: {
+-    //     qrCode: update.qr,
+-    //   },
+-    // });
+-  }
+-
+-  const { connection, lastDisconnect } = update;
+-  if (connection === "open" || connection === "close") {
+-    console.info("WA_CONNECTION_STATE", JSON.stringify({ phoneId, connection, status: (lastDisconnect?.error as any)?.output?.statusCode }));
+-  }
+-  if (connection === "open") {
+-    reconnectAttempts.delete(phoneId);
+-    const pending = reconnectTimers.get(phoneId);
+-    if (pending) clearTimeout(pending);
+-    reconnectTimers.delete(phoneId);
+-  }
+-  if (update.isNewLogin) {
+-    // waSock.ev.flush(true);
+-    // whatsappSocket(io, userId, phoneId);
+-  }
+-
+-  if (update.isOnline) {
+-    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", {
+-      isOnline: update.isOnline,
+-      phoneId: phoneId,
+-    });
+-
+-    await prisma.phone.update({
+-      where: {
+-        id: phoneId,
+-      },
+-      data: {
+-        isOnline: true,
+-      },
+-    });
+-
+-    // waSock.ev.flush(true);
+-  }
+-
+-  if (connection === "close") {
+-    await prisma.phone.update({
+-      where: {
+-        id: phoneId,
+-      },
+-      data: {
+-        isOnline: false,
+-      },
+-    });
+-
+-    const status = (lastDisconnect?.error as any)?.output?.statusCode;
+-    deleteSession(phoneId);
+-    const pending = reconnectTimers.get(phoneId);
+-    if (pending) clearTimeout(pending);
+-    reconnectTimers.delete(phoneId);
+-
+-    // reconnect if not logged out
+-    if (
+-      (lastDisconnect?.error as any)?.output?.statusCode ==
+-      DisconnectReason.loggedOut
+-    ) {
+-      fs.rmSync(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${userId}-${phoneId}`), {
+-        recursive: true,
+-        force: true,
+-      });
+-      reconnectAttempts.delete(phoneId);
+-      return;
+-    }
+-    if (process.env.WHATSAPP_ENABLED === "false" ||
+-        status === DisconnectReason.connectionReplaced ||
+-        status === DisconnectReason.badSession ||
+-        status === DisconnectReason.forbidden ||
+-        status === DisconnectReason.multideviceMismatch) {
+-      return;
+-    }
+-    const attempts = (reconnectAttempts.get(phoneId) || 0) + 1;
+-    reconnectAttempts.set(phoneId, attempts);
+-    const delay = status === DisconnectReason.restartRequired ? 500 : Math.min(60_000, 2_000 * 2 ** Math.min(attempts - 1, 5));
+-    const timer = setTimeout(() => {
+-      reconnectTimers.delete(phoneId);
+-      if (process.env.WHATSAPP_ENABLED === "false") return;
+-      (status === DisconnectReason.restartRequired ? waitForAuthSave(waSock) : Promise.resolve()).then(() => makeWASocket(userId, phoneId)).catch(error => {
+-        console.error("WhatsApp reconnect failed:", error.message);
+-      });
+-    }, delay);
+-    timer.unref();
+-    reconnectTimers.set(phoneId, timer);
+-  }
+-}
++import { SUPER_ADMIN_ROOM } from "../../lib/access";
++import * as fs from "fs";
++import { join } from "path";
++
++import {
++  ConnectionState,
++  DisconnectReason,
++  WASocket,
++} from "@whiskeysockets/baileys";
++
++import { prisma } from "../../lib/prisma";
++import { WaSockQrTimeout } from "../constant";
++import makeWASocket, { deleteSession, getAllSession, waitForAuthSave } from "../libs/makeWASocket";
++import { getSocketIO } from "../libs/socket";
++import { recordPairingProgress } from "../libs/pairingState";
++import { updateDevice } from "../deviceWebhook/events";
++
++const reconnectAttempts = new Map<string, number>();
++const reconnectTimers = new Map<string, NodeJS.Timeout>();
++
++export default async function connectionUpdate(
++  waSock: WASocket,
++  userId: string,
++  phoneId: string,
++  update: Partial<ConnectionState>
++) {
++  const current = getAllSession().get(phoneId);
++  if (current && current !== waSock) return;
++  const io = getSocketIO;
++  const phase = recordPairingProgress(phoneId, update);
++  if (phase && phase !== "qr") io?.to(userId).to(SUPER_ADMIN_ROOM).emit("connectionState", {
++    phoneId,
++    connection: phase === "connected" ? "open" : phase === "error" ? "close" : "pairing",
++    status: (update.lastDisconnect?.error as any)?.output?.statusCode,
++  });
++  if (waSock.user) {
++    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("waUser", { phoneId, waUser: waSock.user });
++  }
++  io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", {
++    isOnline: update.isOnline,
++    phoneId: phoneId,
++  });
++
++  if (update.qr) {
++    io?.to(userId).to(SUPER_ADMIN_ROOM).emit(`qr`, {
++      phoneId,
++      qr: update.qr,
++      timeout: WaSockQrTimeout,
++    });
++    // await prisma.phone.update({
++    //   where: {
++    //     id: phoneId,
++    //   },
++    //   data: {
++    //     qrCode: update.qr,
++    //   },
++    // });
++  }
++
++  const { connection, lastDisconnect } = update;
++  if (connection === "open" || connection === "close") {
++    console.info("WA_CONNECTION_STATE", JSON.stringify({ phoneId, connection, status: (lastDisconnect?.error as any)?.output?.statusCode }));
++  }
++  if (connection === "open") {
++    const waUser = waSock.user;
++    if (waUser) await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
++      number: waUser.id.split(":")[0].split("@")[0], account_name: waUser.name,
++    }));
++    reconnectAttempts.delete(phoneId);
++    const pending = reconnectTimers.get(phoneId);
++    if (pending) clearTimeout(pending);
++    reconnectTimers.delete(phoneId);
++  }
++  if (update.isNewLogin) {
++    // waSock.ev.flush(true);
++    // whatsappSocket(io, userId, phoneId);
++  }
++
++  if (update.isOnline) {
++    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", {
++      isOnline: update.isOnline,
++      phoneId: phoneId,
++    });
++
++    await prisma.phone.update({
++      where: {
++        id: phoneId,
++      },
++      data: {
++        isOnline: true,
++      },
++    });
++
++    // waSock.ev.flush(true);
++  }
++
++  if (connection === "close") {
++    await prisma.phone.update({
++      where: {
++        id: phoneId,
++      },
++      data: {
++        isOnline: false,
++      },
++    });
++
++    const status = (lastDisconnect?.error as any)?.output?.statusCode;
++    deleteSession(phoneId);
++    const pending = reconnectTimers.get(phoneId);
++    if (pending) clearTimeout(pending);
++    reconnectTimers.delete(phoneId);
++
++    // reconnect if not logged out
++    if (
++      (lastDisconnect?.error as any)?.output?.statusCode ==
++      DisconnectReason.loggedOut
++    ) {
++      fs.rmSync(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${userId}-${phoneId}`), {
++        recursive: true,
++        force: true,
++      });
++      reconnectAttempts.delete(phoneId);
++      return;
++    }
++    if (process.env.WHATSAPP_ENABLED === "false" ||
++        status === DisconnectReason.connectionReplaced ||
++        status === DisconnectReason.badSession ||
++        status === DisconnectReason.forbidden ||
++        status === DisconnectReason.multideviceMismatch) {
++      return;
++    }
++    const attempts = (reconnectAttempts.get(phoneId) || 0) + 1;
++    reconnectAttempts.set(phoneId, attempts);
++    const delay = status === DisconnectReason.restartRequired ? 500 : Math.min(60_000, 2_000 * 2 ** Math.min(attempts - 1, 5));
++    const timer = setTimeout(() => {
++      reconnectTimers.delete(phoneId);
++      if (process.env.WHATSAPP_ENABLED === "false") return;
++      (status === DisconnectReason.restartRequired ? waitForAuthSave(waSock) : Promise.resolve()).then(() => makeWASocket(userId, phoneId)).catch(error => {
++        console.error("WhatsApp reconnect failed:", error.message);
++      });
++    }, delay);
++    timer.unref();
++    reconnectTimers.set(phoneId, timer);
++  }
++}
+--- live/src/server/utils/sendDeviceWebhook.ts
++++ src/server/utils/sendDeviceWebhook.ts
+@@ -3,17 +3,21 @@
+ import http from "node:http";
+ import https from "node:https";
+ import { isPublicAddress } from "./safeLinkPreview";
+-export async function sendDeviceWebhook(endpoint: string, payload: unknown) {
++export async function sendDeviceWebhook(endpoint: string, payload: unknown, headers: Record<string, string> = {}) {
+   const url = new URL(endpoint), host = url.hostname.replace(/^\[|\]$/g, "");
+   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || (url.port && !["80", "443"].includes(url.port))) throw new Error("INVALID_WEBHOOK_URL");
+-  const records = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true });
++  let dnsTimer: ReturnType<typeof setTimeout> | undefined;
++  const records = isIP(host) ? [{ address: host, family: isIP(host) }] : await Promise.race([
++    lookup(host, { all: true }),
++    new Promise<never>((_, reject) => { dnsTimer = setTimeout(() => reject(new Error("WEBHOOK_DNS_TIMEOUT")), 5000); }),
++  ]).finally(() => { if (dnsTimer) clearTimeout(dnsTimer); });
+   if (!records.length || records.some(r => !isPublicAddress(r.address))) throw new Error("PRIVATE_WEBHOOK_ADDRESS");
+   const data = JSON.stringify(payload), record = records[0];
+   return new Promise<void>((resolve, reject) => {
+     const request = (url.protocol === "https:" ? https : http).request(url, {
+       method: "POST", agent: false, family: record.family,
+       lookup: ((_host: string, _options: unknown, callback: any) => callback(null, record.address, record.family)) as any,
+-      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) },
++      headers: { ...headers, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) },
+     }, response => {
+       let size = 0; response.on("data", chunk => { size += chunk.length; if (size > 65536) request.destroy(new Error("WEBHOOK_RESPONSE_TOO_LARGE")); });
+       response.on("error", reject); response.on("end", () => response.statusCode && response.statusCode >= 200 && response.statusCode < 300 ? resolve() : reject(new Error("WEBHOOK_HTTP_ERROR")));
+--- live/deployment/verify-phone-token.cjs
++++ deployment/verify-phone-token.cjs
+@@ -21,7 +21,9 @@
+ const matches = (row, where) => (!where.userId || row.userId === where.userId) && (!where.id || (typeof where.id === 'string' ? row.id === where.id : where.id.in.includes(row.id)));
+ const prisma = { $transaction: async fn => {
+   const draft = rows.map(row => ({ ...row }));
+-  const tx = { phone: {
++  const tx = { $queryRaw: async () => [], deviceWebhookSetting: { findUnique: async () => null }, phone: {
++    findFirst: async ({ where }) => { const row = draft.find(row => matches(row, where)); return row ? { ...row } : null; },
++    findUniqueOrThrow: async ({ where }) => ({ ...draft.find(row => matches(row, where)) }),
+     findMany: async ({ where }) => draft.filter(row => matches(row, where)).map(({ id }) => ({ id })),
+     updateMany: async ({ where, data }) => {
+       updates++;
+@@ -33,6 +35,7 @@
+ } };
+ const handler = load('src/pages/api/phones/generate-token.ts', {
+   '@/lib/prisma': { prisma }, '@/lib/access': access,
++  '@/server/deviceWebhook/events': load('src/server/deviceWebhook/events.ts'),
+   '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },
+ }).default;
+ async function run(body, account = user, method = 'POST') {
+--- live/deployment/verify-phone-ownership.cjs
++++ deployment/verify-phone-ownership.cjs
+@@ -31,6 +31,7 @@
+     }, count: async () => fixtures.length,
+   }, waDispatch: { groupBy: async () => [] } };
+   const handler = load('src/pages/api/phones/index.ts', {
++    '@/server/deviceWebhook/events': load('src/server/deviceWebhook/events.ts'),
+     '@/lib/prisma': { prisma }, '@/lib/access': access,
+     '@/lib/tableQuery': load('src/lib/tableQuery.ts'), '@/middleware/apiAuthMiddleware': defaults(fn => fn),
+   }).default;
+--- live/deployment/verify-registered-phones.cjs
++++ deployment/verify-registered-phones.cjs
+@@ -46,6 +46,7 @@
+     '@/lib/access': load('src/lib/access.ts'),
+   });
+   const handler = load('src/pages/api/public/[action].ts', {
++    '@/server/deviceWebhook/events': load('src/server/deviceWebhook/events.ts'),
+     '@/lib/prisma': { prisma }, '@/server/registeredPhones': registered,
+     '@/server/dispatch/queue': {}, '@/server/campaigns/content': {},
+     '@/utils/normalizePhoneRecipient': {}, '@/server/libs/makeWASocket': {},
