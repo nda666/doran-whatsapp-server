@@ -46,23 +46,25 @@ async function main() {
   global.clearTimeout = timer => { timer.cancelled = true; };
   fs.rmSync = target => { deletedPath = target; };
   const close = code => ({ connection: 'close', lastDisconnect: { error: { output: { statusCode: code } } } });
+  // Only paired devices reconnect; each closed socket is retired by the runtime.
+  const pairedSocket = () => ({ authState: { creds: { me: { id: 'fixture@s.whatsapp.net' } } } });
   try {
     process.env.WHATSAPP_ENABLED = 'true';
-    await onUpdate({}, 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
     assert.equal(timers[0].delay, 2000);
-    await onUpdate({}, 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
     assert.equal(timers[0].cancelled, true);
     assert.equal(timers[1].delay, 4000);
-    await onUpdate({}, 'test-user', 'test-phone', { connection: 'open' });
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', { connection: 'open' });
     assert.equal(timers[1].cancelled, true);
     const count = timers.length;
-    await onUpdate({}, 'test-user', 'test-phone', close(baileys.DisconnectReason.loggedOut));
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.loggedOut));
     assert.equal(timers.length, count);
     assert.ok(deletedPath.endsWith('test-user-test-phone'));
-    await onUpdate({}, 'test-user', 'test-phone', close(baileys.DisconnectReason.connectionReplaced));
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.connectionReplaced));
     assert.equal(timers.length, count);
     process.env.WHATSAPP_ENABLED = 'false';
-    await onUpdate({}, 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
+    await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
     assert.equal(timers.length, count);
     assert.equal(reconnects, 0);
     console.log('RECONNECT_BACKOFF_AND_TERMINAL_STATES_OK');
@@ -75,9 +77,17 @@ async function main() {
     process.env.WHATSAPP_ENABLED = 'false';
     await prisma.$disconnect();
   }
-  const previewOptions = { thumbnailWidth: 192, fetchOpts: { timeout: 10000 } };
-  const preview = await baileys.getUrlInfo('https://example.com', previewOptions);
-  assert.ok(preview && preview.title);
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    const response = new Response('<html><head><title>Offline preview fixture</title></head><body>Fixture</body></html>', { headers: { 'content-type': 'text/html' } });
+    Object.defineProperty(response, 'url', { value: 'https://example.com' });
+    return response;
+  };
+  try {
+    const previewOptions = { thumbnailWidth: 192, fetchOpts: { timeout: 1000, resolveDNSHost: async () => '93.184.216.34' } };
+    const preview = await baileys.getUrlInfo('https://example.com', previewOptions);
+    assert.equal(preview?.title, 'Offline preview fixture');
+  } finally { global.fetch = originalFetch; }
   console.log('BAILEYS_LINK_PREVIEW_COMPATIBILITY_OK');
 }
 
