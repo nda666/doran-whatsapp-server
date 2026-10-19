@@ -205,7 +205,7 @@ const PhonePage = () => {
         </Tag>
       ),
     },
-    ...policies.columns,
+    ...policies.columns.filter(column => column.key !== "health"),
     {
       title: uiText("Save Group"),
       key: "is_save_group",
@@ -274,7 +274,6 @@ const PhonePage = () => {
       title: t("action"),
       key: "action",
       dataIndex: "id",
-      fixed: "right",
       render: (v, phone) => {
         return (
           <PhoneTableButton
@@ -308,6 +307,7 @@ const PhonePage = () => {
         );
       },
     },
+    ...policies.columns.filter(column => column.key === "health"),
   ];
 
   const onSubmit = async (data: PhoneFormData) => {
