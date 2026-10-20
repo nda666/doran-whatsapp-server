@@ -1,4 +1,7 @@
 {
+  "Semua kuota": "All quotas",
+  "Kuota terpenuhi": "Quota reached",
+  "Kuota belum terpenuhi": "Quota not reached",
   "Terakhir Proses Kirim": "Last Send Processed",
   "Terakhir Offline": "Last Offline",
   "Terakhir Scan QR": "Last QR Scan",

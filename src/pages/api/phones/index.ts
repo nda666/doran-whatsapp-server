@@ -9,7 +9,7 @@ import { AuthNextApiRequest } from "@/types/global";
 import { enqueueDeviceEvent, updateDevice } from "@/server/deviceWebhook/events";
 import { getPhoneConnectionInfo } from "@/server/phoneConnectionInfo";
 import { isPhonePolicySort } from "@/lib/phonePolicySort";
-import { phonePolicyPage } from "@/server/messaging/phonePolicySort";
+import { phonePolicyPage, phoneQuotaWhere } from "@/server/messaging/phonePolicySort";
 const input = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
   webhookUrl: z.string().max(2000).refine(v => !v || /^https?:\/\//.test(v), "Webhook URL tidak valid").nullable().optional(),
   warmupEnabled: z.boolean().optional(), readReceipt: z.boolean().optional(), rejectCall: z.boolean().optional(), showOnline: z.boolean().optional(), showTyping: z.boolean().optional(), autoReplyEnabled: z.boolean().optional(), saveIncomingMessages: z.boolean().optional() });
@@ -33,8 +33,8 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     if (req.query.sender_group_options === "1") return res.json(await prisma.senderGroup.findMany({
       where: ownerScope(req.user!), select: { id: true, name: true, enabled: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
     }));
-    const { number, name, is_online, active, sender_group } = req.query;
-    const where = { ...ownerScope(req.user!),
+    const { number, name, is_online, active, sender_group, quota_status } = req.query;
+    let where: import("@prisma/client").Prisma.PhoneWhereInput = { ...ownerScope(req.user!),
       ...(typeof number === "string" && number ? { number: { contains: number.slice(0, 100) } } : {}),
       ...(typeof name === "string" && name ? { OR: [
         { name: { contains: name.slice(0, 200) } },
@@ -43,6 +43,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       ...(is_online === "0" || is_online === "1" ? { isOnline: is_online === "1" } : {}),
       ...(active === "0" || active === "1" ? { active: Number(active) } : {}),
       ...(typeof sender_group === "string" && sender_group ? { senderGroupId: sender_group === "none" ? null : sender_group } : {}) };
+    if (quota_status === "fulfilled" || quota_status === "available") where = await phoneQuotaWhere(where, quota_status);
     const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "senderGroup.name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
     const policyPage = isPhonePolicySort(req.query.sort)
       ? await phonePolicyPage(where, req.query.sort, req.query.order === "asc" ? "asc" : "desc", skip, limit)

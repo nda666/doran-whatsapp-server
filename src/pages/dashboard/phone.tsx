@@ -485,7 +485,7 @@ const PhonePage = () => {
           visible={showSearch}
           initialValues={searchQuery}
           onSubmitSuccess={(data) => {
-            replaceSearch({ ...searchState, filters: { name: data.name || "", number: data.number || "", is_online: data.is_online || "", active: data.active || "", sender_group: data.sender_group || "" }, table: { ...searchState.table, page: 1 } });
+            replaceSearch({ ...searchState, filters: { name: data.name || "", number: data.number || "", is_online: data.is_online || "", active: data.active || "", sender_group: data.sender_group || "", quota_status: data.quota_status || "" }, table: { ...searchState.table, page: 1 } });
           }}
         />
         {/* Border tema membedakan info Save Group dari latar halaman. */}

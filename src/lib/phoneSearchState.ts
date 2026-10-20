@@ -3,7 +3,7 @@ import type { TableState } from "./useTableState";
 import { phonePolicySortFields } from "./phonePolicySort";
 
 export type PhoneSearchState = {
-  filters: { name: string; number: string; is_online: string; active: string; sender_group: string };
+  filters: { name: string; number: string; is_online: string; active: string; sender_group: string; quota_status: string };
   table: TableState;
   showSearch: boolean;
 };
@@ -18,7 +18,7 @@ export function readPhoneSearchState(query: ParsedUrlQuery): PhoneSearchState {
   const sort = sortFields.includes(text("sort")) ? text("sort") : "";
   const order = ["asc", "desc"].includes(text("order")) ? text("order") : "";
   return {
-    filters: { name: text("name"), number: text("number"), is_online: status("is_online"), active: status("active"), sender_group: text("sender_group") },
+    filters: { name: text("name"), number: text("number"), is_online: status("is_online"), active: status("active"), sender_group: text("sender_group"), quota_status: ["fulfilled", "available"].includes(text("quota_status")) ? text("quota_status") : "" },
     table: {
       page: Number.isSafeInteger(page) && page > 0 ? page : 1,
       limit: [5, 10, 20, 50, 100].includes(limit) ? limit : 5,

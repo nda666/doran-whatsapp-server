@@ -36,6 +36,7 @@ export type SearchPhoneParams = {
   is_online?: string | undefined | null;
   active?: string | undefined | null;
   sender_group?: string | undefined | null;
+  quota_status?: string | undefined | null;
   sort?: string;
   order?: string;
   page?: number;
@@ -78,6 +79,7 @@ export default function usePhoneData(
             ...(search.is_online && { is_online: search.is_online }),
             ...(search.active && { active: search.active }),
             ...(search.sender_group && { sender_group: search.sender_group }),
+            ...(search.quota_status && { quota_status: search.quota_status }),
           },
         });
         const result = response.data;
@@ -93,7 +95,7 @@ export default function usePhoneData(
     };
     runRefetchPhone && token && fetchPhones();
     return () => { controller.abort(); };
-  }, [runRefetchPhone, token, search.name, search.number, search.is_online, search.active, search.sender_group, search.page, search.limit, search.sort, search.order]);
+  }, [runRefetchPhone, token, search.name, search.number, search.is_online, search.active, search.sender_group, search.quota_status, search.page, search.limit, search.sort, search.order]);
 
   const deleteById = async (phoneId: string, options: PhoneCleanupOptions) => {
     const result: {
