@@ -3,11 +3,11 @@ import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import axios, { AxiosError } from "axios";
 
 import { PhoneFormData } from "@/components/phone/PhoneFormModal";
-import type { Phone, User } from "@prisma/client";
+import type { Phone, SenderGroup, User } from "@prisma/client";
 import type { PhoneCleanupOptions } from "./phoneCleanup";
 import type { PhoneConnectionInfo } from "./phoneConnectionStatus";
 
-export type PhoneRow = Phone & { user?: Pick<User, "id" | "name" | "email">; connection?: PhoneConnectionInfo };
+export type PhoneRow = Phone & { user?: Pick<User, "id" | "name" | "email">; senderGroup?: Pick<SenderGroup, "id" | "name" | "enabled"> | null; connection?: PhoneConnectionInfo };
 
 type ResponseResult = {
   success: boolean;
@@ -35,6 +35,7 @@ export type SearchPhoneParams = {
   number?: string | undefined | null;
   is_online?: string | undefined | null;
   active?: string | undefined | null;
+  sender_group?: string | undefined | null;
   sort?: string;
   order?: string;
   page?: number;
@@ -76,6 +77,7 @@ export default function usePhoneData(
             ...(search.number && { number: search.number }),
             ...(search.is_online && { is_online: search.is_online }),
             ...(search.active && { active: search.active }),
+            ...(search.sender_group && { sender_group: search.sender_group }),
           },
         });
         const result = response.data;
@@ -91,7 +93,7 @@ export default function usePhoneData(
     };
     runRefetchPhone && token && fetchPhones();
     return () => { controller.abort(); };
-  }, [runRefetchPhone, token, search.name, search.number, search.is_online, search.active, search.page, search.limit, search.sort, search.order]);
+  }, [runRefetchPhone, token, search.name, search.number, search.is_online, search.active, search.sender_group, search.page, search.limit, search.sort, search.order]);
 
   const deleteById = async (phoneId: string, options: PhoneCleanupOptions) => {
     const result: {

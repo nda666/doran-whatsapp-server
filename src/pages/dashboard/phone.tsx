@@ -194,6 +194,14 @@ const PhonePage = () => {
       render: (v) => <div style={{ whiteSpace: "pre", wordBreak: "normal", overflowWrap: "normal" }}>{wrapPhoneText(v)}</div>,
     },
     {
+      title: uiText("Grup pengirim"),
+      key: "senderGroup.name",
+      dataIndex: ["senderGroup", "name"],
+      render: (_v, phone) => <div style={{ minWidth: 140, maxWidth: 240, overflowWrap: "anywhere" }}>
+        {phone.senderGroup ? <>{phone.senderGroup.name}{!phone.senderGroup.enabled && <div style={{ color: "var(--ui-muted)", fontSize: 12 }}>{uiText("Tidak aktif")}</div>}</> : <span style={{ color: "var(--ui-muted)" }}>{uiText("Tanpa grup")}</span>}
+      </div>,
+    },
+    {
       title: uiText("Status koneksi"),
       key: "isOnline",
       dataIndex: "isOnline",
@@ -475,7 +483,7 @@ const PhonePage = () => {
           visible={showSearch}
           initialValues={searchQuery}
           onSubmitSuccess={(data) => {
-            replaceSearch({ ...searchState, filters: { name: data.name || "", number: data.number || "", is_online: data.is_online || "", active: data.active || "" }, table: { ...searchState.table, page: 1 } });
+            replaceSearch({ ...searchState, filters: { name: data.name || "", number: data.number || "", is_online: data.is_online || "", active: data.active || "", sender_group: data.sender_group || "" }, table: { ...searchState.table, page: 1 } });
           }}
         />
         {/* Border tema membedakan info Save Group dari latar halaman. */}

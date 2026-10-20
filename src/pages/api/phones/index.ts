@@ -30,7 +30,10 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       return res.json({ total, online, offline: total - online, active, inactive: total - active });
     }
     if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, name: true, number: true, active: true, isOnline: true, autoReplyEnabled: true, saveIncomingMessages: true } }));
-    const { number, name, is_online, active } = req.query;
+    if (req.query.sender_group_options === "1") return res.json(await prisma.senderGroup.findMany({
+      where: ownerScope(req.user!), select: { id: true, name: true, enabled: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
+    }));
+    const { number, name, is_online, active, sender_group } = req.query;
     const where = { ...ownerScope(req.user!),
       ...(typeof number === "string" && number ? { number: { contains: number.slice(0, 100) } } : {}),
       ...(typeof name === "string" && name ? { OR: [
@@ -38,15 +41,16 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
         { account_name: { contains: name.slice(0, 200) } },
       ] } : {}),
       ...(is_online === "0" || is_online === "1" ? { isOnline: is_online === "1" } : {}),
-      ...(active === "0" || active === "1" ? { active: Number(active) } : {}) };
-    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
+      ...(active === "0" || active === "1" ? { active: Number(active) } : {}),
+      ...(typeof sender_group === "string" && sender_group ? { senderGroupId: sender_group === "none" ? null : sender_group } : {}) };
+    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "senderGroup.name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
     const policyPage = isPhonePolicySort(req.query.sort)
       ? await phonePolicyPage(where, req.query.sort, req.query.order === "asc" ? "asc" : "desc", skip, limit)
       : undefined;
     const [data, total] = await Promise.all([prisma.phone.findMany({
       where: policyPage ? { ...where, id: { in: policyPage.ids } } : where,
       ...(!policyPage ? { take: limit, skip, orderBy } : {}),
-      ...(admin ? { include: { user: { select: { id: true, name: true, email: true } } } } : {}),
+      include: { senderGroup: { select: { id: true, name: true, enabled: true } }, ...(admin ? { user: { select: { id: true, name: true, email: true } } } : {}) },
     }), policyPage ? Promise.resolve(policyPage.total) : prisma.phone.count({ where })]);
     if (policyPage) {
       const positions = new Map(policyPage.ids.map((id, position) => [id, position]));

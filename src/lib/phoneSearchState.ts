@@ -3,12 +3,12 @@ import type { TableState } from "./useTableState";
 import { phonePolicySortFields } from "./phonePolicySort";
 
 export type PhoneSearchState = {
-  filters: { name: string; number: string; is_online: string; active: string };
+  filters: { name: string; number: string; is_online: string; active: string; sender_group: string };
   table: TableState;
   showSearch: boolean;
 };
 
-const sortFields = ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", "user.name", ...phonePolicySortFields];
+const sortFields = ["name", "number", "account_name", "senderGroup.name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", "user.name", ...phonePolicySortFields];
 
 export function readPhoneSearchState(query: ParsedUrlQuery): PhoneSearchState {
   const text = (key: string) => typeof query[key] === "string" ? query[key] as string : "";
@@ -18,7 +18,7 @@ export function readPhoneSearchState(query: ParsedUrlQuery): PhoneSearchState {
   const sort = sortFields.includes(text("sort")) ? text("sort") : "";
   const order = ["asc", "desc"].includes(text("order")) ? text("order") : "";
   return {
-    filters: { name: text("name"), number: text("number"), is_online: status("is_online"), active: status("active") },
+    filters: { name: text("name"), number: text("number"), is_online: status("is_online"), active: status("active"), sender_group: text("sender_group") },
     table: {
       page: Number.isSafeInteger(page) && page > 0 ? page : 1,
       limit: [5, 10, 20, 50, 100].includes(limit) ? limit : 5,

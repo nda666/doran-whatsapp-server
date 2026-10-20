@@ -11,6 +11,7 @@ const tests = [
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
   'verify-phone-last-qr-scan.cjs',
   'verify-phone-last-offline.cjs', 'verify-phone-last-send.cjs',
+  'verify-phone-sender-group.cjs', 'verify-phone-search-return.cjs',
   'verify-daily-warmup.cjs',
   'verify-quota-recovery.cjs',
   'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
