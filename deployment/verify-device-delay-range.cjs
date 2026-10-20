@@ -14,7 +14,7 @@ function loader(stubs = {}) {
     if (cache.has(name)) return cache.get(name);
     const file = path.resolve(name), real = createRequire(file), module = { exports: {} };
     const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: 1, target: 7, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-    const req = spec => spec in stubs ? stubs[spec] : spec.startsWith('@/') ? load('src/' + spec.slice(2) + '.ts') : spec.startsWith('.') ? load(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + (fs.existsSync(path.resolve(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + '.tsx')) ? '.tsx' : '.ts')) : real(spec);
+    const req = spec => spec.endsWith('.css') ? new Proxy({}, { get: (_, key) => key === '__esModule' ? false : String(key) }) : spec in stubs ? stubs[spec] : spec.startsWith('@/') ? load('src/' + spec.slice(2) + '.ts') : spec.startsWith('.') ? load(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + (fs.existsSync(path.resolve(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + '.tsx')) ? '.tsx' : '.ts')) : real(spec);
     new Function('require', 'module', 'exports', 'Math', code)(req, module, module.exports, math);
     cache.set(name, module.exports); return module.exports;
   }

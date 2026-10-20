@@ -73,6 +73,10 @@
   border-top: 1px solid var(--ui-border, #e2e8f0);
 }
 .visibilityBody { max-height: calc(100dvh - 240px); overflow-y: auto; }
+.hoursBody { max-height: calc(100dvh - 220px); overflow-y: auto; padding-top: 8px; }
+.hoursInfo { margin-top: 20px; }
+.hoursInfo :global(.ant-alert-message) { font-weight: 600; line-height: 1.5; }
+.hoursInfo :global(.ant-alert-description) { margin-top: 6px; font-size: 13px; line-height: 1.65; }
 @media (max-width: 560px) {
   .choices { grid-template-columns: 1fr; gap: 8px; }
   .choices :global(.ant-checkbox-wrapper) { padding: 12px; }
