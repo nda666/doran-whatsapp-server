@@ -9,6 +9,9 @@ Email/password lokal tersimpan di storage/local/LOGIN-LOCAL.txt.
 Database: wa_local (127.0.0.1:3306).
 Konfigurasi: .env.development.local.
 Runtime Node.js lokal: storage/local/runtime/node.exe.
+Versi Node.js yang wajib digunakan: 24.21.0 (sama dengan CI dan produksi).
+Periksa terminal: node --version. Periksa launcher: storage\local\runtime\node.exe --version.
+Setelah memperbarui Node.js, buka ulang terminal dan jalankan npm ci.
 Koneksi WhatsApp dinonaktifkan untuk percobaan dashboard lokal.
 Menu www Laragon tidak otomatis menjalankan proses Node.js.
 

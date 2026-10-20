@@ -9,7 +9,7 @@ const nextConfig = {
   outputFileTracingExcludes: {
     "*": ["./storage/**/*", "./whatsapp-auth/**/*"],
   },
-  experimental: { cpus: 2 },
+  experimental: { cpus: process.platform === "win32" ? 1 : 2 },
   modularizeImports: {
     "@ant-design/icons": {
       transform: "@ant-design/icons/lib/icons/{{member}}",

@@ -18,7 +18,8 @@ NODE_BIN = Path('/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/b
 PM2 = '/usr/local/bin/pm2'
 PARTS = ['.next', 'dist', 'node_modules', 'src', 'public', 'prisma', 'deployment',
          'package.json', 'package-lock.json', 'next.config.js', 'next-i18next.config.js',
-         'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json']
+         'tsconfig.json', 'tsconfig.server.json', 'ecosystem.config.js', '.eslintrc.json',
+         '.nvmrc', '.node-version', '.npmrc']
 PUBLIC_DATA = ['uploads', 'downloads']
 
 
