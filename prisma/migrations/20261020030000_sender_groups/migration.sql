@@ -22,7 +22,7 @@ ALTER TABLE `wa_dispatches`
 
 CREATE TABLE `wa_dispatch_attempts` (
   `id` VARCHAR(36) NOT NULL,
-  `dispatchId` VARCHAR(36) NOT NULL,
+  `dispatchId` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `phoneId` VARCHAR(36) NOT NULL,
   `messageId` VARCHAR(64) NOT NULL,
   `status` VARCHAR(16) NOT NULL DEFAULT 'PROCESSING',

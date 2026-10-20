@@ -79,7 +79,11 @@ async function main() {
     cwd: root, env: { ...process.env, DATABASE_URL: url,
       ...(process.platform === 'win32' ? { PRISMA_QUERY_ENGINE_LIBRARY: path.join(root, 'node_modules/@prisma/engines/query_engine-windows.dll.node') } : {}) }, stdio: 'pipe',
   }).toString();
-  for (const statement of baselineSql.split(';').map(s => s.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
+  // Prisma's datamodel does not express collation. The historical dispatch
+  // migration uses utf8mb4_bin for this primary key; preserve that FK contract.
+  const legacyBaselineSql = baselineSql.replace(/(CREATE TABLE `wa_dispatches` \(\s*`id` VARCHAR\(36\)) NOT NULL/, '$1 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL');
+  assert.notEqual(legacyBaselineSql, baselineSql, 'Legacy dispatch primary-key collation fixture must be applied');
+  for (const statement of legacyBaselineSql.split(';').map(s => s.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   const schemaUpgrade = require('./cd-feature-schema.cjs');
   // Validate the actual Prisma diff syntax used by the production preflight,
   // including separate CREATE INDEX and ADD CONSTRAINT statements.
@@ -89,7 +93,7 @@ async function main() {
   const testBackup = path.join(root, 'tmp', `schema-upgrade-backup-${process.pid}`);
   fs.mkdirSync(testBackup);
   await assert.rejects(schemaUpgrade.apply(prisma, approvedSql, testBackup), 'Missing backups must prohibit schema writes');
-  fs.writeFileSync(path.join(testBackup, 'database.sql'), baselineSql);
+  fs.writeFileSync(path.join(testBackup, 'database.sql'), legacyBaselineSql);
   fs.writeFileSync(path.join(testBackup, 'storage-and-env.tar'), Buffer.alloc(1024));
   const upgrade = await schemaUpgrade.apply(prisma, approvedSql, testBackup);
   assert.deepEqual(upgrade.created_tables.sort(), ['sender_groups', 'wa_dispatch_attempts']);

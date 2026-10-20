@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
-  '20261020030000_sender_groups': 'cefd8c77479151e9f39ff2a6080de2b4de43e42096895de7cc708a36afe6cc2c',
+  '20261020030000_sender_groups': '4f9613fe539447a90cbf22c39005fa1ae10aadd66bd0fb9dc18679cdf6adfcf3',
   '20261020040000_operating_hours': '239a206e4f4c025c54626593dead34cb4e80da12ced89d75eb2b5db99dcccf22',
 };
 const normalize = sql => sql.replace(/`/g, '').replace(/\s+/g, ' ').replace(/\s*([(),])\s*/g, '$1').trim().toLowerCase();
