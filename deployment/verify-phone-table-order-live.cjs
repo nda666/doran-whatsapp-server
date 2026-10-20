@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd());
+const { PrismaClient } = require('@prisma/client');
+const db = new PrismaClient();
+(async () => {
+  const owner = await db.user.findFirst({ where: { role: 'ADMIN', email: 'admin@gmail.com' } });
+  assert(owner);
+  const { encode } = require('next-auth/jwt');
+  const jwt = await encode({ token: { id: owner.id, token: owner.token, name: owner.name, email: owner.email, role: owner.role, approvalStatus: owner.approvalStatus }, secret: process.env.NEXTAUTH_SECRET });
+  const base = 'https://dashboard.jeblast.com';
+  const page = await fetch(base + '/dashboard/phone', { headers: { Cookie: '__Secure-next-auth.session-token=' + jwt } });
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  const headers = [...html.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(match => match[1].replace(/<[^>]*>/g, '').trim()).filter(Boolean);
+  const columnCount = headers.indexOf("Nomor", 1);
+  const visibleHeaders = columnCount < 0 ? headers : headers.slice(0, columnCount);
+  if (columnCount >= 0) assert.deepEqual(headers.slice(columnCount), visibleHeaders);
+  assert.deepEqual(visibleHeaders.filter(title => title !== "Kepemilikan"), ['Nomor', 'Nama akun WhatsApp', 'Label', 'Grup pengirim', 'Status koneksi', 'Kuota hari ini', 'Terakhir Proses Kirim', 'Terakhir Offline', 'Terakhir Scan QR', 'Status Perangkat', 'Jam operasional', 'Jeda pengiriman', 'Status pemanasan', 'Save Group', 'Token API', 'Dibuat pada', 'Kesehatan', 'Tindakan']);
+  console.log(JSON.stringify(headers));
+  const chunks = [...html.matchAll(/<script[^>]*src="([^"]+\.js)"/g)].map(match => match[1]);
+  assert(chunks.length);
+  for (const path of chunks) assert.equal((await fetch(new URL(path, base))).status, 200);
+  console.log('PHONE_TABLE_ORDER_AND_AUTHENTICATED_ASSETS_VERIFIED');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => db.$disconnect());

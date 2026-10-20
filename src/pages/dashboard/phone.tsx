@@ -207,6 +207,8 @@ const PhonePage = () => {
       dataIndex: "isOnline",
       render: (_v, phone) => <Space size={8} style={{ whiteSpace: "nowrap" }}><PhoneConnectionStatus connection={phone.connection} />{phone.connection?.action === "scan_qr" && <Button size="small" onClick={() => onGetQrCodeClick(phone)}>{uiText("Scan QR")}</Button>}</Space>,
     },
+    ...policies.columns.filter(column => column.key === "quota"),
+    ...policies.columns.filter(column => column.key === "lastSendProcessedAt"),
     {
       title: uiText("Terakhir Offline"),
       key: "lastOfflineAt",
@@ -237,7 +239,7 @@ const PhonePage = () => {
         </Tag>
       ),
     },
-    ...policies.columns.filter(column => column.key !== "health"),
+    ...policies.columns.filter(column => !["health", "quota", "lastSendProcessedAt"].includes(String(column.key))),
     {
       title: uiText("Save Group"),
       key: "is_save_group",
