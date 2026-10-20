@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Phone, Prisma } from "@prisma/client";
+import { conflictingSender, lockSenderMembership, senderMembershipSelect } from "../dispatch/senderNumberMembership";
 
 export function deviceSnapshot(phone: Phone) {
   return {
@@ -9,6 +10,7 @@ export function deviceSnapshot(phone: Phone) {
     read_receipt: phone.readReceipt, reject_call: phone.rejectCall,
     show_online: phone.showOnline, show_typing: phone.showTyping,
     save_incoming_messages: phone.saveIncomingMessages,
+    sender_group_id: phone.senderGroupId, sender_priority: phone.senderPriority,
   };
 }
 
@@ -30,6 +32,7 @@ export async function enqueueDeviceEvent(tx: Prisma.TransactionClient, event: st
 }
 
 export async function updateDevice(tx: Prisma.TransactionClient, where: Prisma.PhoneWhereInput, data: Prisma.PhoneUpdateManyMutationInput, event = "device.updated") {
+  if (typeof data.number === "string") await lockSenderMembership(tx);
   // Consistent lock order also serializes bulk token changes with individual edits.
   await tx.$queryRaw`SELECT id FROM device_webhook_settings WHERE id = 1 FOR UPDATE`;
   let before = await tx.phone.findFirst({ where });
@@ -37,8 +40,19 @@ export async function updateDevice(tx: Prisma.TransactionClient, where: Prisma.P
   await tx.$queryRaw`SELECT id FROM phones WHERE id = ${before.id} FOR UPDATE`;
   before = await tx.phone.findFirst({ where });
   if (!before) return null;
+  let clearSenderGroup = false;
+  if (typeof data.number === "string" && before.senderGroupId) {
+    const members = await tx.phone.findMany({ where: { senderGroupId: { not: null } }, select: senderMembershipSelect });
+    if (conflictingSender({ ...before, number: data.number }, members)) {
+      // Keep the actual connected number, but remove the newly conflicting
+      // membership rather than leaving a stale number or disrupting its socket.
+      clearSenderGroup = true;
+      console.warn("WA_SENDER_GROUP_MEMBERSHIP_REMOVED", before.id);
+    }
+  }
   await tx.phone.updateMany({ where: { ...where, id: before.id }, data: {
     ...data,
+    ...(clearSenderGroup ? { senderGroupId: null, senderPriority: 0 } : {}),
     ...(before.isOnline && data.isOnline === false ? { lastOfflineAt: new Date() } : {}),
   } });
   const after = await tx.phone.findUniqueOrThrow({ where: { id: before.id } });

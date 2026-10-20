@@ -219,7 +219,7 @@ const createWASocket = async (
   if (_waSocket.user) {
     const waUser = _waSocket.user;
     await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
-        number: waUser.id.split(":")[0],
+        number: waUser.id.split(":")[0].split("@")[0],
         account_name: waUser.name,
       }));
   }

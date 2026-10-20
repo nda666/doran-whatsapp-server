@@ -124,6 +124,47 @@ async function main() {
   assert.equal(response.code, 409, 'A phone cannot belong to two groups');
   console.log('PASS group administration, owner isolation, unique membership');
 
+  // Same physical number, separate device IDs, formats, accounts and disabled groups.
+  const duplicateA = await prisma.phone.create({ data: { userId: user.id, name: 'Duplicate A', number: '081234567890' } });
+  const duplicateB = await prisma.phone.create({ data: { userId: foreign.id, name: 'Duplicate B', number: '+62 812-3456-7890' } });
+  const membershipInput = { userId: user.id, name: 'Number A', enabled: false, phoneIds: [duplicateA.id] };
+  response = await api(groupApi, { method: 'POST', user: admin, body: membershipInput });
+  assert.equal(response.code, 200);
+  const numberGroup = await prisma.senderGroup.findFirstOrThrow({ where: { name: 'Number A' } });
+  response = await api(groupApi, { method: 'POST', user: admin, body: { ...membershipInput, userId: foreign.id, name: 'Number B', phoneIds: [duplicateB.id] } });
+  assert.equal(response.code, 409, 'Equivalent number must conflict across devices and owners, even when disabled');
+  assert(response.body.message.includes('Number A'));
+  assert(response.body.message.includes('Duplicate A'));
+  const unknown = await prisma.phone.create({ data: { userId: foreign.id, name: 'Unknown number' } });
+  response = await api(groupApi, { method: 'POST', user: admin, body: { ...membershipInput, userId: foreign.id, name: 'Unknown group', phoneIds: [unknown.id] } });
+  assert.equal(response.code, 200, 'Devices may join before QR pairing reveals their number');
+  await prisma.$transaction(tx => load('src/server/deviceWebhook/events.ts').updateDevice(tx, { id: unknown.id }, { number: '6281234567890' }));
+  const connectedDuplicate = await prisma.phone.findUniqueOrThrow({ where: { id: unknown.id } });
+  assert.equal(connectedDuplicate.number, '6281234567890', 'Persist the actual number');
+  assert.equal(connectedDuplicate.senderGroupId, null, 'Detach new conflicting membership');
+  assert.equal(connectedDuplicate.senderPriority, 0);
+  // Simulate pre-existing data: report it without silently deleting memberships.
+  const legacy = await prisma.senderGroup.create({ data: { userId: foreign.id, name: 'Legacy conflict', phones: { connect: { id: duplicateB.id } } } });
+  response = await api(groupApi, { user: admin });
+  assert(response.body.conflicts.some(row => row.phoneId === duplicateA.id && row.otherGroupName === legacy.name));
+  await prisma.phone.update({ where: { id: duplicateB.id }, data: { senderGroupId: null } });
+  await prisma.senderGroup.delete({ where: { id: numberGroup.id } });
+  response = await api(groupApi, { method: 'POST', user: admin, body: { ...membershipInput, userId: foreign.id, name: 'Number B', phoneIds: [duplicateB.id] } });
+  assert.equal(response.code, 200, 'Releasing the old membership allows a number to move');
+  // Two simultaneous saves must not admit one number to different groups.
+  const racePhones = await Promise.all(['+6289991234567', '089991234567'].map((number, index) => prisma.phone.create({ data: { userId: user.id, name: `Race ${index}`, number } })));
+  const races = await Promise.all(racePhones.map((phone, index) => api(groupApi, { method: 'POST', user: admin, body: { ...membershipInput, name: `Race group ${index}`, phoneIds: [phone.id] } })));
+  assert.deepEqual(races.map(result => result.code).sort(), [200, 409]);
+  const pairingPhones = await Promise.all([0, 1].map(index => prisma.phone.create({ data: { userId: user.id, name: `Pairing ${index}` } })));
+  for (const [index, phone] of pairingPhones.entries()) {
+    response = await api(groupApi, { method: 'POST', user: admin, body: { ...membershipInput, name: `Pairing group ${index}`, phoneIds: [phone.id] } });
+    assert.equal(response.code, 200);
+  }
+  await Promise.all(pairingPhones.map(phone => prisma.$transaction(tx => load('src/server/deviceWebhook/events.ts').updateDevice(tx, { id: phone.id }, { number: '6287771234567' }))));
+  const paired = await prisma.phone.findMany({ where: { id: { in: pairingPhones.map(phone => phone.id) } } });
+  assert.equal(paired.filter(phone => phone.senderGroupId).length, 1, 'Concurrent pairing must retain only one group');
+  console.log('PASS canonical number membership, cross-owner/disabled conflict, QR reconciliation, legacy audit, release and concurrent saves');
+
   await prisma.dispatchWebhookSetting.create({ data: { id: 1, enabled: true, url: 'https://cashier.example.test/webhook', secret: 'test-only', revision: randomUUID() } });
   const queue = load('src/server/dispatch/queue.ts');
   const worker = load('src/server/dispatch/worker.ts');
@@ -138,6 +179,17 @@ async function main() {
   await prisma.waDispatch.update({ where: { id: dispatchId }, data: { nextAttemptAt: new Date(0) } });
   await prisma.waSenderLease.updateMany({ data: { nextSendAt: new Date(0) } });
   mockSocket(backup); mockSocket(third);
+  // A legacy conflicting fallback is skipped; uncertain sends keep their sender.
+  await prisma.phone.update({ where: { id: backup.id }, data: { number: '081234567890' } });
+  const pendingJob = await prisma.waDispatch.findUniqueOrThrow({ where: { id: dispatchId } });
+  const groupedOrigin = await prisma.phone.findUniqueOrThrow({ where: { id: primary.id } });
+  const routing = load('src/server/dispatch/senderRouting.ts');
+  let selectedSender = await routing.selectDispatchSender(groupedOrigin, pendingJob, 'conflict-test', 120000);
+  assert.equal(selectedSender.phone.id, third.id, 'Skip conflicting number across groups');
+  selectedSender = await routing.selectDispatchSender(groupedOrigin, { ...pendingJob, messageId: 'already-sent', senderPhoneId: backup.id }, 'pinned-conflict-test', 120000);
+  assert.equal(selectedSender.phone.id, backup.id, 'Preserve pinned sender for ambiguous/late receipts');
+  await prisma.phone.update({ where: { id: backup.id }, data: { number: null } });
+  await prisma.waSenderLease.updateMany({ data: { leaseToken: null, leaseUntil: null } });
   await worker.processPhone(primary.id);
   let job = await prisma.waDispatch.findUniqueOrThrow({ where: { id: dispatchId } });
   assert.equal(job.status, 'SENT'); assert.equal(job.phoneId, primary.id); assert.equal(job.senderPhoneId, backup.id);

@@ -7,6 +7,7 @@ import { deviceDailyQuota, DEFAULT_DEVICE_DAILY_QUOTA } from "../../lib/deviceQu
 import { getGlobalDeviceQuota, getWarmupDailyLimits, getGlobalOperatingHours } from "./settings";
 import { effectiveOperatingHours, operatingHoursState } from "../../lib/operatingHours";
 import { hasEnabledSenderGroup } from "./senderGroups";
+import { conflictingSender, senderMembershipSelect } from "./senderNumberMembership";
 
 // A message ID can have late receipts, even after a timeout. Never change its sender.
 export function pinnedSender(job: Pick<WaDispatch, "phoneId" | "senderPhoneId" | "messageId">) {
@@ -26,8 +27,11 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
   if (!pinned) phones.sort((a, b) => Number(b.id === origin.id) - Number(a.id === origin.id));
   const [globalQuota, warmupLimits] = grouped ? await Promise.all([getGlobalDeviceQuota(), getWarmupDailyLimits()]) : [0, []];
   const globalHours = await getGlobalOperatingHours();
+  const members = grouped ? await prisma.phone.findMany({ where: { senderGroupId: { not: null } }, select: senderMembershipSelect }) : [];
   let outsideHours = false;
   for (const phone of phones) {
+    // Existing conflicts stay visible for admin review, but cannot route new work.
+    if (grouped && !pinned && conflictingSender(phone, members)) continue;
     const socket = session.get(phone.id);
     if (phone.active !== 1 || phoneMaintenance.has(phone.id) || !socket?.ws.isOpen || !socket.user) continue;
     const savedPolicy = await prisma.deviceSendPolicy.findUnique({ where: { phoneId: phone.id } });

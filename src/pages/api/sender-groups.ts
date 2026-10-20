@@ -5,6 +5,7 @@ import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import type { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
 import { DispatchError } from "@/server/dispatch/queue";
+import { conflictingSender, lockSenderMembership, senderMembershipSelect, senderNumber, senderNumberConflicts } from "@/server/dispatch/senderNumberMembership";
 
 const input = z.object({ id: z.string().uuid().optional(), userId: z.string().min(1).max(191),
   name: z.string().trim().min(1).max(100), enabled: z.boolean(),
@@ -21,13 +22,15 @@ export default apiSuperAdminMiddleware(async (req: AuthNextApiRequest, res: Next
       prisma.phone.findMany({ select: { id: true, name: true, number: true, userId: true, senderGroupId: true,
         user: { select: { name: true, email: true } } }, orderBy: [{ name: "asc" }, { id: "asc" }] }),
     ]);
-    return res.json({ groups, phones });
+    const members = phones.map(phone => ({ ...phone, senderGroup: groups.find(group => group.id === phone.senderGroupId) || null }));
+    return res.json({ groups, phones, conflicts: senderNumberConflicts(members) });
   }
   if (!["POST", "PUT", "DELETE"].includes(req.method || "")) { res.setHeader("Allow", "GET, POST, PUT, DELETE"); return res.status(405).end(); }
   const parsed = req.method === "DELETE" ? z.object({ id: z.string().uuid() }).strict().safeParse(req.body) : input.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: "Isi nama, pemilik, dan 1–100 perangkat unik untuk grup." });
   try {
     await prisma.$transaction(async tx => {
+      await lockSenderMembership(tx);
       const id = parsed.data.id;
       if (req.method !== "POST" && !id) throw new DispatchError(400, "ID grup wajib diisi.");
       if (id) {
@@ -45,6 +48,11 @@ export default apiSuperAdminMiddleware(async (req: AuthNextApiRequest, res: Next
       const phones = await tx.phone.findMany({ where: { id: { in: values.phoneIds } } });
       if (phones.length !== values.phoneIds.length || phones.some(phone => phone.userId !== values.userId)) throw new DispatchError(400, "Seluruh perangkat dalam satu grup harus dimiliki akun yang sama.");
       if (phones.some(phone => phone.senderGroupId && phone.senderGroupId !== id)) throw new DispatchError(409, "Perangkat sudah berada dalam grup lain. Keluarkan dari grup tersebut terlebih dahulu.");
+      const members = await tx.phone.findMany({ where: { senderGroupId: { not: null } }, select: senderMembershipSelect });
+      for (const phone of phones) {
+        const conflict = conflictingSender({ ...phone, senderGroupId: id || null }, members);
+        if (conflict) throw new DispatchError(409, `Nomor ${senderNumber(phone.number)} sudah digunakan di grup ${conflict.senderGroup?.name || "lain"} melalui perangkat ${conflict.name}. Keluarkan dari grup tersebut terlebih dahulu.`);
+      }
       const group = existing
         ? await tx.senderGroup.update({ where: { id }, data: { name: values.name, enabled: values.enabled } })
         : await tx.senderGroup.create({ data: { userId: values.userId, name: values.name, enabled: values.enabled } });
