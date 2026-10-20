@@ -133,6 +133,17 @@ class DeploymentGuards(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             deploy.compare_counts(before, {'counts': before['counts'], 'migrations': [{'checksum': 'changed'}]})
 
+    def test_only_approved_new_empty_tables_can_be_added(self):
+        before = {'counts': {'phones': '20', '_prisma_migrations': '5'}, 'migrations': [{'checksum': 'original'}]}
+        after = {'counts': dict(before['counts'], sender_groups='0', wa_dispatch_attempts='0'), 'migrations': before['migrations']}
+        deploy.compare_counts(before, after, ['sender_groups', 'wa_dispatch_attempts'])
+        for table in ['users', 'unexpected']:
+            with self.assertRaises(RuntimeError):
+                deploy.compare_counts(before, after, [table])
+        for changes in [{'phones': '19'}, {'sender_groups': '1'}, {'_prisma_migrations': '6'}]:
+            with self.assertRaises(RuntimeError):
+                deploy.compare_counts(before, {'counts': dict(after['counts'], **changes), 'migrations': before['migrations']}, ['sender_groups', 'wa_dispatch_attempts'])
+
 
 if __name__ == '__main__':
     unittest.main()

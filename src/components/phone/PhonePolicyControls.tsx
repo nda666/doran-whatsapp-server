@@ -10,12 +10,18 @@ import type { PhoneRow } from "@/lib/usePhoneData";
 import type { TableState } from "@/lib/useTableState";
 import type { PhonePolicySort } from "@/lib/phonePolicySort";
 import { deviceSendIntervalRange } from "@/lib/deviceSendInterval";
+import OperatingHoursFields from "../OperatingHoursFields";
+import { operatingHoursLabel, type OperatingHours } from "@/lib/operatingHours";
 
 export type DevicePolicy = {
   id: string;
   name: string;
   dailyLimit: number;
   useGlobalQuota: boolean;
+  operatingHours: OperatingHours | null;
+  globalOperatingHours: OperatingHours;
+  effectiveOperatingHours: OperatingHours;
+  operatingHoursState: { open: boolean; nextOpenAt: string | null };
   globalQuota: number;
   used: number;
   lastSendProcessedAt?: string | null;
@@ -45,10 +51,18 @@ export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string)
       return <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 200, maxWidth: 250 }}>
         {policy.health.score === null ? <Typography.Text>{uiText("Data belum cukup")}</Typography.Text> : <Progress percent={policy.health.score} status={policy.health.stop ? "exception" : "normal"} style={{ margin: 0 }} />}
         <Typography.Text type="secondary" style={{ ...detailStyle, overflowWrap: "anywhere" }}>{description}</Typography.Text>
-        <Tag color={stopped ? "red" : "green"} style={{ alignSelf: "flex-start", whiteSpace: "normal" }}>
-          {policy.paused ? policy.pauseReason ? uiText("Dihentikan: pembatasan WhatsApp") : uiText("Dijeda admin") : stopped ? uiText("Dihentikan otomatis") : uiText("Siap mengirim")}
+        <Tag color={stopped ? "red" : policy.operatingHoursState.open ? "green" : "gold"} style={{ alignSelf: "flex-start", whiteSpace: "normal" }}>
+          {policy.paused ? policy.pauseReason ? uiText("Dihentikan: pembatasan WhatsApp") : uiText("Dijeda admin") : stopped ? uiText("Dihentikan otomatis") : policy.operatingHoursState.open ? uiText("Siap mengirim") : uiText("Di luar jam operasional")}
         </Tag>
       </div>;
+    } },
+    { title: uiText("Jam operasional"), key: "operatingHours", width: 230, render: (_, phone) => {
+      const policy = getPolicy(phone.id);
+      return policy ? <Space direction="vertical" size={4}>
+        <Typography.Text>{operatingHoursLabel(policy.effectiveOperatingHours)}</Typography.Text>
+        <Tag>{policy.operatingHours == null ? uiText("Ikuti jadwal global") : uiText("Jadwal khusus")}</Tag>
+        {!policy.operatingHoursState.open && policy.operatingHoursState.nextOpenAt && <Typography.Text type="secondary">{uiText("Mulai kembali:")} {uiText.date(policy.operatingHoursState.nextOpenAt)} WIB</Typography.Text>}
+      </Space> : <Typography.Text type="secondary">{uiText("Belum tersedia")}</Typography.Text>;
     } },
     { title: uiText("Kuota hari ini"), key: "quota", ...sorting("quota"), width: 160, render: (_, phone) => {
       const policy = getPolicy(phone.id);
@@ -94,6 +108,7 @@ export default function usePhonePolicies(sort?: Pick<TableState, "sort" | "order
     try {
       await axios.put("/api/device-policies", {
         phoneId: row.id, dailyLimit: row.dailyLimit, useGlobalQuota: row.useGlobalQuota,
+        operatingHours: row.operatingHours,
         minIntervalSeconds: row.minIntervalSeconds, maxIntervalSeconds: row.maxIntervalSeconds, adaptiveEnabled: row.adaptiveEnabled, paused: row.paused, ...values,
       }, { headers: api.headers });
       api.reload();
@@ -118,11 +133,15 @@ export default function usePhonePolicies(sort?: Pick<TableState, "sort" | "order
     modal: <Modal className="device-settings-modal" width={640} open={!!editing} title={uiText("Atur batas — {{v0}}", { v0: editing?.name || uiText("Perangkat") })} footer={<Space><Button disabled={busy} onClick={() => setEditing(undefined)}>{uiText("Batal")}</Button><Button form="phone-policy-form" htmlType="submit" type="primary" loading={busy}>{uiText("Simpan")}</Button></Space>}
       onCancel={() => { if (!saving.current) setEditing(undefined); }} closable={!busy} maskClosable={!busy} keyboard={!busy} destroyOnClose>
       {editing && <Form id="phone-policy-form" key={editing.id} layout="vertical" disabled={busy}
-        initialValues={{ ...editing, followGlobal: editing.minIntervalSeconds == null, minIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).minSeconds, maxIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).maxSeconds }}
-        onFinish={({ followGlobal, minIntervalSeconds, maxIntervalSeconds, ...values }) => update(editing, {
+        initialValues={{ ...editing, followGlobalOperatingHours: editing.operatingHours == null, customOperatingHours: editing.operatingHours || editing.globalOperatingHours, followGlobal: editing.minIntervalSeconds == null, minIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).minSeconds, maxIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).maxSeconds }}
+        onFinish={({ followGlobal, minIntervalSeconds, maxIntervalSeconds, followGlobalOperatingHours, customOperatingHours, ...values }) => update(editing, {
+          operatingHours: followGlobalOperatingHours ? null : customOperatingHours,
           ...values, minIntervalSeconds: followGlobal ? null : minIntervalSeconds, maxIntervalSeconds: followGlobal ? null : maxIntervalSeconds,
         })}>
         <div className="device-settings-list">
+          <SettingToggle name="followGlobalOperatingHours" label={uiText("Ikuti jam operasional global")} onLabel={uiText("Global")} offLabel={uiText("Khusus")}
+            description={`${uiText("Jadwal global:")} ${operatingHoursLabel(editing.globalOperatingHours)}. ${uiText("Matikan untuk memakai jadwal khusus yang menggantikan jadwal global pada nomor ini.")}`} />
+          <Form.Item noStyle shouldUpdate={(before, after) => before.followGlobalOperatingHours !== after.followGlobalOperatingHours}>{({ getFieldValue }) => !getFieldValue("followGlobalOperatingHours") && <div className="device-setting-dependent"><OperatingHoursFields name="customOperatingHours" /></div>}</Form.Item>
           <SettingToggle name="useGlobalQuota" label={uiText("Gunakan kuota global")} onLabel={uiText("Global")} offLabel={uiText("Custom")}
             description={uiText("Kuota global saat ini {{v0}} percobaan per nomor per hari. Matikan untuk menggunakan kuota custom.", { v0: editing.globalQuota })} />
           <Form.Item noStyle shouldUpdate={(before, after) => before.useGlobalQuota !== after.useGlobalQuota}>{({ getFieldValue }) => !getFieldValue("useGlobalQuota") && <div className="device-setting-dependent"><Form.Item name="dailyLimit" label={uiText("Kuota custom per hari")} rules={[{ required: true }]}><InputNumber min={1} max={100000} precision={0} style={{width: "100%"}} /></Form.Item></div>}</Form.Item>

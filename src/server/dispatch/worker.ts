@@ -19,6 +19,7 @@ import { ACK_TIMEOUT_MS, acknowledgementFailure, retryEligible } from "./retry";
 import { recordDispatchReceipt } from "./receipts";
 import { waitForDispatchAcknowledgement, AckObservation } from "./acknowledgement";
 import { recoverQuotaDispatches } from "./quotaRecovery";
+import { selectDispatchSender } from "./senderRouting";
 
 const runnable = () => ({ OR: [{ campaignId: null }, { campaign: { status: { in: ["WAITING", "PROCESSING"] as ("WAITING" | "PROCESSING")[] }, scheduledAt: { lte: new Date() } } }] });
 // A future campaign must not expire merely because its queue rows were created early.
@@ -92,36 +93,41 @@ export async function processPhone(phoneId: string) {
   let sendGap: number | undefined;
   let sendRange = DEFAULT_DISPATCH_DELAY;
   let heartbeatBusy = false;
+  let senderId = phoneId;
+  let grouped = false;
+  let alternateLease = false;
+  let attemptId: string | undefined;
+  let attemptResult: { status: string; error: string | null } | undefined;
   const heartbeat = setInterval(async () => {
     if (heartbeatBusy) return; heartbeatBusy = true;
     try {
       const until = new Date(Date.now() + leaseMs);
       await prisma.waSenderLease.updateMany({ where: { phoneId, leaseToken: token }, data: { leaseUntil: until } });
+      if (alternateLease) await prisma.waSenderLease.updateMany({ where: { phoneId: senderId, leaseToken: token }, data: { leaseUntil: until } });
       if (jobId) await updateDispatches({ where: { id: jobId, leaseToken: token, status: "PROCESSING" }, data: { leaseUntil: until } });
     } catch (error) { logFailure("DISPATCH_HEARTBEAT_FAILED", error, startedAt, phoneId, jobId); } finally { heartbeatBusy = false; }
   }, 15_000);
   try {
-    const phone = await prisma.phone.findUnique({ where: { id: phoneId } });
-    if (!phone) { await updateDispatches({ where: { phoneId, status: "QUEUED" }, data: { status: "FAILED", lastError: "SENDER_DELETED" } }); return; }
-    const socket = session.get(phoneId);
-    if (phoneMaintenance.has(phoneId) || phone.active !== 1 || !socket?.ws.isOpen || !socket.user) {
-      const offlineError = phone.active !== 1 ? "DEVICE_INACTIVE" : "DEVICE_OFFLINE";
-      sendGap = 30_000;
-      // The global status/due index can lock other senders while scanning UPDATE.
-      // Use the existing sender index, bound the batch, and mark each row only
-      // when its reason changes. Cooldown belongs to the sender lease, avoiding
-      // rewriting thousands of already-offline jobs every thirty seconds.
-      await prisma.$executeRaw`
-        UPDATE wa_dispatches FORCE INDEX (wa_dispatches_phoneId_status_createdAt_idx)
-        SET nextAttemptAt = ${new Date(Date.now() + 30_000)}, lastError = ${offlineError}, updatedAt = ${new Date()}
-        WHERE phoneId = ${phoneId} AND status = 'QUEUED' AND messageId IS NULL AND nextAttemptAt <= ${new Date()}
-        AND (lastError IS NULL OR lastError <> ${offlineError}) LIMIT 250`;
-      return;
-    }
+    const origin = await prisma.phone.findUnique({ where: { id: phoneId } });
+    if (!origin) { await updateDispatches({ where: { phoneId, status: "QUEUED" }, data: { status: "FAILED", lastError: "SENDER_DELETED" } }); return; }
     const [cutoff, order, range] = await Promise.all([getDispatchAgeCutoff(), getDispatchQueueOrder(), getDispatchDelayRange()]);
     sendRange = range;
     const job = await prisma.waDispatch.findFirst({ where: { phoneId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable()] }, include: { campaign: true, media: true }, orderBy: dispatchQueueOrderBy(order) });
     if (!job) return;
+    const selection = await selectDispatchSender(origin, job, token, leaseMs);
+    grouped = selection.grouped;
+    const { phone, socket } = selection;
+    if (!phone || !socket || !socket.user) {
+      const offlineError = selection.outsideHours ? "OUTSIDE_OPERATING_HOURS" : grouped ? "SENDER_GROUP_UNAVAILABLE" : origin.active !== 1 ? "DEVICE_INACTIVE" : "DEVICE_OFFLINE";
+      // Defer this job without blocking newer, unsent jobs that can use a backup.
+      sendGap = grouped ? 1000 : 30_000;
+      await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: {
+        lastError: job.messageId && !selection.outsideHours ? job.lastError : offlineError, nextAttemptAt: new Date(Date.now() + 30_000),
+      } });
+      return;
+    }
+    senderId = phone.id;
+    alternateLease = selection.leased;
     if (await recipientBlocked(job.userId, job.recipient)) {
       await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: { status: "SUPPRESSED", lastError: "RECIPIENT_OPTED_OUT" } });
       return;
@@ -144,10 +150,16 @@ export async function processPhone(phoneId: string) {
         status: attempts >= 5 ? "FAILED" : "QUEUED", lastError: "MEDIA_PREPARATION_FAILED",
         nextAttemptAt: new Date(Date.now() + Math.min(900_000, 30_000 * 2 ** attempts)) } }); return;
     }
-    if (phoneMaintenance.has(phoneId) || !socket.ws.isOpen) return;
+    if (phoneMaintenance.has(senderId) || !socket.ws.isOpen) return;
     const claimCutoff = await getDispatchAgeCutoff();
     const messageId = job.messageId || generateMessageIDV2(socket.user.id);
     const claimed = await prisma.$transaction(async tx => {
+      if (grouped && !job.messageId) {
+        await tx.$queryRaw`SELECT id FROM sender_groups WHERE id = ${selection.groupId} FOR UPDATE`;
+        const group = await tx.senderGroup.findFirst({ where: { id: selection.groupId!, userId: job.userId, enabled: true } });
+        const members = await tx.phone.count({ where: { id: { in: Array.from(new Set([phoneId, senderId])) }, userId: job.userId, senderGroupId: selection.groupId } });
+        if (!group || members !== new Set([phoneId, senderId]).size) return false;
+      }
       if (job.campaignId) {
         await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${job.campaignId} FOR UPDATE`;
         const campaign = await tx.campaign.findUnique({ where: { id: job.campaignId } });
@@ -157,9 +169,15 @@ export async function processPhone(phoneId: string) {
       }
       const held = await tx.waSenderLease.findFirst({ where: { phoneId, leaseToken: token, leaseUntil: { gt: new Date() } } });
       if (!held) return false;
+      if (alternateLease && !await tx.waSenderLease.findFirst({ where: { phoneId: senderId, leaseToken: token, leaseUntil: { gt: new Date() } } })) return false;
       const claim = await updateDispatches({ where: { id: job.id, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, AND: [ageEligible(claimCutoff), retryEligible(), dispatchDeadline()] },
         data: { status: "PROCESSING", attempts: { increment: 1 }, messageId, leaseToken: token,
+          senderPhoneId: senderId, senderGroupId: selection.groupId,
           leaseUntil: new Date(Date.now() + leaseMs), lastError: null } }, tx);
+      if (claim.count === 1) {
+        const attempt = await tx.waDispatchAttempt.create({ data: { dispatchId: job.id, phoneId: senderId, messageId } });
+        attemptId = attempt.id;
+      }
       return claim.count === 1;
     });
     if (!claimed) return;
@@ -185,7 +203,7 @@ export async function processPhone(phoneId: string) {
         const ack = await acknowledgement;
         if (ack.attrs?.error === "463") throw new Error("WA_ACK_463");
         // Also accept an ACK that arrives after the outer timeout queued a retry.
-        await recordDispatchReceipt(phoneId, messageId, 2);
+        await recordDispatchReceipt(senderId, messageId, 2);
         return result;
       };
       const result = await Promise.race([
@@ -199,20 +217,33 @@ export async function processPhone(phoneId: string) {
         data: { status: "SENT", sentAt: new Date(), leaseToken: null, leaseUntil: null, lastError: null } });
     } catch (error) {
       if (error instanceof SendGuardError) {
+        attemptResult = { status: "SKIPPED", error: error.code };
         await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {
           status: error.code === "RECIPIENT_OPTED_OUT" ? "SUPPRESSED" : "QUEUED",
           lastError: error.code,
           messageId: job.messageId, attempts: job.attempts,
-          nextAttemptAt: error.retryAt || new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null,
+          senderPhoneId: job.senderPhoneId,
+          nextAttemptAt: error.code === "OUTSIDE_OPERATING_HOURS" ? new Date(Date.now() + 30000) : grouped && !job.messageId ? new Date(Date.now() + 1000) : error.retryAt || new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null,
         } });
-        sendGap = Math.max(1000, (error.retryAt?.getTime() || Date.now() + 60000) - Date.now());
+        sendGap = error.code === "OUTSIDE_OPERATING_HOURS" ? grouped ? 1000 : 30000 : grouped && !job.messageId ? 1000 : Math.max(1000, (error.retryAt?.getTime() || Date.now() + 60000) - Date.now());
         return;
       }
       if (error instanceof Error && ["SEND_TIMEOUT", "ACK_TIMEOUT", "WA_ACK_463"].includes(error.message)) {
-        await prisma.deviceDailyUsage.updateMany({ where: { phoneId, day: usageDay(new Date(startedAt)) }, data: { failures: { increment: 1 } } });
+        await prisma.deviceDailyUsage.updateMany({ where: { phoneId: senderId, day: usageDay(new Date(startedAt)) }, data: { failures: { increment: 1 } } });
       }
       if (error instanceof Error && error.message === "WA_ACK_463") {
-        await prisma.deviceSendPolicy.updateMany({ where: { phoneId }, data: { paused: true, pauseReason: "WhatsApp menolak pengiriman dengan kode 463. Tinjau kondisi nomor sebelum melanjutkan." } });
+        await prisma.deviceSendPolicy.updateMany({ where: { phoneId: senderId }, data: { paused: true, pauseReason: "WhatsApp menolak pengiriman dengan kode 463. Tinjau kondisi nomor sebelum melanjutkan." } });
+        if (grouped) {
+          // An explicit rejection is definitive, unlike a missing ACK. Keep the
+          // dispatch identity, retire this message ID and choose a new sender.
+          attemptResult = { status: "FAILED", error: "WA_ACK_463_ACCOUNT_RESTRICTED" };
+          await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {
+            status: "QUEUED", messageId: null, senderPhoneId: null, lastError: "SENDER_REJECTED_RETRY",
+            nextAttemptAt: new Date(Date.now() + 1000), leaseToken: null, leaseUntil: null,
+          } });
+          sendGap = 1000;
+          return;
+        }
       }
       logFailure("DISPATCH_ACK_FAILED", error, startedAt, phoneId, job.id);
       console.error("DISPATCH_ACK_DIAGNOSTIC", JSON.stringify({ at: new Date().toISOString(),
@@ -227,12 +258,22 @@ export async function processPhone(phoneId: string) {
     throw error;
   } finally {
     clearInterval(heartbeat);
+    if (attemptId && jobId) {
+      // Finish history without delaying lease release when the DB is unavailable.
+      try {
+        const final = await prisma.waDispatch.findUnique({ where: { id: jobId } });
+        if (final) await prisma.waDispatchAttempt.updateMany({ where: { id: attemptId, status: "PROCESSING" },
+          data: { ...(attemptResult || { status: final.status, error: final.lastError }), finishedAt: new Date() } });
+      } catch (error) { logFailure("DISPATCH_ATTEMPT_HISTORY_FAILED", error, startedAt, senderId, jobId); }
+    }
     // The shared transport sampled the global interval once. Reuse its cooldown
     // instead of drawing and applying another global delay after the ACK.
-    const policy = await prisma.deviceSendPolicy.findUnique({ where: { phoneId }, select: { nextAllowedAt: true } });
+    const policy = await prisma.deviceSendPolicy.findUnique({ where: { phoneId: senderId }, select: { nextAllowedAt: true } });
     const nextSendAt = new Date(Math.max(policy?.nextAllowedAt.getTime() || 0,
       Date.now() + (sendGap ?? (jobId ? 0 : randomDispatchDelay(sendRange)))));
     await prisma.waSenderLease.updateMany({ where: { phoneId, leaseToken: token },
+      data: { leaseToken: null, leaseUntil: null, nextSendAt: grouped ? new Date(Date.now() + (sendGap ?? 0)) : nextSendAt } });
+    if (alternateLease) await prisma.waSenderLease.updateMany({ where: { phoneId: senderId, leaseToken: token },
       data: { leaseToken: null, leaseUntil: null, nextSendAt } });
   }
 }
@@ -267,7 +308,7 @@ export function startDispatchWorker() {
         SELECT d.phoneId FROM wa_dispatches d
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
-        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED')) AND d.sentAt IS NULL
+        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS')) AND d.sentAt IS NULL
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
@@ -291,7 +332,7 @@ export function startDispatchWorker() {
     sampling = getDispatchAgeCutoff().then(cutoff => prisma.$queryRaw<QueueSample[]>`
       SELECT d.phoneId, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
       FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId
-      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED')) AND d.sentAt IS NULL
+      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS')) AND d.sentAt IS NULL
       AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
       AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
       AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))

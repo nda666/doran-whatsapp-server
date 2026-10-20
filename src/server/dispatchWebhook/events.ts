@@ -9,6 +9,7 @@ async function settings(tx: Prisma.TransactionClient) {
 
 export function dispatchSnapshot(job: WaDispatch) {
   return { id: job.id, job_id: job.clientJobId, device_id: job.phoneId, user_id: job.userId,
+    sender_device_id: job.senderPhoneId || job.phoneId, sender_group_id: job.senderGroupId,
     transaction_id: job.transactionId, store_id: job.storeId, message_key: job.messageKey,
     campaign_id: job.campaignId, source: job.source, recipient: job.recipient, status: job.status,
     message_id: job.messageId, attempts: job.attempts, error: job.lastError,

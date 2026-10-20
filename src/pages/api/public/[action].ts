@@ -13,6 +13,7 @@ import { updateDevice } from "@/server/deviceWebhook/events";
 import { deviceToken } from "@/server/deviceToken";
 import type { Phone } from "@prisma/client";
 import { DispatchAuthError, resolveDispatchDevice, resolveIntegrationIdentity } from "@/server/dispatchAuth";
+import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store"); res.setHeader("Referrer-Policy", "no-referrer");
@@ -45,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const previous = await existingRequestJob(phone.id, body);
       if (previous) return res.status(202).json(previous);
     }
-    if (phone.active !== 1) return res.status(409).json({ result: false, curl_error: null, message: "Device nonaktif." });
+    if (phone.active !== 1 && !(sending && process.env.DISPATCH_QUEUE_ENABLED === "true" && await hasEnabledSenderGroup(phone))) return res.status(409).json({ result: false, curl_error: null, message: "Device nonaktif." });
     if (["generate-qr", "check-number"].includes(action) && process.env.WHATSAPP_ENABLED === "false") return res.status(503).json({ result: false, curl_error: null, message: "Koneksi WhatsApp dinonaktifkan." });
     if (action === "generate-qr") {
       if (isPairingInProgress(phone.id)) return res.json({ pairing: true });

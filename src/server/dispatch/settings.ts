@@ -6,6 +6,14 @@ import { DEFAULT_DISPATCH_QUEUE_ORDER, DISPATCH_QUEUE_ORDER_KEY, parseDispatchQu
 import { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, parseDispatchDelayRange } from "../../lib/dispatchSettings";
 
 import { DEVICE_DAILY_QUOTA_KEY, DEFAULT_DEVICE_DAILY_QUOTA, parseDeviceDailyQuota } from "../../lib/deviceQuota";
+import { DEFAULT_OPERATING_HOURS, OPERATING_HOURS_KEY, parseOperatingHours } from "../../lib/operatingHours";
+
+export async function getGlobalOperatingHours() {
+  const setting = await prisma.globalSetting.findUnique({ where: { key: OPERATING_HOURS_KEY } });
+  const hours = setting ? parseOperatingHours(decryptSetting(setting.value)) : DEFAULT_OPERATING_HOURS;
+  if (!hours) throw new Error("Invalid global operating hours");
+  return hours;
+}
 export async function getGlobalDeviceQuota() {
   const setting = await prisma.globalSetting.findUnique({ where: { key: DEVICE_DAILY_QUOTA_KEY } });
   const quota = setting ? parseDeviceDailyQuota(decryptSetting(setting.value)) : DEFAULT_DEVICE_DAILY_QUOTA;

@@ -8,6 +8,7 @@ import { AuthNextApiRequest } from "@/types/global";
 import { SendMessageValidation } from "@/validations/sendMessage";
 import { DispatchError, enqueueDispatch, prepareDispatch, existingRequestJob, requestJobId } from "@/server/dispatch/queue";
 import { DispatchAuthError, resolveDispatchDevice } from "@/server/dispatchAuth";
+import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -84,7 +85,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
     try {
       const previous = await existingRequestJob(phone.id, req.body);
       if (previous) return res.status(200).json(previous);
-      if (phone.active !== 1) return res.status(409).json({ result: false, curl_error: null, message: "Perangkat nonaktif. Aktifkan sebelum mengirim." });
+      if (phone.active !== 1 && !await hasEnabledSenderGroup(phone)) return res.status(409).json({ result: false, curl_error: null, message: "Perangkat nonaktif. Aktifkan sebelum mengirim." });
       return res.status(200).json(await enqueueDispatch(phone.id, phone.userId, req.body));
     }
     catch (error) { return res.status(error instanceof DispatchError ? error.status : 503).json({ result: false, curl_error: null, message: error instanceof DispatchError ? error.message : "Request belum tersimpan. Ulangi dengan ID transaksi yang sama." }); }

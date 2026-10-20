@@ -14,14 +14,14 @@ function loader(stubs = {}) {
     if (cache.has(name)) return cache.get(name);
     const file = path.resolve(name), real = createRequire(file), module = { exports: {} };
     const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: 1, target: 7, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-    const req = spec => spec in stubs ? stubs[spec] : spec.startsWith('@/') ? load('src/' + spec.slice(2) + '.ts') : spec.startsWith('.') ? load(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + (spec.endsWith('SettingToggle') ? '.tsx' : '.ts')) : real(spec);
+    const req = spec => spec in stubs ? stubs[spec] : spec.startsWith('@/') ? load('src/' + spec.slice(2) + '.ts') : spec.startsWith('.') ? load(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + (fs.existsSync(path.resolve(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec)) + '.tsx')) ? '.tsx' : '.ts')) : real(spec);
     new Function('require', 'module', 'exports', 'Math', code)(req, module, module.exports, math);
     cache.set(name, module.exports); return module.exports;
   }
   return load;
 }
 const ui = (text, values = {}) => text.replace(/{{(\w+)}}/g, (_, key) => values[key]);
-const base = { id: '00000000-0000-4000-8000-000000000001', name: 'Fixture', dailyLimit: 200, useGlobalQuota: true, minIntervalSeconds: null, maxIntervalSeconds: null, adaptiveEnabled: true, paused: false, health: { multiplier: 1 }, globalInterval: { minSeconds: 12, maxSeconds: 18 } };
+const base = { id: '00000000-0000-4000-8000-000000000001', name: 'Fixture', dailyLimit: 200, useGlobalQuota: true, minIntervalSeconds: null, maxIntervalSeconds: null, adaptiveEnabled: true, paused: false, health: { multiplier: 1 }, operatingHours: null, globalOperatingHours: { enabled: false, start: '08:00', end: '20:00' }, operatingHoursState: { open: true, nextOpenAt: null }, globalInterval: { minSeconds: 12, maxSeconds: 18 } };
 async function main() {
   let stored, scoped = 0;
   const api = loader({
@@ -85,7 +85,7 @@ async function main() {
   };
   const safety = loader({
     'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatchWebhook/events.ts': {},
-    'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
+    'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
   })('src/server/messaging/safety.ts');
   async function gap(min, max, rng, attempts = 0, failures = 0, adaptive = true) {
     Object.assign(policy, { minIntervalSeconds: min, maxIntervalSeconds: max, nextAllowedAt: new Date(0), adaptiveEnabled: adaptive });

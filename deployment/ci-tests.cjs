@@ -13,6 +13,8 @@ const tests = [
   'verify-phone-last-offline.cjs', 'verify-phone-last-send.cjs',
   'verify-daily-warmup.cjs',
   'verify-quota-recovery.cjs',
+  'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
+  'verify-feature-schema.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);

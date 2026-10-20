@@ -12,12 +12,14 @@ import { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, DISPATCH_DELAY_LABEL, parse
 import { DEFAULT_PHONE_FORM_FIELDS, PHONE_FORM_FIELDS_KEY, PHONE_FORM_FIELDS_LABEL, parsePhoneFormFields } from "@/lib/phoneFormFields";
 
 import { DEVICE_DAILY_QUOTA_KEY, DEVICE_DAILY_QUOTA_LABEL, DEFAULT_DEVICE_DAILY_QUOTA, parseDeviceDailyQuota } from "@/lib/deviceQuota";
+import { DEFAULT_OPERATING_HOURS, OPERATING_HOURS_KEY, OPERATING_HOURS_LABEL, OPERATING_HOURS_ERROR, parseOperatingHours } from "@/lib/operatingHours";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
   const decode = (row: { id: string; label: string; key: string; value: string }) => ({ ...row, value: decryptSetting(row.value), secret: secretSetting(row.key) });
   if (req.method === "GET") {
     await prisma.globalSetting.createMany({ data: [
+      { key: OPERATING_HOURS_KEY, label: OPERATING_HOURS_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_OPERATING_HOURS)) },
       { key: WARMUP_DAILY_LIMITS_KEY, label: WARMUP_DAILY_LIMITS_LABEL, value: encryptSetting(DEFAULT_WARMUP_DAILY_LIMITS.join(",")) },
       { key: DEVICE_DAILY_QUOTA_KEY, label: DEVICE_DAILY_QUOTA_LABEL, value: encryptSetting(String(DEFAULT_DEVICE_DAILY_QUOTA)) },
       { key: EMAIL_FROM_KEY, label: EMAIL_FROM_LABEL, value: encryptSetting(DEFAULT_EMAIL_FROM) },
@@ -48,6 +50,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (key === WARMUP_DAILY_LIMITS_KEY && parseWarmupDailyLimits(value) === null) return res.status(400).json({ message: WARMUP_LIMITS_ERROR });
   if (key === DEVICE_DAILY_QUOTA_KEY && parseDeviceDailyQuota(value) === null) return res.status(400).json({ message: "Kuota harian harus berupa bilangan bulat 1–100000." });
   if (key === DISPATCH_DELAY_KEY && parseDispatchDelayRange(value) === null) return res.status(400).json({ message: "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai." });
+  if (key === OPERATING_HOURS_KEY && parseOperatingHours(value) === null) return res.status(400).json({ message: OPERATING_HOURS_ERROR });
   if (key === PHONE_FORM_FIELDS_KEY && parsePhoneFormFields(value) === null) return res.status(400).json({ message: "Pilih input form perangkat yang valid, tanpa duplikasi." });
   if (key === POSTMARK_TOKEN_KEY && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) return res.status(400).json({ message: "Format token server Postmark tidak valid." });
   if (key === EMAIL_FROM_KEY && !emailFromInput.safeParse(value).success) return res.status(400).json({ message: "Masukkan alamat email pengirim yang valid." });

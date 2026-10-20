@@ -35,10 +35,11 @@ function load(file, mocks) {
   };
   const safety = load('src/server/messaging/safety.ts', {
     '../../lib/warmupSettings': { DEFAULT_WARMUP_DAILY_LIMITS: [25] },
+    '../../lib/operatingHours': load('src/lib/operatingHours.ts', { zod: require('zod') }),
     '../../lib/dispatchPresentation': { dispatchErrorLabels: {} }, '../dispatchWebhook/events': {},
     '../../lib/prisma': { prisma: db }, '../../utils/normalizePhoneRecipient': { normalizePhoneRecipient: number => number },
     '../../lib/deviceQuota': { deviceDailyQuota: p => p.dailyLimit },
-    '../dispatch/settings': { getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 0, maxSeconds: 0 }), getWarmupDailyLimits: async () => [25] },
+    '../dispatch/settings': { getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 0, maxSeconds: 0 }), getWarmupDailyLimits: async () => [25] },
     '../dispatch/timing': { randomDispatchDelay: () => 0 }, '../../lib/deviceSendInterval': {},
   });
   const send = () => safety.reserveSend('owner', 'phone', '628123@s.whatsapp.net');

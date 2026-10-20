@@ -50,6 +50,8 @@ model DeviceSendPolicy {
   phoneId            String    @id @db.VarChar(36)
   dailyLimit         Int       @default(200)
   useGlobalQuota     Boolean   @default(true)
+  // NULL follows the global schedule; an object overrides it for this device.
+  operatingHours     Json?
   minIntervalSeconds Int?
   maxIntervalSeconds Int?
   adaptiveEnabled    Boolean   @default(true)
@@ -89,6 +91,10 @@ model WaDispatch {
   id            String           @id @default(uuid()) @db.VarChar(36)
   userId        String           @db.VarChar(36)
   phoneId       String           @db.VarChar(36)
+  // phoneId remains the token identity; senderPhoneId is the actual transport.
+  senderPhoneId String?          @db.VarChar(36)
+  senderGroupId String?          @db.VarChar(36)
+  sendAttempts  WaDispatchAttempt[]
   storeId       String           @db.VarChar(64)
   transactionId String           @db.VarChar(128)
   messageKey    String           @db.VarChar(64)
@@ -124,8 +130,38 @@ model WaDispatch {
   @@index([phoneId, storeId, transactionId])
   @@index([userId, createdAt])
   @@index([requestJobKey])
+  @@index([senderPhoneId, messageId])
   @@index([campaignId, status])
   @@map("wa_dispatches")
+}
+
+model WaDispatchAttempt {
+  id           String     @id @default(uuid()) @db.VarChar(36)
+  dispatchId   String     @db.VarChar(36)
+  dispatch     WaDispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  phoneId      String     @db.VarChar(36)
+  messageId    String     @db.VarChar(64)
+  status       String     @default("PROCESSING") @db.VarChar(16)
+  error        String?    @db.VarChar(128)
+  startedAt    DateTime   @default(now())
+  finishedAt   DateTime?
+
+  @@index([dispatchId, startedAt])
+  @@index([phoneId, messageId])
+  @@map("wa_dispatch_attempts")
+}
+
+model SenderGroup {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(191)
+  name      String   @db.VarChar(100)
+  enabled   Boolean  @default(true)
+  phones    Phone[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@map("sender_groups")
 }
 
 model WaSenderLease {
@@ -266,6 +302,9 @@ model Phone {
   token                String             @unique @default(uuid())
   user                 User               @relation(fields: [userId], references: [id], onDelete: NoAction)
   userId               String
+  senderGroupId        String?            @db.VarChar(36)
+  senderGroup          SenderGroup?       @relation(fields: [senderGroupId], references: [id], onDelete: SetNull)
+  senderPriority       Int                @default(0)
   auto_replies         AutoReply[]
   is_save_group        Boolean            @default(value: false) @map("is_save_group")
   active               Int                @default(value: 1)
@@ -281,6 +320,7 @@ model Phone {
   createdAt            DateTime           @default(now()) @map(name: "created_at")
   updatedAt            DateTime           @updatedAt @map(name: "updated_at")
 
+  @@index([senderGroupId, senderPriority])
   @@map(name: "phones")
 }
 

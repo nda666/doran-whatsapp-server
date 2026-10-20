@@ -61,6 +61,7 @@ export function prepareDispatch(phoneId: string, userId: string, body: any) {
 }
 
 export const dispatchSummary = (job: any) => ({ id: job.id, recipient: job.recipient, status: job.status,
+  device_id: job.phoneId, sender_device_id: job.senderPhoneId || job.phoneId, sender_group_id: job.senderGroupId || null,
   message_id: job.messageId, attempts: job.attempts, error: job.lastError, created_at: job.createdAt,
   next_attempt_at: job.status === "QUEUED" ? job.nextAttemptAt : null,
   sent_at: job.sentAt, delivered_at: job.deliveredAt, read_at: job.readAt });

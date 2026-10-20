@@ -16,7 +16,8 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") return res.status(405).end();
   if (typeof req.query.id === "string") {
     const job = await prisma.waDispatch.findFirst({ where: { id: req.query.id, ...ownerScope(req.user!) },
-      select: { id: true, recipient: true, status: true, message: true, image: true, payload: true,
+      select: { id: true, phoneId: true, senderPhoneId: true, senderGroupId: true, recipient: true, status: true, message: true, image: true, payload: true,
+        sendAttempts: { orderBy: { startedAt: "asc" }, select: { id: true, phoneId: true, messageId: true, status: true, error: true, startedAt: true, finishedAt: true } },
         media: { select: { name: true, originalName: true, mime: true } } } });
     if (!job) return res.status(404).json({ message: "Pesan tidak ditemukan atau tidak dapat diakses." });
     return res.json({ ...job, content_available: !!(job.message || job.image || job.payload || job.media) });
@@ -54,10 +55,11 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     prisma.waDispatch.findMany({ where, take: limit, skip, orderBy, include: { campaign: { select: { status: true, scheduledAt: true } } } }),
     prisma.waDispatch.groupBy({ by: ["status"], where: req.query.summary_filtered === "1" ? where : displayScope, _count: { _all: true } }),
   ]);
-  const phones = await prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: Array.from(new Set(jobs.map(job => job.phoneId))) } }, select: { id: true, name: true, number: true, active: true, status: true } });
+  const phones = await prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: Array.from(new Set(jobs.flatMap(job => [job.phoneId, job.senderPhoneId || job.phoneId]))) } }, select: { id: true, name: true, number: true, active: true, status: true } });
   return res.status(200).json({ result: true, total, page, max_age_days: maxAgeDays, display_cutoff: cutoff, counts: Object.fromEntries(counts.map(item => [item.status, item._count._all])),
     data: jobs.map(job => ({ ...dispatchSummary(job), updated_at: job.updatedAt, job_id: job.clientJobId, transaction_id: job.transactionId, store_id: job.storeId,
       message_key: job.messageKey, source: job.source, waiting_reason: dispatchWaitingReason(job, phones.find(phone => phone.id === job.phoneId)),
-      sender: phones.find(phone => phone.id === job.phoneId)?.number || job.phoneId })) });
+      sender: phones.find(phone => phone.id === (job.senderPhoneId || job.phoneId))?.number || job.senderPhoneId || job.phoneId,
+      origin_sender: phones.find(phone => phone.id === job.phoneId)?.number || job.phoneId })) });
 }
 export default apiAuthMiddleware(handler);

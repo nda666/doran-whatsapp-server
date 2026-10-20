@@ -18,7 +18,9 @@ CI tidak menggunakan database, secret, sesi WhatsApp, atau email produksi.
 Tes `verify-*-live` sengaja tidak dijalankan. Lint warning dilaporkan; error memblokir.
 Schema drift atau migration history yang tidak bisa direplay pada database CI
 memblokir checks. Database produksi diperlakukan sebagai acuan terbaru dan
-tidak dimigrasikan oleh deploy.
+tidak menjalankan ulang riwayat migrasi saat deploy. Pengecualian tambahan struktur
+untuk grup pengirim dan jam operasional disetujui pengguna pada 20 Oktober 2026,
+dibatasi secara eksplisit oleh `cd-feature-schema.cjs` seperti dijelaskan di bawah.
 
 ## Konfigurasi GitHub sekali
 
@@ -59,21 +61,30 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - Database produksi hanya dibaca dan dicatat. Tidak ada `migrate deploy`,
   `migrate resolve`, reset, `db push`, seed, atau penulisan riwayat migration.
   Guard command menolak perintah Prisma yang dapat mengubah database.
+- Pengecualian yang disetujui hanya `20261020030000_sender_groups` dan
+  `20261020040000_operating_hours`: helper memverifikasi SHA-256 SQL, memeriksa
+  seluruh diff agar tidak ada perubahan lain, lalu menambahkan tabel/kolom/index/
+  foreign key yang belum ada setelah aplikasi berhenti dan kedua backup selesai.
+  Tidak ada DML, penghapusan, pengubahan kolom lama, replay migrasi lama, atau
+  penulisan `_prisma_migrations`. Eksekusi idempotent dan hasil setiap tambahan
+  dicatat di backup privat `feature-schema-result.json`. Diff akhir harus nol.
 - Simpan nama/checksum migration yang sudah diterapkan, perbedaan checksum,
   migration yang belum tercatat, dan migration belum selesai dalam
   `migration-inventory.json`. Perbedaan riwayat bersifat catatan; tidak dieksekusi
   atau ditandai applied secara otomatis. Termasuk migration penyelarasan legacy
   dalam source: hanya untuk replay database CI/install baru.
 - `prisma migrate diff` hanya membandingkan schema secara read-only. Schema
-  aktual harus sesuai kebutuhan kode sebelum aplikasi dihentikan. Bila berbeda,
-  hentikan deploy dan sesuaikan source dengan database produksi yang menjadi acuan.
+  aktual harus sesuai kebutuhan kode atau hanya berbeda pada tambahan yang
+  diizinkan helper sebelum aplikasi dihentikan. Perbedaan lain memblokir deploy.
 - Stop hanya `doran-whatsapp` setelah build lulus. Ada jeda layanan selama
   backup dan promosi; durasinya tergantung ukuran database/storage.
 - Backup database penuh (`mysqldump --single-transaction`), env dan storage
   ke direktori privat `/home/jeblast/backups/doran-cd-*`.
 - Simpan hitungan record seluruh tabel sebelum/sesudah persiapan deploy.
-  Seluruh tabel, jumlah record, dan isi catatan `_prisma_migrations` wajib tetap
-  sama sebelum aplikasi dijalankan kembali; perubahan memblokir promosi.
+  Seluruh tabel lama, jumlah record, dan isi catatan `_prisma_migrations` wajib
+  tetap sama sebelum aplikasi dijalankan kembali. Hanya tabel baru `sender_groups`
+  dan `wa_dispatch_attempts` yang boleh ditambahkan dengan nol record. Perubahan
+  lain memblokir promosi.
 - Periksa hash env dan seluruh file auth WhatsApp sebelum restart.
 - Tukar source, dependencies, Prisma client, serta runtime sebagai satu promosi
   yang dapat dipulihkan. `.env*`, `storage`, dan `.git` tetap di lokasi asli.
@@ -94,8 +105,10 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 
 Backup database tidak otomatis direstore: restore otomatis dapat menghapus pesan
 baru. Deploy aplikasi mempertahankan schema, isi record, dan riwayat migration
-produksi. Pengujian migration dan restore yang menulis database hanya berjalan
-pada database CI sementara.
+produksi, kecuali tambahan struktur yang disebutkan di atas. Pengujian replay
+seluruh migration dan restore hanya berjalan pada database CI sementara. Jika
+runtime harus dirollback, tambahan nullable/defaulted tetap dipertahankan agar
+data tidak dihapus; runtime lama tetap dapat memakai schema tersebut.
 
 ## Apa yang dibuktikan
 

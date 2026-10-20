@@ -17,6 +17,9 @@ export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; s
     if (job.campaign.status === "CANCELLED") return "Campaign dibatalkan; pesan tidak akan diproses.";
     if (job.campaign.scheduledAt > now) return "Menunggu jadwal campaign.";
   }
+  if (job.lastError === "SENDER_GROUP_UNAVAILABLE") return dispatchErrorLabels.SENDER_GROUP_UNAVAILABLE;
+  if (job.lastError === "OUTSIDE_OPERATING_HOURS") return dispatchErrorLabels.OUTSIDE_OPERATING_HOURS;
+  if (job.lastError === "SENDER_REJECTED_RETRY") return dispatchErrorLabels.SENDER_REJECTED_RETRY;
   if (!phone) return "Perangkat pengirim tidak ditemukan; menunggu pemeriksaan sistem.";
   if (phone.active !== 1) return "Menunggu perangkat pengirim diaktifkan.";
   if (phone.status !== "OPEN" || job.lastError === "DEVICE_OFFLINE") return "Menunggu perangkat pengirim terhubung ke WhatsApp.";
@@ -28,6 +31,9 @@ export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; s
 }
 
 export const dispatchErrorLabels: Record<string, string> = {
+  OUTSIDE_OPERATING_HOURS: "Menunggu jam operasional pengiriman nomor (WIB).",
+  SENDER_GROUP_UNAVAILABLE: "Menunggu nomor dalam grup yang online, aktif, tidak dijeda, dan memiliki kuota pengiriman.",
+  SENDER_REJECTED_RETRY: "Pengiriman ditolak oleh WhatsApp; nomor tersebut dijeda. Menunggu nomor cadangan dalam grup.",
   RECIPIENT_ID_UNRESOLVED: "Identitas penerima belum dapat dipetakan ke nomor telepon. Tunggu sinkronisasi kontak sebelum mencoba kembali.",
   RECIPIENT_OPTED_OUT: "Penerima berhenti berlangganan atau diblokir admin.",
   DEVICE_DAILY_LIMIT: "Batas percobaan pengiriman harian tercapai.",

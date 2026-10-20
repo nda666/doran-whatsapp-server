@@ -23,8 +23,12 @@ async function update({ where, data }) {
   transitions.push(row.status); return { count: 1 };
 }
 const prisma = {
+  recipientSuppression: { findUnique: async () => null },
   waSenderLease: { updateMany: async () => ({ count: 1 }), findFirst: async () => ({}) },
-  phone: { findUnique: async () => ({ active: 1, showTyping: true }) },
+  phone: { findUnique: async () => ({ id: 'phone', userId: 'owner', active: 1, showTyping: true }), findMany: async () => [{ id: 'phone', userId: 'owner', active: 1, showTyping: true }] },
+  deviceSendPolicy: { findUnique: async () => null, updateMany: async () => ({ count: 1 }) },
+  deviceDailyUsage: { updateMany: async () => ({ count: 1 }) },
+  waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async () => ({ count: 1 }) },
   waDispatch: {
     findFirst: async ({ where }) => matches(row, where) ? { ...row } : null,
     findUnique: async () => { if (beforeRead) { const fn = beforeRead; beforeRead = null; await fn(); } return { ...row }; },
@@ -49,7 +53,7 @@ const stubs = {
   'src/lib/prisma.ts': { prisma },
   'src/server/dispatchWebhook/events.ts': { updateDispatches: update },
   'src/server/libs/makeWASocket.ts': { session: new Map([['phone', socket]]) },
-  'src/server/dispatch/settings.ts': { getDispatchAgeCutoff: async () => new Clock(0), getDispatchQueueOrder: async () => 'oldest', getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 1 }), dispatchDeadline: () => ({}) },
+  'src/server/dispatch/settings.ts': { getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getDispatchAgeCutoff: async () => new Clock(0), getDispatchQueueOrder: async () => 'oldest', getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 1 }), dispatchDeadline: () => ({}) },
   'src/server/dispatch/media.ts': {}, 'src/server/campaigns/media.ts': {}, 'src/server/campaigns/content.ts': {},
 };
 const cache = {};
@@ -74,7 +78,7 @@ const retry = load('src/server/dispatch/retry.ts');
 const worker = load('src/server/dispatch/worker.ts');
 const receipts = load('src/server/dispatch/receipts.ts');
 function reset() {
-  row = { id: 'dispatch', phoneId: 'phone', status: 'QUEUED', messageId: null, sentAt: null, deliveredAt: null, readAt: null,
+  row = { id: 'dispatch', phoneId: 'phone', senderPhoneId: null, senderGroupId: null, source: 'API', status: 'QUEUED', messageId: null, sentAt: null, deliveredAt: null, readAt: null,
     attempts: 0, nextAttemptAt: new Clock(0), createdAt: new Clock(now - 1000), lastError: null, recipient: 'mock', message: 'test', campaignId: null };
   sends = []; mode = 'timeout'; timers.clear(); beforeRead = null;
 }

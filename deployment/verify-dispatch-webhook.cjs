@@ -32,6 +32,7 @@ function reset() {
   dispatches = []; phone = { ...initialPhone }; jobs = []; requests = []; failDelivery = false;
 }
 const tx = {
+  waDispatchAttempt: { updateMany: async () => ({ count: 0 }) },
   recipientSuppression: { findMany: async () => [] },
   $queryRaw: async (strings, id) => strings.join('').includes('SELECT status') ? (dispatches.filter(j => j.id === id).map(j => ({status:j.status}))) : [],
   waDispatch: {
@@ -77,7 +78,7 @@ async function api(body, method = 'POST', user = { id: 'admin', role: 'ADMIN', e
 }
 
 const receipts = load('src/server/dispatch/receipts.ts', {'../dispatchWebhook/events':helpers, '../../lib/prisma':{prisma:db}});
-const job = () => ({id:'dispatch-1',clientJobId:'kasir-job-1',dedupeKey:'dedupe-1',phoneId:'phone-1',userId:'owner',storeId:'store-1',transactionId:'trx-1',messageKey:'default',recipient:'6281234567890',status:'QUEUED',attempts:0,message:'private-message',image:'private-image',messageId:'message-1',createdAt:new Date(),updatedAt:new Date()});
+const job = () => ({id:'dispatch-1',clientJobId:'kasir-job-1',dedupeKey:'dedupe-1',phoneId:'phone-1',senderPhoneId:null,senderGroupId:null,userId:'owner',storeId:'store-1',transactionId:'trx-1',messageKey:'default',recipient:'6281234567890',status:'QUEUED',attempts:0,message:'private-message',image:'private-image',messageId:'message-1',createdAt:new Date(),updatedAt:new Date()});
 (async()=>{
  reset(); config.enabled=false; await helpers.createDispatches(tx,{data:[job()]}); assert.equal(jobs.length,0);
  reset(); await helpers.createDispatches(tx,{data:[job()]}); assert.equal(jobs.length,1); let payload=JSON.parse(jobs[0].payload); assert.equal(payload.event,'dispatch.status_changed'); assert.equal(payload.previous_status,null); assert.equal(payload.dispatch.job_id,'kasir-job-1'); assert.equal(payload.dispatch.transaction_id,'trx-1'); assert(!JSON.stringify(payload).includes('private-message')); assert(!JSON.stringify(payload).includes('private-image'));

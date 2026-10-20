@@ -35,7 +35,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       // Recheck the snapshot and receipts atomically; a second reset cannot revive a claimed job.
       const changed = await updateDispatches({ where: { ...scope, status: job.status, updatedAt: job.updatedAt,
         sentAt: null, deliveredAt: null, readAt: null }, data: {
-        status: "QUEUED", attempts: 0, messageId: null, lastError: null, leaseToken: null, leaseUntil: null,
+        status: "QUEUED", attempts: 0, messageId: null, senderPhoneId: null, lastError: null, leaseToken: null, leaseUntil: null,
         createdAt: now, nextAttemptAt: now, expiresAt: new Date(now.getTime() + 86400000),
       } }, tx);
       if (changed.count !== 1) throw new DispatchError(409, "Status pengiriman telah berubah. Refresh data sebelum mencoba lagi.");

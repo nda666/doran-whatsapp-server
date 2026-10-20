@@ -38,7 +38,7 @@ async function safetyTests() {
     $transaction: fn => { const next = chain.then(() => fn(db)); chain = next.catch(() => {}); return next; },
   };
   let globalSeconds = 0, globalQuota = 200;
-  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalDeviceQuota: async () => globalQuota, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
+  const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => globalQuota, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
   const safety = load('src/server/messaging/safety.ts');
   assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'STOP'), false);
   enabled = true;
@@ -233,7 +233,8 @@ async function sharedCooldownTests() {
   let finalLease, cooldown = new Date(Date.now() + 20000);
   const job = { id: 'synthetic-job', userId: 'a', phoneId: 'p', recipient: '6280000000000', campaignId: null, payload: null, media: null, image: null, message: 'fixture', attempts: 0, messageId: null };
   const db = {
-    phone: { findUnique: async () => ({ active: 1 }) },
+    phone: { findUnique: async () => ({ id: 'p', userId: 'a', active: 1 }) },
+    waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async () => ({ count: 1 }) },
     waSenderLease: { updateMany: async ({ data }) => { if (data.nextSendAt) finalLease = data; return { count: 1 }; }, findFirst: async () => ({}) },
     waDispatch: { findFirst: async () => job, findUnique: async () => ({ status: 'PROCESSING' }) },
     deviceSendPolicy: { findUnique: async () => ({ nextAllowedAt: cooldown }) },
@@ -247,7 +248,7 @@ async function sharedCooldownTests() {
     'src/server/libs/makeWASocket.ts': { session: new Map([['p', { ws: { isOpen: true }, user: { id: 'synthetic-user' }, sendMessage: async () => ({ key: { id: 'synthetic-message' } }), waitForMessage() {} }]]) },
     'src/server/libs/phoneMaintenance.ts': { phoneMaintenance: new Set() },
     'src/server/dispatch/media.ts': {}, 'src/server/campaigns/media.ts': {}, 'src/server/campaigns/content.ts': {},
-    'src/server/dispatch/settings.ts': { getDispatchAgeCutoff: async () => new Date(0), getDispatchQueueOrder: async () => 'oldest', getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 30, maxSeconds: 30 }), dispatchDeadline: () => ({}) },
+    'src/server/dispatch/settings.ts': { getDispatchAgeCutoff: async () => new Date(0), getDispatchQueueOrder: async () => 'oldest', getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 30, maxSeconds: 30 }), dispatchDeadline: () => ({}) },
     'src/server/dispatch/receipts.ts': { recordDispatchReceipt: async () => {} },
     'src/server/dispatch/acknowledgement.ts': { waitForDispatchAcknowledgement: async () => ({ attrs: {} }) },
   };

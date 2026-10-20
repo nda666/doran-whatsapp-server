@@ -14,6 +14,8 @@ import { DISPATCH_DELAY_KEY, DEFAULT_DISPATCH_DELAY, MAX_DISPATCH_DELAY_SECONDS,
 import { DEFAULT_PHONE_FORM_FIELDS, PHONE_FORM_FIELDS, PHONE_FORM_FIELDS_KEY, parsePhoneFormFields } from "@/lib/phoneFormFields";
 
 import styles from "@/styles/GlobalSettings.module.css";
+import OperatingHoursFields from "./OperatingHoursFields";
+import { DEFAULT_OPERATING_HOURS, OPERATING_HOURS_KEY, operatingHoursLabel, parseOperatingHours, type OperatingHours } from "@/lib/operatingHours";
 
 const fieldDescriptions = (uiText: UiTranslator): Record<string, string> => ({
   saveIncomingMessages: uiText("Penyimpanan pesan di menu Percakapan."),
@@ -25,9 +27,10 @@ const fieldDescriptions = (uiText: UiTranslator): Record<string, string> => ({
 });
 
 type Setting = { id: string; label: string; key: string; value: string; secret: boolean };
-type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[] };
+type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[]; operatingHours?: OperatingHours };
 const generalHelp = (uiText: UiTranslator) => (uiText("Pengaturan global berlaku untuk seluruh aplikasi. Key dibuat sebagai slug dan tidak dapat diubah setelah disimpan."));
 const settingHelp = (uiText: UiTranslator): Record<string, string> => ({
+  [OPERATING_HOURS_KEY]: uiText("Jam pengiriman setiap hari dalam WIB. Nomor mengikuti jadwal global kecuali memiliki jadwal khusus. Jadwal khusus menggantikan jadwal global untuk nomor tersebut. Di luar jadwal, pesan antrean menunggu tanpa mengonsumsi percobaan atau kuota. Batas usia antrean tetap berlaku. Perubahan terbaca pada pemeriksaan berikutnya tanpa restart."),
   [WARMUP_DAILY_LIMITS_KEY]: uiText("Batas percobaan per hari untuk setiap tahap pemanasan, dipisahkan koma. Contoh: 25,50,100,200,350,500. Setiap tahap berlangsung dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum. Perubahan berlaku pada pengiriman berikutnya tanpa mengulang tanggal mulai pemanasan."),
   [DEVICE_DAILY_QUOTA_KEY]: uiText("Kuota percobaan pengiriman per nomor per hari (WIB). Berlaku untuk nomor yang mengikuti kuota global. Nomor custom memakai batasnya sendiri; batas pemanasan tetap berlaku. Perubahan berlaku pada pengiriman berikutnya tanpa restart."),
   [EMAIL_FROM_KEY]: uiText("Alamat pengirim untuk seluruh email aplikasi, termasuk reset password, notifikasi admin, dan proses lain yang memerlukan pengiriman email. Gunakan alamat atau domain pengirim yang sudah diverifikasi pada server Postmark. Perubahan berlaku untuk pengiriman berikutnya tanpa restart."),
@@ -59,15 +62,16 @@ export default function GlobalSettings() {
   const fieldsSetting = (editing?.key || formKey) === PHONE_FORM_FIELDS_KEY;
   const delaySetting = (editing?.key || formKey) === DISPATCH_DELAY_KEY;
   const senderSetting = (editing?.key || formKey) === EMAIL_FROM_KEY;
+  const hoursSetting = (editing?.key || formKey) === OPERATING_HOURS_KEY;
   const show = (setting?: Setting) => {
     setEditing(setting); form.resetFields();
     const range = setting?.key === DISPATCH_DELAY_KEY ? parseDispatchDelayRange(setting.value) || DEFAULT_DISPATCH_DELAY : DEFAULT_DISPATCH_DELAY;
-    form.setFieldsValue({ ...(setting || { label: "", key: "", value: "" }), ...range, visibleFields: setting?.key === PHONE_FORM_FIELDS_KEY ? parsePhoneFormFields(setting.value) || DEFAULT_PHONE_FORM_FIELDS : DEFAULT_PHONE_FORM_FIELDS }); setOpen(true);
+    form.setFieldsValue({ ...(setting || { label: "", key: "", value: "" }), ...range, operatingHours: setting?.key === OPERATING_HOURS_KEY ? parseOperatingHours(setting.value) || DEFAULT_OPERATING_HOURS : DEFAULT_OPERATING_HOURS, visibleFields: setting?.key === PHONE_FORM_FIELDS_KEY ? parsePhoneFormFields(setting.value) || DEFAULT_PHONE_FORM_FIELDS : DEFAULT_PHONE_FORM_FIELDS }); setOpen(true);
   };
   const save = async (values: Values) => {
     setBusy(true);
     try {
-      const data = { label: values.label, value: fieldsSetting ? JSON.stringify(values.visibleFields || []) : delaySetting ? JSON.stringify({ minSeconds: values.minSeconds, maxSeconds: values.maxSeconds }) : String(values.value), ...(editing ? { id: editing.id } : { key: values.key || "" }) };
+      const data = { label: values.label, value: hoursSetting ? JSON.stringify(values.operatingHours) : fieldsSetting ? JSON.stringify(values.visibleFields || []) : delaySetting ? JSON.stringify({ minSeconds: values.minSeconds, maxSeconds: values.maxSeconds }) : String(values.value), ...(editing ? { id: editing.id } : { key: values.key || "" }) };
       await axios({ method: editing ? "PATCH" : "POST", url: "/api/admin/global-settings", data, headers: api.headers, timeout: 15000 });
       message.success(uiText("Setting berhasil disimpan.")); setOpen(false); api.reload();
     } catch (error: unknown) {
@@ -82,7 +86,7 @@ export default function GlobalSettings() {
       { title: uiText("Key"), dataIndex: "key", render: (value: string) => <code>{value}</code> },
       { title: uiText("Value"), dataIndex: "value", width: 320, render: (value: string, row) => row.secret
         ? <Input.Password readOnly value={value} autoComplete="off" aria-label={uiText("Value {{v0}}", { v0: row.label })} />
-        : <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 100, overflow: "auto" }}>{row.key === PHONE_FORM_FIELDS_KEY ? (() => { const fields = parsePhoneFormFields(value); return fields ? fields.length ? PHONE_FORM_FIELDS.filter(field => fields.includes(field.value)).map(field => uiText(field.label)).join(", ") : uiText("Semua input tambahan disembunyikan") : value; })() : row.key === DISPATCH_DELAY_KEY ? (() => { const range = parseDispatchDelayRange(value); return range ? uiText("{{v0}}–{{v1}} detik", { v0: range.minSeconds, v1: range.maxSeconds }) : value; })() : row.key === DISPATCH_QUEUE_ORDER_KEY ? uiText(DISPATCH_QUEUE_ORDER_OPTIONS.find(option => option.value === value)?.label || value) : value}</div> },
+        : <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 100, overflow: "auto" }}>{row.key === OPERATING_HOURS_KEY ? (() => { const hours = parseOperatingHours(value); return hours ? operatingHoursLabel(hours) : value; })() : row.key === PHONE_FORM_FIELDS_KEY ? (() => { const fields = parsePhoneFormFields(value); return fields ? fields.length ? PHONE_FORM_FIELDS.filter(field => fields.includes(field.value)).map(field => uiText(field.label)).join(", ") : uiText("Semua input tambahan disembunyikan") : value; })() : row.key === DISPATCH_DELAY_KEY ? (() => { const range = parseDispatchDelayRange(value); return range ? uiText("{{v0}}–{{v1}} detik", { v0: range.minSeconds, v1: range.maxSeconds }) : value; })() : row.key === DISPATCH_QUEUE_ORDER_KEY ? uiText(DISPATCH_QUEUE_ORDER_OPTIONS.find(option => option.value === value)?.label || value) : value}</div> },
       { title: uiText("Aksi"), width: 90, render: (_, row) => <Button icon={<EditOutlined />} onClick={() => show(row)} aria-label={uiText("Edit setting {{v0}}", { v0: row.label })}>{uiText("Edit")}</Button> },
     ]} />
     <Modal centered={fieldsSetting} width={fieldsSetting ? 680 : 520} title={fieldsSetting ? uiText("Tampilan form perangkat") : editing ? uiText("Edit setting") : uiText("Tambah setting")} open={open} onCancel={() => !busy && setOpen(false)} footer={fieldsSetting ? <div className={styles.footer}>
@@ -92,7 +96,7 @@ export default function GlobalSettings() {
       <Form id="global-setting-form" className={fieldsSetting ? styles.visibilityBody : undefined} form={form} layout="vertical" disabled={busy} onFinish={save} requiredMark={false}>
         <Form.Item hidden={fieldsSetting && !!editing} name="label" label={uiText("Label")} rules={[{ required: true, whitespace: true, message: uiText("Label wajib diisi.") }, { max: 200 }]}><Input maxLength={200} /></Form.Item>
         <Form.Item hidden={fieldsSetting && !!editing} name="key" label={uiText("Key")} extra={editing ? uiText("Key tidak dapat diubah setelah dibuat.") : uiText("Opsional. Jika kosong, key dibuat dari label. Contoh: Postmark Server Token → postmark-server-token.")}><Input disabled={!!editing || busy} maxLength={200} placeholder={uiText("Otomatis dari label")} /></Form.Item>
-        {fieldsSetting ? <>
+        {hoursSetting ? <><OperatingHoursFields name="operatingHours" /><Alert type="info" showIcon message={settingHelp(uiText)[OPERATING_HOURS_KEY]} /></> : fieldsSetting ? <>
           <p className={styles.intro}>{uiText("Pilih input yang muncul saat menambah atau mengedit perangkat. Berlaku untuk semua pengguna.")}</p>
           <div className={styles.selectionHeading}>
             <div className={styles.selectionTitle}>{uiText("Input yang ditampilkan")}<span className={styles.count}>{selectedFields.length}  {uiText("dari")} {PHONE_FORM_FIELDS.length}</span></div>

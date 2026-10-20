@@ -4,7 +4,8 @@ import { updateDispatches } from "../dispatchWebhook/events";
 import { prisma } from "../../lib/prisma";
 import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 import { deviceDailyQuota } from "../../lib/deviceQuota";
-import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits } from "../dispatch/settings";
+import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits, getGlobalOperatingHours } from "../dispatch/settings";
+import { effectiveOperatingHours, operatingHoursState } from "../../lib/operatingHours";
 import { randomDispatchDelay } from "../dispatch/timing";
 import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
 
@@ -47,10 +48,13 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
   const globalQuota = await getGlobalDeviceQuota();
   const globalRange = await getDispatchDelayRange();
   const warmupLimits = await getWarmupDailyLimits();
+  const globalHours = await getGlobalOperatingHours();
   await prisma.deviceSendPolicy.createMany({ data: [{ phoneId }], skipDuplicates: true });
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT phoneId FROM device_send_policies WHERE phoneId = ${phoneId} FOR UPDATE`;
     const policy = await tx.deviceSendPolicy.findUniqueOrThrow({ where: { phoneId } });
+    const hours = operatingHoursState(effectiveOperatingHours(globalHours, policy.operatingHours));
+    if (!hours.open) throw new SendGuardError("OUTSIDE_OPERATING_HOURS", hours.nextOpenAt!);
     const day = usageDay();
     const usage = await tx.deviceDailyUsage.upsert({ where: { phoneId_day: { phoneId, day } }, create: { phoneId, day }, update: {} });
     const health = healthAssessment(usage.attempts, usage.failures);

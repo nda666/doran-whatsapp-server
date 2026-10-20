@@ -107,8 +107,14 @@ def enforce_read_only_prisma(command):
         raise RuntimeError('Production database is read-only: Prisma command blocked')
 
 
-def compare_counts(before, after):
-    if before['counts'] != after['counts']:
+def compare_counts(before, after, added_tables=()):
+    # Only explicitly approved, newly created empty feature tables may be added.
+    expected = dict(before['counts'])
+    for table in added_tables:
+        if table not in {'sender_groups', 'wa_dispatch_attempts'} or table in expected:
+            raise RuntimeError('Unexpected schema table addition')
+        expected[table] = '0'
+    if expected != after['counts']:
         raise RuntimeError('Database tables or row counts changed while stopped')
     if before['migrations'] != after['migrations']:
         raise RuntimeError('Production migration history changed while stopped')
@@ -206,13 +212,17 @@ def main():
     run(['node', 'deployment/ci-tests.cjs'])
     before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
     (backup / 'migration-inventory.json').write_text(json.dumps(migration_inventory(before, stage)))
-    # Comparison only: production already contains the authoritative schema.
+    # Default remains read-only. The user approved only the two additive feature
+    # upgrades; validate the entire diff before stopping or touching production.
     schema_command = ['npx', '--no-install', 'prisma', 'migrate', 'diff',
                       '--from-schema-datasource', 'prisma/schema.prisma',
                       '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code']
-    comparison = run(schema_command, capture=True)
-    (backup / 'schema-comparison.txt').write_bytes(comparison)
-    print('BUILD_TESTS_READ_ONLY_DATABASE_PREFLIGHT_OK', flush=True)
+    plan_path = backup / 'schema-feature-plan.sql'
+    diff_script = schema_command[:-1] + ['--script']
+    plan_path.write_bytes(run(diff_script, capture=True))
+    upgrade_plan = json.loads(run(['node', 'deployment/cd-feature-schema.cjs', 'plan', str(plan_path)], capture=True))
+    (backup / 'feature-schema-plan.json').write_text(json.dumps(upgrade_plan))
+    print('BUILD_TESTS_APPROVED_SCHEMA_PREFLIGHT_OK', len(upgrade_plan['pending']), flush=True)
     if (APP / '.next/BUILD_ID').read_bytes() != active_build:
         raise RuntimeError('Another deployment changed the active build')
 
@@ -246,10 +256,13 @@ def main():
         print('DATABASE_BACKUP_DONE_STORAGE_BACKUP_STARTED', flush=True)
         backup_private_files(APP, backup / 'storage-and-env.tar')
         print('STORAGE_BACKUP_DONE', flush=True)
-        # Audit/backup only. Never migrate, resolve, reset, db push, seed or restore production.
+        # Never replay/resolve historical migrations or mutate existing records.
+        # Only hash-pinned nullable/defaulted additions run after both backups.
+        run(['node', 'deployment/cd-feature-schema.cjs', 'apply', str(plan_path), str(backup)])
+        upgrade_result = json.loads((backup / 'feature-schema-result.json').read_text())
         run(schema_command)
         after = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
-        compare_counts(before, after)
+        compare_counts(before, after, upgrade_result['created_tables'])
         print('DATABASE_AUDIT_UNCHANGED_AUTH_ENV_RECHECK_STARTED', flush=True)
         if private_hashes(APP) != frozen:
             raise RuntimeError('Environment or WhatsApp session changed during deployment')

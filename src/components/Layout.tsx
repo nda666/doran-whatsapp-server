@@ -46,6 +46,7 @@ export default function Layout({ children, title }: { title?: string; children: 
     { href: "/dashboard", label: t("dashboard"), icon: <DashboardOutlined /> },
     { href: "/dashboard/conversations", label: uiText("Percakapan"), icon: <MessageOutlined /> },
     { href: "/dashboard/phone", label: t("phone_devices"), icon: <WhatsAppOutlined /> },
+    { href: "/dashboard/sender-groups", label: uiText("Grup pengirim"), icon: <WhatsAppOutlined /> },
     { href: "/dashboard/campaigns", label: uiText("Kampanye pesan"), icon: <SendOutlined /> },
     { href: "/dashboard/calendar", label: uiText("Kalender pengiriman"), icon: <CalendarOutlined /> },
     { href: "/dashboard/dispatch", label: uiText("Antrean pengiriman"), icon: <OrderedListOutlined /> },

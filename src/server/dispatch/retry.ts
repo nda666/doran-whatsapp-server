@@ -4,7 +4,7 @@ export const ACK_RETRY_ERROR = "ACK_TIMEOUT_RETRY";
 export const ACK_EXHAUSTED_ERROR = "ACK_TIMEOUT_RETRY_EXHAUSTED";
 export const retryEligible = () => ({ OR: [
   { messageId: null },
-  { lastError: { in: [ACK_RETRY_ERROR, "MEDIA_PREPARATION_FAILED", "DEVICE_DAILY_LIMIT", "DEVICE_THROTTLED", "DEVICE_SAFETY_PAUSED"] } },
+  { lastError: { in: [ACK_RETRY_ERROR, "MEDIA_PREPARATION_FAILED", "DEVICE_DAILY_LIMIT", "DEVICE_THROTTLED", "DEVICE_SAFETY_PAUSED", "OUTSIDE_OPERATING_HOURS"] } },
 ] });
 
 export function acknowledgementFailure(error: unknown, attempts: number, now = Date.now()) {
