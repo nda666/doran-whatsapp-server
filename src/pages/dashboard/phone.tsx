@@ -551,11 +551,18 @@ const PhonePage = () => {
   );
 };
 
-export const getStaticProps = async ({ locale }: { locale: string }) => ({
-  props: {
-    ...(await serverSideTranslations(locale, ["common", "upgrade", "interface"])),
-  },
-});
+export const getStaticProps = async ({ locale }: { locale: string }) => {
+  const translations = await serverSideTranslations(locale, ["common", "upgrade", "interface"]);
+  // The UI translator already falls back to the source text. Avoid shipping the
+  // identical Indonesian catalog, including when it is a fallback locale.
+  const store = translations._nextI18Next?.initialI18nStore;
+  if (store?.id?.interface) {
+    store.id.interface = Object.fromEntries(
+      Object.entries(store.id.interface).filter(([source, translated]) => source !== translated)
+    );
+  }
+  return { props: translations };
+};
 
 PhonePage.getLayout = function getLayout(page: ReactElement) {
   return <Layout title="Perangkat WhatsApp">{page}</Layout>;

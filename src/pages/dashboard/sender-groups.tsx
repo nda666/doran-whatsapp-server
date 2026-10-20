@@ -50,7 +50,7 @@ export default function SenderGroups() {
       { title: "Urutan cadangan", render: (_, group) => <Space direction="vertical">{group.phones.map((phone, index) => <span key={phone.id}>{index + 1}. {phone.name} · {phone.number || "Belum terhubung"} <Tag color={phone.isOnline && phone.active === 1 ? "green" : "default"}>{phone.isOnline && phone.active === 1 ? "Online" : "Tidak tersedia"}</Tag></span>)}</Space> },
       { title: "Aksi", render: (_, group) => <Space><Button onClick={() => edit(group)}>Edit</Button><Popconfirm title="Hapus grup? Perangkat akan kembali mengirim tanpa cadangan." onConfirm={() => remove(group.id)}><Button danger>Hapus</Button></Popconfirm></Space> },
     ]} />
-    <Modal title={editing ? "Edit grup pengirim" : "Tambah grup pengirim"} open={open} onCancel={() => { if (!saving) setOpen(false); }} footer={null} destroyOnClose>
+    <Modal title={editing ? "Edit grup pengirim" : "Tambah grup pengirim"} open={open} onCancel={() => { if (!saving) setOpen(false); }} footer={null} destroyOnHidden>
       <Form form={form} layout="vertical" onFinish={save} disabled={saving}>
         <Form.Item name="name" label="Nama grup / store" rules={[{ required: true, whitespace: true }]}><Input maxLength={100} /></Form.Item>
         <Form.Item name="userId" label="Pemilik perangkat" rules={[{ required: true }]}><Select disabled={!!editing} showSearch optionFilterProp="label" options={owners} onChange={() => form.setFieldValue("phoneIds", [])} /></Form.Item>

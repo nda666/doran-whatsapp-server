@@ -38,8 +38,8 @@ export default function ScheduleCalendar() {
       { title: uiText("Kapasitas"), render: (_, r: any) => <Tag color={conflicts.some(c => c.id === r.id) ? "orange" : "green"}>{conflicts.some(c => c.id === r.id) ? uiText("Potensi benturan") : uiText("Tidak terdeteksi benturan")}</Tag> },
       { title: uiText("Tindakan"), render: (_, r: any) => <Button disabled={!["WAITING", "PAUSED"].includes(r.status)} onClick={() => setEditing(r)}>{uiText("Ubah jadwal")}</Button> },
     ]} /></Card>
-    <Modal open={!!editing} title={uiText("Jadwal {{v0}}", { v0: editing?.name || uiText("campaign") })} onCancel={() => setEditing(undefined)} footer={null} destroyOnClose>
-      {editing && <Form key={editing.id} layout="vertical" initialValues={{ scheduledAt: wib(editing.scheduledAt) }} onFinish={changeSchedule}><Form.Item name="scheduledAt" label={uiText("Jadwal baru (WIB)")} rules={[{ required: true }]}><DatePicker showTime format="DD/MM/YYYY HH:mm" /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan jadwal")}</Button></Form>}
+    <Modal open={!!editing} title={uiText("Jadwal {{v0}}", { v0: editing?.name || uiText("campaign") })} onCancel={() => setEditing(undefined)} footer={null} destroyOnHidden>
+      {editing && <Form key={editing.id} layout="vertical" initialValues={{ scheduledAt: wib(editing.scheduledAt) }} onFinish={changeSchedule}><Form.Item name="scheduledAt" label={uiText("Jadwal baru (WIB)")} rules={[{ required: true }]}><DatePicker showTime={{ format: "HH:mm", use12Hours: false }} format="DD/MM/YYYY HH:mm" /></Form.Item><Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan jadwal")}</Button></Form>}
     </Modal>
   </Space>;
 }

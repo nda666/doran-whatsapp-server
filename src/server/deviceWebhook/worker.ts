@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { sendDeviceWebhook } from "../utils/sendDeviceWebhook";
+import { webhookWorkerRetry } from "../utils/webhookWorkerRetry";
 
 export const retryDelay = (attempt: number) => Math.min(3600000, 5000 * 3 ** Math.max(0, attempt - 1));
 const pending = ["PENDING", "SENDING"];
@@ -49,8 +50,9 @@ export async function processDeviceWebhook() {
 
 export function startDeviceWebhookWorker() {
   let stopping = false, busy = false, cleanupAt = 0;
+  const retry = webhookWorkerRetry("DEVICE_CHANGE_WEBHOOK_WORKER_FAILED");
   const tick = async () => {
-    if (stopping || busy) return;
+    if (stopping || busy || !retry.ready()) return;
     busy = true;
     try {
       if (Date.now() - cleanupAt > 3600000) {
@@ -58,7 +60,8 @@ export function startDeviceWebhookWorker() {
         cleanupAt = Date.now();
       }
       for (let i = 0; i < 10 && !stopping; i++) if (!await processDeviceWebhook()) break;
-    } catch { console.error("DEVICE_CHANGE_WEBHOOK_WORKER_FAILED"); }
+      retry.reset();
+    } catch (error) { retry.fail(error); }
     finally { busy = false; }
   };
   const timer = setInterval(tick, 2000);

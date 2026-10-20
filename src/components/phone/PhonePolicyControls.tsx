@@ -131,7 +131,7 @@ export default function usePhonePolicies(sort?: Pick<TableState, "sort" | "order
     },
     columns: phonePolicyColumns(uiText, id => policies.get(id), sort),
     modal: <Modal className="device-settings-modal" width={640} open={!!editing} title={uiText("Atur batas — {{v0}}", { v0: editing?.name || uiText("Perangkat") })} footer={<Space><Button disabled={busy} onClick={() => setEditing(undefined)}>{uiText("Batal")}</Button><Button form="phone-policy-form" htmlType="submit" type="primary" loading={busy}>{uiText("Simpan")}</Button></Space>}
-      onCancel={() => { if (!saving.current) setEditing(undefined); }} closable={!busy} maskClosable={!busy} keyboard={!busy} destroyOnClose>
+      onCancel={() => { if (!saving.current) setEditing(undefined); }} closable={!busy} maskClosable={!busy} keyboard={!busy} destroyOnHidden>
       {editing && <Form id="phone-policy-form" key={editing.id} layout="vertical" disabled={busy}
         initialValues={{ ...editing, followGlobalOperatingHours: editing.operatingHours == null, customOperatingHours: editing.operatingHours || editing.globalOperatingHours, followGlobal: editing.minIntervalSeconds == null, minIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).minSeconds, maxIntervalSeconds: deviceSendIntervalRange(editing.globalInterval, editing).maxSeconds }}
         onFinish={({ followGlobal, minIntervalSeconds, maxIntervalSeconds, followGlobalOperatingHours, customOperatingHours, ...values }) => update(editing, {

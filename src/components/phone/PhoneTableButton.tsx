@@ -57,6 +57,7 @@ export default function PhoneTableButton({
   const uiText = useUiTranslation();
   const { t } = useTranslation("common");
   const router = useRouter();
+  const [modal, contextHolder] = Modal.useModal();
   const items: MenuProps["items"] = [
     {
       label: t("scan_qrcode"),
@@ -102,12 +103,12 @@ export default function PhoneTableButton({
       onClick: () => onGenerateTokenClick?.(),
     },
     { type: "divider" },
-    { label: uiText("Informasi koneksi"), icon: <InfoCircleOutlined />, key: `${phone.id}-session`, onClick: () => Modal.info({ title: uiText("Informasi koneksi WhatsApp"), content: <div><p>{uiText("Label:")} {phone.name}</p><p>{uiText("Nomor:")} {phone.number || uiText("Belum tertaut")}</p><p>{uiText("Nama Akun WA:")} {phone.account_name || "—"}</p><PhoneConnectionStatus connection={phone.connection} /><p>{phone.connection ? uiText("Diperiksa: {{v0}} WIB", { v0: new Date(phone.connection.checkedAt).toLocaleString(uiText.locale, { timeZone: "Asia/Jakarta" }) }) : uiText("Status belum tersedia.")}</p></div> }) },
+    { label: uiText("Informasi koneksi"), icon: <InfoCircleOutlined />, key: `${phone.id}-session`, onClick: () => modal.info({ title: uiText("Informasi koneksi WhatsApp"), okText: uiText("Tutup"), content: <div><p>{uiText("Label:")} {phone.name}</p><p>{uiText("Nomor:")} {phone.number || uiText("Belum tertaut")}</p><p>{uiText("Nama Akun WA:")} {phone.account_name || "—"}</p><PhoneConnectionStatus connection={phone.connection} /><p>{phone.connection ? uiText("Diperiksa: {{v0}} WIB", { v0: new Date(phone.connection.checkedAt).toLocaleString(uiText.locale, { timeZone: "Asia/Jakarta" }) }) : uiText("Status belum tersedia.")}</p></div> }) },
     {
       label: uiText("Lihat Device ID"),
       icon: <InfoCircleOutlined />,
       key: `${phone.id}-device-id`,
-      onClick: () => Modal.info({
+      onClick: () => modal.info({
         title: uiText("Device ID Perangkat Pengirim"),
         okText: uiText("Tutup"),
         content: <div>
@@ -125,7 +126,7 @@ export default function PhoneTableButton({
       icon: <UserOutlined />,
       key: `${phone.id}-user-id`,
       disabled: !phone.userId,
-      onClick: () => Modal.info({
+      onClick: () => modal.info({
         title: uiText("User ID Pemilik Perangkat"),
         okText: uiText("Tutup"),
         content: <div>
@@ -181,5 +182,8 @@ export default function PhoneTableButton({
   //   // });
   // }
 
-  return <ActionDropdown ariaLabel={uiText("Aksi perangkat {{v0}}", { v0: phone.name })} items={items} />;
+  return <>
+    {contextHolder}
+    <ActionDropdown ariaLabel={uiText("Aksi perangkat {{v0}}", { v0: phone.name })} items={items} />
+  </>;
 }

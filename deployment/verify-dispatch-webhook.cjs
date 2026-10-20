@@ -66,6 +66,7 @@ const db = { ...tx, $transaction: async fn => {
 } };
 helpers = load('src/server/dispatchWebhook/events.ts', { '../../lib/prisma': { prisma: db } });
 const worker = load('src/server/dispatchWebhook/worker.ts', {
+  '../utils/webhookWorkerRetry': load('src/server/utils/webhookWorkerRetry.ts'),
   '../../lib/prisma': { prisma: db }, '../utils/sendDeviceWebhook': { sendDeviceWebhook: async (url, body, headers) => { requests.push({ url, body, headers }); if (failDelivery) throw new Error('down'); } },
 });
 const settingsHandler = load('src/pages/api/admin/dispatch-webhook.ts', {

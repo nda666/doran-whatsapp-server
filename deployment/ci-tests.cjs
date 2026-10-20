@@ -7,6 +7,7 @@ const tests = [
   'verify-connection-status.cjs', 'verify-user-active.cjs',
   'verify-admin-user-token.cjs', 'verify-change-password.cjs',
   'verify-global-settings-password-reset.cjs', 'verify-dispatch-webhook.cjs',
+  'verify-webhook-worker-retry.cjs',
   'verify-messaging-improvements.cjs', 'verify-pm2-optimization.cjs',
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
   'verify-phone-last-qr-scan.cjs',

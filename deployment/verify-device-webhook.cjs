@@ -52,6 +52,7 @@ const db = { ...tx, $transaction: async fn => {
   try { return await fn(tx); } catch (error) { phone = oldPhone; jobs = oldJobs; config = oldConfig; throw error; }
 } };
 const worker = load('src/server/deviceWebhook/worker.ts', {
+  '../utils/webhookWorkerRetry': load('src/server/utils/webhookWorkerRetry.ts'),
   '../../lib/prisma': { prisma: db }, '../utils/sendDeviceWebhook': { sendDeviceWebhook: async (url, body, headers) => { requests.push({ url, body, headers }); if (failDelivery) throw new Error('down'); } },
 });
 const settingsHandler = load('src/pages/api/admin/device-webhook.ts', {

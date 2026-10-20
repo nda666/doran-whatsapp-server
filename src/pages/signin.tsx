@@ -1,20 +1,18 @@
 import { useUiTranslation } from "@/lib/uiTranslation";
 import React, { ReactElement, useState } from "react";
-import { Form, Typography, Alert, Space, Button } from "antd";
+import { Form, Typography, Alert, Space } from "antd";
 import SigninForm, { SigninData } from "@/components/auth/SigninForm";
-import { NextPageWithLayout } from "./_app";
 import GuestLayout from "@/components/GuestLayout";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
-import axios, { AxiosError } from "axios";
 import Link from "next/link";
 import type {
   GetServerSidePropsContext,
   InferGetServerSidePropsType,
 } from "next";
 import { getCsrfToken, signIn } from "next-auth/react";
-import Router, { useRouter } from "next/router";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/router";
+import { localizedPath } from "@/lib/localizedPath";
 
 const Signin = ({
   csrfToken,
@@ -30,23 +28,32 @@ const Signin = ({
   const router = useRouter();
   const onSubmit = async (data: SigninData) => {
     setState({ ...state, alert: undefined, message: "", loading: true });
-    const res = await signIn("credentials", {
-      redirect: false,
-      email: data.email,
-      password: data.password,
-    });
-    setState({
-      ...state,
-      loading: false,
-      alert: res?.ok ? "success" : "error",
-      message: !res?.ok
-        ? res?.error?.toString()!
-        : t("login_success").toString(),
-    });
+    try {
+      const dashboardUrl = localizedPath("/dashboard", router.locale);
+      const res = await signIn("credentials", {
+        redirect: false,
+        callbackUrl: dashboardUrl,
+        email: data.email,
+        password: data.password,
+      });
 
-    if (res?.ok) {
-      form.resetFields();
-      Router.replace("/dashboard");
+      if (res?.ok && !res.error) {
+        // Reload with the new session cookie, bypassing cached guest redirects.
+        window.location.replace(dashboardUrl);
+        return;
+      }
+
+      setState({
+        loading: false,
+        alert: "error",
+        message: res?.error || "Login belum berhasil. Silakan coba lagi.",
+      });
+    } catch {
+      setState({
+        loading: false,
+        alert: "error",
+        message: "Login belum berhasil. Silakan coba lagi.",
+      });
     }
   };
   return (
