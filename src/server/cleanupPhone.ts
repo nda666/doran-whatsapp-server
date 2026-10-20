@@ -104,7 +104,9 @@ export async function cleanupPhone(id: string, scope: { userId?: string }, optio
       } else {
         const updated = await tx.phone.update({ where: { id }, data: {
           active: options.disconnect ? (options.clearAuth ? 1 : 0) : phone.active,
-          ...(options.disconnect ? { isOnline: false, status: "CLOSE" as const, qrCode: null } : {}),
+          ...(options.disconnect ? { isOnline: false, status: "CLOSE" as const, qrCode: null,
+            ...(current.isOnline ? { lastOfflineAt: new Date() } : {}),
+          } : {}),
           ...(options.clearAuth ? { number: null, account_name: null, qrCode: null } : {}),
           ...(options.resetToken ? { token: randomUUID() } : {}),
           ...(options.resetSettings ? { is_save_group: false, webhookUrl: null,
@@ -118,7 +120,10 @@ export async function cleanupPhone(id: string, scope: { userId?: string }, optio
     return { result: true, deleted: options.deleteRecord };
   } catch (error) {
     // A partial cleanup must not reconnect with credentials that may be gone.
-    if (suspended && options.disconnect) await prisma.phone.updateMany({ where: { id, ...scope }, data: { active: 0, isOnline: false, status: "CLOSE" } });
+    if (suspended && options.disconnect) {
+      await prisma.phone.updateMany({ where: { id, ...scope, isOnline: true }, data: { lastOfflineAt: new Date(), isOnline: false, status: "CLOSE" } });
+      await prisma.phone.updateMany({ where: { id, ...scope }, data: { active: 0, isOnline: false, status: "CLOSE" } });
+    }
     else if (suspended) await prisma.phone.updateMany({ where: { id, ...scope }, data: { active: phone.active } });
     throw error;
   } finally {

@@ -68,11 +68,19 @@ async function main() {
   const cell = controls.phonePolicyColumns(ui, () => ({ ...base, minIntervalSeconds: 2, maxIntervalSeconds: 5 })).find(column => column.key === 'sendInterval').render(null, { id: base.id });
   assert.match(require('react-dom/server').renderToStaticMarkup(cell), /Khusus: 2–5 detik/);
 
+  ui.date = value => new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value));
+  const sendColumn = controls.phonePolicyColumns(ui, () => ({ ...base, lastSendProcessedAt: '2026-10-20T01:23:00Z' }), { sort: 'lastSendProcessedAt', order: 'desc' }).find(column => column.key === 'lastSendProcessedAt');
+  assert.equal(sendColumn.sortOrder, 'descend');
+  assert.match(require('react-dom/server').renderToStaticMarkup(sendColumn.render(null, { id: base.id })), /08.23 WIB/);
+  const emptySend = controls.phonePolicyColumns(ui, () => base).find(column => column.key === 'lastSendProcessedAt');
+  assert.match(require('react-dom/server').renderToStaticMarkup(emptySend.render(null, { id: base.id })), /Belum tercatat/);
+
   const policy = { ...base, nextAllowedAt: new Date(0), warmupStartedAt: null };
   const usage = { attempts: 0, failures: 0 };
   const db = {
     deviceSendPolicy: { createMany: async () => {}, findUniqueOrThrow: async () => policy, update: async ({ data }) => Object.assign(policy, data) },
     deviceDailyUsage: { upsert: async () => usage, update: async () => { usage.attempts++; } },
+    phone: { update: async () => {} },
     $queryRaw: async () => [], $transaction: fn => fn(db),
   };
   const safety = loader({

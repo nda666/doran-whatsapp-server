@@ -82,7 +82,15 @@ export default async function connectionUpdate(
     const isOnline = connection === "open";
     let persisted = false;
     try {
-      await prisma.phone.update({ where: { id: phoneId }, data: { isOnline, status: isOnline ? "OPEN" : "CLOSE" } });
+      await prisma.$transaction(async tx => {
+        // Only the transition from online starts a new offline period.
+        // Failed reconnects must preserve the original time.
+        if (!isOnline) await tx.phone.updateMany({
+          where: { id: phoneId, isOnline: true },
+          data: { isOnline: false, status: "CLOSE", lastOfflineAt: new Date() },
+        });
+        await tx.phone.update({ where: { id: phoneId }, data: { isOnline, status: isOnline ? "OPEN" : "CLOSE" } });
+      });
       persisted = true;
     } catch (error) {
       // A database outage must not prevent transport recovery.

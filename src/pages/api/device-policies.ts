@@ -11,7 +11,7 @@ const input = z.object({ phoneId: z.string().uuid(), useGlobalQuota: z.boolean()
 export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiResponse) => {
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "GET") {
-    const phones = await prisma.phone.findMany({ where: ownerScope(req.user!), select: { id: true, name: true, number: true, isOnline: true } });
+    const phones = await prisma.phone.findMany({ where: ownerScope(req.user!), select: { id: true, name: true, number: true, isOnline: true, lastSendProcessedAt: true } });
     const ids = phones.map(p => p.id);
     const [policies, usage, globalInterval, globalQuota, warmupLimits] = await Promise.all([prisma.deviceSendPolicy.findMany({ where: { phoneId: { in: ids } } }), prisma.deviceDailyUsage.findMany({ where: { phoneId: { in: ids }, day: usageDay() } }), getDispatchDelayRange(), getGlobalDeviceQuota(), getWarmupDailyLimits()]);
     return res.json(phones.map(phone => {

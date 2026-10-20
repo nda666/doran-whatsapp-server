@@ -18,6 +18,7 @@ export type DevicePolicy = {
   useGlobalQuota: boolean;
   globalQuota: number;
   used: number;
+  lastSendProcessedAt?: string | null;
   effectiveLimit: number;
   minIntervalSeconds: number | null;
   maxIntervalSeconds: number | null;
@@ -32,7 +33,7 @@ export type DevicePolicy = {
 const detailStyle = { display: "block", fontSize: 12, lineHeight: 1.5 };
 
 export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string) => DevicePolicy | undefined, sort?: Pick<TableState, "sort" | "order">): ColumnsType<PhoneRow> {
-  const sorting = (key: PhonePolicySort) => ({ sorter: true, sortOrder: sort?.sort === key ? sort.order === "asc" ? "ascend" as const : "descend" as const : null });
+  const sorting = (key: PhonePolicySort | "lastSendProcessedAt") => ({ sorter: true, sortOrder: sort?.sort === key ? sort.order === "asc" ? "ascend" as const : "descend" as const : null });
   return [
     { title: uiText("Kesehatan"), key: "health", ...sorting("health"), width: 250, render: (_, phone) => {
       const policy = getPolicy(phone.id);
@@ -55,6 +56,12 @@ export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string)
         <Typography.Text>{policy.used} / {policy.effectiveLimit}</Typography.Text>
         <Tag>{policy.useGlobalQuota ? uiText("Global: {{v0}}", { v0: policy.globalQuota }) : uiText("Custom: {{v0}}", { v0: policy.dailyLimit })}</Tag>
       </Space> : <Typography.Text type="secondary">{uiText("Belum tersedia")}</Typography.Text>;
+    } },
+    { title: uiText("Terakhir Proses Kirim"), key: "lastSendProcessedAt", ...sorting("lastSendProcessedAt"), width: 200, render: (_, phone) => {
+      const policy = getPolicy(phone.id);
+      return <div style={{ whiteSpace: "nowrap" }}>
+        {policy ? policy.lastSendProcessedAt ? `${uiText.date(policy.lastSendProcessedAt)} WIB` : uiText("Belum tercatat") : <Typography.Text type="secondary">{uiText("Belum tersedia")}</Typography.Text>}
+      </div>;
     } },
     { title: uiText("Jeda pengiriman"), key: "sendInterval", ...sorting("sendInterval"), width: 220, render: (_, phone) => {
       const policy = getPolicy(phone.id);

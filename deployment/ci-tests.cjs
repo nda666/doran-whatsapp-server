@@ -10,6 +10,7 @@ const tests = [
   'verify-messaging-improvements.cjs', 'verify-pm2-optimization.cjs',
   'verify-device-delay-range.cjs', 'verify-upgrade.cjs',
   'verify-phone-last-qr-scan.cjs',
+  'verify-phone-last-offline.cjs', 'verify-phone-last-send.cjs',
   'verify-daily-warmup.cjs',
   'verify-quota-recovery.cjs',
 ];

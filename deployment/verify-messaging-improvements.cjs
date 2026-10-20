@@ -33,6 +33,7 @@ async function safetyTests() {
     recipientSuppression: { findUnique: async ({ where }) => blocked.get(JSON.stringify(where.userId_number)), upsert: async ({ create }) => blocked.set(JSON.stringify({ userId: create.userId, number: create.number }), create) },
     deviceSendPolicy: { createMany: async () => {}, upsert: async () => policy, findUniqueOrThrow: async () => policy, update: async ({ data }) => Object.assign(policy, data) },
     deviceDailyUsage: { upsert: async () => usage, update: async () => { usage.attempts++; } },
+    phone: { update: async () => {} },
     $queryRaw: async () => [],
     $transaction: fn => { const next = chain.then(() => fn(db)); chain = next.catch(() => {}); return next; },
   };

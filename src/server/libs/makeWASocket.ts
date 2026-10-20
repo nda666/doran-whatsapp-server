@@ -252,6 +252,10 @@ export const getAllSession = () => {
 
 export async function closeWaSessions() {
   await Promise.allSettled(Array.from(pendingSockets.values()));
+  await prisma.phone.updateMany({
+    where: { id: { in: Array.from(session.keys()) }, isOnline: true },
+    data: { isOnline: false, status: "CLOSE", lastOfflineAt: new Date() },
+  }).catch(error => console.error("WA_SHUTDOWN_STATUS_FAILED", error instanceof Error ? error.message : "Unknown error"));
   const results = await Promise.allSettled(Array.from(session.values()).map(async socket => {
     try { await waitForAuthSave(socket); }
     finally { socket.end(new Error("SERVER_SHUTDOWN")); }

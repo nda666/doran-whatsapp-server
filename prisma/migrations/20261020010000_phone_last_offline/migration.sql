@@ -1,0 +1,1 @@
+ALTER TABLE `phones` ADD COLUMN `lastOfflineAt` DATETIME(3) NULL;

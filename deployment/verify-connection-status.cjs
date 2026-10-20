@@ -24,7 +24,7 @@ async function main() {
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admin' },
     fs: { rmSync() { throw new Error('Unexpected credential deletion'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
-    '../../lib/prisma': { prisma: { phone: { update: async value => { writes.push(value); online = value.data.isOnline; status = value.data.status; } }, $transaction: async callback => callback({}) } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async value => { writes.push(value); online = value.data.isOnline; status = value.data.status; } } } },
     '../constant': { WaSockQrTimeout: 60000 }, '../libs/makeWASocket': socketModule,
     '../libs/socket': { getSocketIO: io }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': { updateDevice: async () => {} },

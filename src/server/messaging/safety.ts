@@ -58,6 +58,8 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
     if (usage.attempts >= warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits)) throw new SendGuardError("DEVICE_DAILY_LIMIT", new Date(`${day}T17:00:00Z`));
     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
     await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
+    // Match the quota admission event, including retries, before transport runs.
+    await tx.phone.update({ where: { id: phoneId }, data: { lastSendProcessedAt: new Date() } });
     const multiplier = policy.adaptiveEnabled ? health.multiplier : 1;
     const interval = policy.maxIntervalSeconds == null
       ? effectiveSendInterval(randomDispatchDelay(globalRange), policy.minIntervalSeconds, multiplier)

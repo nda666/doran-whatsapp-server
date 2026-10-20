@@ -259,6 +259,8 @@ model Phone {
   account_name         String?
   qrCode               String?            @db.Text
   lastQrScanAt         DateTime?
+  lastOfflineAt        DateTime?
+  lastSendProcessedAt  DateTime?
   status               PhoneStatus?       @default(value: CLOSE)
   isOnline             Boolean            @default(value: false) @map("is_online")
   token                String             @unique @default(uuid())

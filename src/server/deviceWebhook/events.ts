@@ -37,7 +37,10 @@ export async function updateDevice(tx: Prisma.TransactionClient, where: Prisma.P
   await tx.$queryRaw`SELECT id FROM phones WHERE id = ${before.id} FOR UPDATE`;
   before = await tx.phone.findFirst({ where });
   if (!before) return null;
-  await tx.phone.updateMany({ where: { ...where, id: before.id }, data });
+  await tx.phone.updateMany({ where: { ...where, id: before.id }, data: {
+    ...data,
+    ...(before.isOnline && data.isOnline === false ? { lastOfflineAt: new Date() } : {}),
+  } });
   const after = await tx.phone.findUniqueOrThrow({ where: { id: before.id } });
   const old = deviceSnapshot(before), next = deviceSnapshot(after);
   const changed = (Object.keys(next) as Array<keyof typeof next>).filter(key => old[key] !== next[key]);

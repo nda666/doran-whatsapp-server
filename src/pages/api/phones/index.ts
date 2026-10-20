@@ -39,7 +39,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       ] } : {}),
       ...(is_online === "0" || is_online === "1" ? { isOnline: is_online === "1" } : {}),
       ...(active === "0" || active === "1" ? { active: Number(active) } : {}) };
-    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
+    const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
     const policyPage = isPhonePolicySort(req.query.sort)
       ? await phonePolicyPage(where, req.query.sort, req.query.order === "asc" ? "asc" : "desc", skip, limit)
       : undefined;

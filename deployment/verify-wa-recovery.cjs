@@ -51,7 +51,7 @@ async function main() {
   const connection = load('src/server/events/connectionUpdate.ts', {
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admin' }, fs: { rmSync() { throw new Error('Credential deletion'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
-    '../../lib/prisma': { prisma: { phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
     '../constant': { WaSockQrTimeout: 60000 }, '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {}, default: async (_, id) => attempts.push(id) },
     '../libs/socket': { getSocketIO: undefined }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired }, '../libs/waRecoveryState': { waRecovery: state },

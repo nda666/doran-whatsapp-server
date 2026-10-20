@@ -8,7 +8,7 @@ function load(name, mocks) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, { exports, require: key => key in mocks ? mocks[key] : require(key), process: { env: {} }, setTimeout, clearTimeout, console });
+  vm.runInNewContext(code, { exports, require: key => key === '@/lib/uiTranslation' ? { useUiTranslation: () => text => text } : key in mocks ? mocks[key] : require(key), process: { env: {} }, setTimeout, clearTimeout, console });
   return exports;
 }
 const { phoneCleanupSchema, defaultCleanupOptions } = load('src/lib/phoneCleanup.ts', {});

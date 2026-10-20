@@ -8,7 +8,7 @@ export type PhoneSearchState = {
   showSearch: boolean;
 };
 
-const sortFields = ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "user.name", ...phonePolicySortFields];
+const sortFields = ["name", "number", "account_name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", "user.name", ...phonePolicySortFields];
 
 export function readPhoneSearchState(query: ParsedUrlQuery): PhoneSearchState {
   const text = (key: string) => typeof query[key] === "string" ? query[key] as string : "";

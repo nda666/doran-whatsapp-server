@@ -16,7 +16,7 @@ function load(name, mocks) {
   const handler = load('src/server/events/connectionUpdate.ts', {
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admins' }, fs: {}, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515 } },
-    '../../lib/prisma': { prisma: { phone: { update: async args => { if (fail) throw new Error('DB unavailable'); updates.push(args); if (args.data.lastQrScanAt) persisted = args.data.lastQrScanAt; } } } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async args => { if (fail) throw new Error('DB unavailable'); updates.push(args); if (args.data.lastQrScanAt) persisted = args.data.lastQrScanAt; } } } },
     '../constant': { WaSockQrTimeout: 60000 },
     '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {} },
     '../libs/socket': { getSocketIO: io }, '../libs/pairingState': { recordPairingProgress: () => undefined },

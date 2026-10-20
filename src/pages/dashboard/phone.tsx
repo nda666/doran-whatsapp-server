@@ -200,6 +200,16 @@ const PhonePage = () => {
       render: (_v, phone) => <Space size={8} style={{ whiteSpace: "nowrap" }}><PhoneConnectionStatus connection={phone.connection} />{phone.connection?.action === "scan_qr" && <Button size="small" onClick={() => onGetQrCodeClick(phone)}>{uiText("Scan QR")}</Button>}</Space>,
     },
     {
+      title: uiText("Terakhir Offline"),
+      key: "lastOfflineAt",
+      dataIndex: "lastOfflineAt",
+      render: (v) => (
+        <div style={{ whiteSpace: "nowrap" }}>
+          {v ? `${uiText.date(v)} WIB` : uiText("Belum tercatat")}
+        </div>
+      ),
+    },
+    {
       title: uiText("Terakhir Scan QR"),
       key: "lastQrScanAt",
       dataIndex: "lastQrScanAt",
