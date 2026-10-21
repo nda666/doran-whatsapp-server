@@ -16,7 +16,7 @@ const tests = [
   'verify-sender-number-membership.cjs',
   'verify-phone-quota-filter.cjs',
   'verify-daily-warmup.cjs',
-  'verify-quota-recovery.cjs',
+  'verify-quota-recovery.cjs', 'verify-device-quota-reset.cjs',
   'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
   'verify-feature-schema.cjs',
 ];

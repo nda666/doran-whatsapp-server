@@ -41,6 +41,7 @@ async function scenario(options = {}) {
   const db = {
     waDispatch: { findMany: async ({ where }) => jobs.filter(row => matches(row, where)).map(row => ({ phoneId: row.phoneId })),
       updateMany: async args => update(jobs, args) },
+    deviceQuotaWindow: { findUnique: async () => options.window || null },
     deviceSendPolicy: { findUnique: async () => policy },
     deviceDailyUsage: { findUnique: async ({ where }) => { assert.equal(where.phoneId_day.day, '2026-10-19'); return usage; } },
     waSenderLease: { updateMany: async args => update([lease], args) },
@@ -51,13 +52,13 @@ async function scenario(options = {}) {
     '../messaging/safety': load('src/server/messaging/safety.ts', {
       '../../lib/prisma': {}, '../dispatchWebhook/events': {}, '../dispatch/settings': {},
     }),
-    './settings': { getGlobalDeviceQuota: async () => { reads++; return options.globalQuota ?? 50; },
+    './settings': { getQuotaReset: async () => options.reset || { mode: 'midnight', hours: 24 }, getGlobalDeviceQuota: async () => { reads++; return options.globalQuota ?? 50; },
       getWarmupDailyLimits: async () => options.warmupLimits || [25, 50, 100] },
   });
   await recovery.recoverQuotaDispatches(now);
   for (const other of others) assert.equal(other.nextAttemptAt, midnight, 'Unrelated/confirmed jobs must remain untouched');
   if (options.blocked) {
-    assert.equal(job.nextAttemptAt, midnight); assert.equal(lease.nextSendAt, midnight);
+    assert.equal(job.nextAttemptAt.getTime(), midnight.getTime()); assert.equal(lease.nextSendAt.getTime(), midnight.getTime());
   } else {
     assert.equal(job.nextAttemptAt, now);
     assert.equal(lease.nextSendAt.getTime(), policy.nextAllowedAt.getTime(), 'Respect the transport interval');
@@ -80,5 +81,8 @@ async function scenario(options = {}) {
   await scenario({ policy: { warmupStartedAt: new Date('2026-10-19T00:00:00Z') }, blocked: true });
   await scenario({ policy: { warmupStartedAt: new Date('2026-10-19T00:00:00Z') }, warmupLimits: [50, 100] });
   await scenario({ job: { messageId: 'existing-safe-retry' } });
+  const window = { attempts: 45, startedAt: new Date('2026-10-18T00:00:00Z'), lastAttemptAt: new Date('2026-10-19T03:00:00Z'), reachedAt: new Date('2026-10-19T03:00:00Z') };
+  await scenario({ globalQuota: 45, reset: { mode: 'after-full', hours: 2 }, window });
+  await scenario({ globalQuota: 45, window, policy: { quotaReset: { mode: 'after-full', hours: 2 } } });
   console.log('QUOTA_RECOVERY_OK: global/custom increases, exhausted/reduced limits, warmup, pauses, active leases, interval, existing retries and confirmed-job protection.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

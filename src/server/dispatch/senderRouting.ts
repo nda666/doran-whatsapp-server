@@ -6,6 +6,8 @@ import { healthAssessment, usageDay, warmupLimit } from "../messaging/safety";
 import { deviceDailyQuota, DEFAULT_DEVICE_DAILY_QUOTA } from "../../lib/deviceQuota";
 import { getGlobalDeviceQuota, getWarmupDailyLimits, getGlobalOperatingHours } from "./settings";
 import { effectiveOperatingHours, operatingHoursState } from "../../lib/operatingHours";
+import { getQuotaReset } from "./settings";
+import { DEFAULT_QUOTA_RESET, effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { hasEnabledSenderGroup } from "./senderGroups";
 import { conflictingSender, senderMembershipSelect } from "./senderNumberMembership";
 
@@ -27,6 +29,7 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
   if (!pinned) phones.sort((a, b) => Number(b.id === origin.id) - Number(a.id === origin.id));
   const [globalQuota, warmupLimits] = grouped ? await Promise.all([getGlobalDeviceQuota(), getWarmupDailyLimits()]) : [0, []];
   const globalHours = await getGlobalOperatingHours();
+  const quotaReset = grouped ? await getQuotaReset() : DEFAULT_QUOTA_RESET;
   const members = grouped ? await prisma.phone.findMany({ where: { senderGroupId: { not: null } }, select: senderMembershipSelect }) : [];
   let outsideHours = false;
   for (const phone of phones) {
@@ -45,7 +48,9 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
         adaptiveEnabled: true, warmupStartedAt: null, nextAllowedAt: new Date(0) };
       if (policy.paused || policy.nextAllowedAt > new Date()) continue;
       if (policy.adaptiveEnabled && healthAssessment(usage?.attempts || 0, usage?.failures || 0).stop) continue;
-      if ((usage?.attempts || 0) >= warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits)) continue;
+      const limit = warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits);
+      const window = await prisma.deviceQuotaWindow.findUnique({ where: { phoneId: phone.id } });
+      if (quotaWindowState(window, usage?.attempts || 0, limit, effectiveQuotaReset(quotaReset, savedPolicy?.quotaReset)).used >= limit) continue;
     }
     if (phone.id !== origin.id) {
       await prisma.waSenderLease.createMany({ data: [{ phoneId: phone.id }], skipDuplicates: true });

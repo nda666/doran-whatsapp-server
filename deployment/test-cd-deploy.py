@@ -133,6 +133,15 @@ class DeploymentGuards(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             deploy.compare_counts(before, {'counts': before['counts'], 'migrations': [{'checksum': 'changed'}]})
 
+    def test_quota_initialization_preserves_existing_table_counts(self):
+        before = {'counts': {'phones': '20', 'device_daily_usage': '50'}, 'migrations': []}
+        after = {'counts': dict(before['counts'], device_quota_windows='12'), 'migrations': []}
+        deploy.compare_counts(before, after, ['device_quota_windows'], {'device_quota_windows': '12'})
+        with self.assertRaises(RuntimeError):
+            deploy.compare_counts(before, after, ['device_quota_windows'])
+        with self.assertRaises(RuntimeError):
+            deploy.compare_counts(before, {'counts': dict(after['counts'], device_daily_usage='49'), 'migrations': []}, ['device_quota_windows'], {'device_quota_windows': '12'})
+
     def test_only_approved_new_empty_tables_can_be_added(self):
         before = {'counts': {'phones': '20', '_prisma_migrations': '5'}, 'migrations': [{'checksum': 'original'}]}
         after = {'counts': dict(before['counts'], sender_groups='0', wa_dispatch_attempts='0'), 'migrations': before['migrations']}

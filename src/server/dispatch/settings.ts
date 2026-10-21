@@ -7,6 +7,14 @@ import { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, parseDispatchDelayRange } f
 
 import { DEVICE_DAILY_QUOTA_KEY, DEFAULT_DEVICE_DAILY_QUOTA, parseDeviceDailyQuota } from "../../lib/deviceQuota";
 import { DEFAULT_OPERATING_HOURS, OPERATING_HOURS_KEY, parseOperatingHours } from "../../lib/operatingHours";
+import { DEFAULT_QUOTA_RESET, QUOTA_RESET_KEY, parseQuotaReset } from "../../lib/quotaReset";
+
+export async function getQuotaReset() {
+  const setting = await prisma.globalSetting.findUnique({ where: { key: QUOTA_RESET_KEY } });
+  const reset = setting ? parseQuotaReset(decryptSetting(setting.value)) : DEFAULT_QUOTA_RESET;
+  if (!reset) throw new Error("Invalid quota reset setting");
+  return reset;
+}
 
 export async function getGlobalOperatingHours() {
   const setting = await prisma.globalSetting.findUnique({ where: { key: OPERATING_HOURS_KEY } });

@@ -15,7 +15,7 @@ export default function SearchPhoneForm({ onSubmitSuccess, visible, initialValue
     <Form.Item name="sender_group" label={uiText("Grup pengirim")} help={groups.error ? uiText(groups.error) : undefined} validateStatus={groups.error ? "warning" : undefined}><FilterSelect showSearch loading={!groups.data && !groups.error} allLabel={uiText("Semua grup")} options={[{ value: "none", label: uiText("Tanpa grup") }, ...(groups.data || []).map(group => ({ value: group.id, label: `${group.name}${group.enabled ? "" : ` (${uiText("Tidak aktif")})`}` }))]} /></Form.Item>
     <Form.Item name="is_online" label={uiText("Koneksi")}><FilterSelect allLabel={uiText("Semua koneksi")} options={[{ value: "1", label: uiText("Online") }, { value: "0", label: uiText("Offline") }]} /></Form.Item>
     <Form.Item name="active" label={uiText("Status perangkat")}><FilterSelect allLabel={uiText("Semua status")} options={[{ value: "1", label: uiText("Aktif") }, { value: "0", label: uiText("Tidak aktif") }]} /></Form.Item>
-    <Form.Item name="quota_status" label={uiText("Kuota hari ini")}><FilterSelect allLabel={uiText("Semua kuota")} options={[{ value: "fulfilled", label: uiText("Kuota terpenuhi") }, { value: "available", label: uiText("Kuota belum terpenuhi") }]} /></Form.Item>
+    <Form.Item name="quota_status" label={uiText("Kuota pengiriman")}><FilterSelect allLabel={uiText("Semua kuota")} options={[{ value: "fulfilled", label: uiText("Kuota terpenuhi") }, { value: "available", label: uiText("Kuota belum terpenuhi") }]} /></Form.Item>
     <div className="dashboard-filter-actions"><Button type="primary" htmlType="submit">{uiText("Cari")}</Button></div>
   </Form></Card>;
 }

@@ -107,13 +107,14 @@ def enforce_read_only_prisma(command):
         raise RuntimeError('Production database is read-only: Prisma command blocked')
 
 
-def compare_counts(before, after, added_tables=()):
-    # Only explicitly approved, newly created empty feature tables may be added.
+def compare_counts(before, after, added_tables=(), created_table_counts=None):
+    # Only explicitly approved new feature tables may be added.
+    created_table_counts = created_table_counts or {}
     expected = dict(before['counts'])
     for table in added_tables:
-        if table not in {'sender_groups', 'wa_dispatch_attempts'} or table in expected:
+        if table not in {'sender_groups', 'wa_dispatch_attempts', 'device_quota_windows'} or table in expected:
             raise RuntimeError('Unexpected schema table addition')
-        expected[table] = '0'
+        expected[table] = str(created_table_counts.get(table, '0')) if table == 'device_quota_windows' else '0'
     if expected != after['counts']:
         raise RuntimeError('Database tables or row counts changed while stopped')
     if before['migrations'] != after['migrations']:
@@ -262,7 +263,7 @@ def main():
         upgrade_result = json.loads((backup / 'feature-schema-result.json').read_text())
         run(schema_command)
         after = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
-        compare_counts(before, after, upgrade_result['created_tables'])
+        compare_counts(before, after, upgrade_result['created_tables'], upgrade_result.get('created_table_counts'))
         print('DATABASE_AUDIT_UNCHANGED_AUTH_ENV_RECHECK_STARTED', flush=True)
         if private_hashes(APP) != frozen:
             raise RuntimeError('Environment or WhatsApp session changed during deployment')

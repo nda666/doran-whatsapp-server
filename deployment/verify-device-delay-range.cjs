@@ -21,7 +21,7 @@ function loader(stubs = {}) {
   return load;
 }
 const ui = (text, values = {}) => text.replace(/{{(\w+)}}/g, (_, key) => values[key]);
-const base = { id: '00000000-0000-4000-8000-000000000001', name: 'Fixture', dailyLimit: 200, useGlobalQuota: true, minIntervalSeconds: null, maxIntervalSeconds: null, adaptiveEnabled: true, paused: false, health: { multiplier: 1 }, operatingHours: null, globalOperatingHours: { enabled: false, start: '08:00', end: '20:00' }, operatingHoursState: { open: true, nextOpenAt: null }, globalInterval: { minSeconds: 12, maxSeconds: 18 } };
+const base = { id: '00000000-0000-4000-8000-000000000001', name: 'Fixture', quotaReset: null, globalQuotaReset: { mode: 'midnight', hours: 24 }, effectiveQuotaReset: { mode: 'midnight', hours: 24 }, dailyLimit: 200, useGlobalQuota: true, minIntervalSeconds: null, maxIntervalSeconds: null, adaptiveEnabled: true, paused: false, health: { multiplier: 1 }, operatingHours: null, globalOperatingHours: { enabled: false, start: '08:00', end: '20:00' }, operatingHoursState: { open: true, nextOpenAt: null }, globalInterval: { minSeconds: 12, maxSeconds: 18 } };
 async function main() {
   let stored, scoped = 0;
   const api = loader({
@@ -58,6 +58,12 @@ async function main() {
   assert.equal(submitted.minIntervalSeconds, 2); assert.equal(submitted.maxIntervalSeconds, 5);
   await form.props.onFinish({ followGlobal: true, minIntervalSeconds: 2, maxIntervalSeconds: 5 });
   assert.equal(submitted.minIntervalSeconds, null); assert.equal(submitted.maxIntervalSeconds, null);
+  assert.equal(form.props.initialValues.followGlobalQuotaReset, true);
+  assert.deepEqual(form.props.initialValues.customQuotaReset, base.globalQuotaReset);
+  await form.props.onFinish({ followGlobalQuotaReset: false, customQuotaReset: { mode: 'after-full', hours: 6 }, quotaReset: null });
+  assert.deepEqual(submitted.quotaReset, { mode: 'after-full', hours: 6 }, 'Custom reset must override the old form value');
+  await form.props.onFinish({ followGlobalQuotaReset: true, customQuotaReset: { mode: 'after-full', hours: 6 } });
+  assert.equal(submitted.quotaReset, null, 'Following global clears the custom reset');
   const children = React.Children.toArray(form.props.children.props.children);
   const dependent = children.find(child => typeof child.props.children === 'function' && child.props.shouldUpdate({ followGlobal: true }, { followGlobal: false }));
   assert.equal(dependent.props.children({ getFieldValue: () => true }), false);
@@ -79,13 +85,14 @@ async function main() {
   const usage = { attempts: 0, failures: 0 };
   const db = {
     deviceSendPolicy: { createMany: async () => {}, findUniqueOrThrow: async () => policy, update: async ({ data }) => Object.assign(policy, data) },
+    deviceQuotaWindow: { findUnique: async () => null, upsert: async () => ({}) },
     deviceDailyUsage: { upsert: async () => usage, update: async () => { usage.attempts++; } },
     phone: { update: async () => {} },
     $queryRaw: async () => [], $transaction: fn => fn(db),
   };
   const safety = loader({
     'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatchWebhook/events.ts': {},
-    'src/server/dispatch/settings.ts': { getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
+    'src/server/dispatch/settings.ts': { getQuotaReset: async () => ({ mode: 'midnight', hours: 24 }), getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => base.globalInterval },
   })('src/server/messaging/safety.ts');
   async function gap(min, max, rng, attempts = 0, failures = 0, adaptive = true) {
     Object.assign(policy, { minIntervalSeconds: min, maxIntervalSeconds: max, nextAllowedAt: new Date(0), adaptiveEnabled: adaptive });

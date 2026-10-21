@@ -2,6 +2,7 @@ import { useUiTranslation, type UiTranslator } from "@/lib/uiTranslation";
 import { DEVICE_DAILY_QUOTA_KEY } from "@/lib/deviceQuota";
 import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
 import { useState } from "react";
+import { DEFAULT_QUOTA_RESET, QUOTA_RESET_KEY, parseQuotaReset, type QuotaReset } from "@/lib/quotaReset";
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Popover, Select, Space, Table, message } from "antd";
 import { EditOutlined, InfoCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -27,9 +28,10 @@ const fieldDescriptions = (uiText: UiTranslator): Record<string, string> => ({
 });
 
 type Setting = { id: string; label: string; key: string; value: string; secret: boolean };
-type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[]; operatingHours?: OperatingHours };
+type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[]; operatingHours?: OperatingHours; quotaReset?: QuotaReset };
 const generalHelp = (uiText: UiTranslator) => (uiText("Pengaturan global berlaku untuk seluruh aplikasi. Key dibuat sebagai slug dan tidak dapat diubah setelah disimpan."));
 const settingHelp = (uiText: UiTranslator): Record<string, string> => ({
+  [QUOTA_RESET_KEY]: uiText("Default: reset setiap pukul 00.00 WIB. Pilihan jeda: reset sejumlah jam setelah kuota tiap nomor terpenuhi, termasuk batas pemanasan dan kuota custom. Jika kuota belum terpenuhi, pemakaian berlanjut melewati tengah malam. Berlaku untuk semua nomor; jam operasional tetap berlaku."),
   [OPERATING_HOURS_KEY]: uiText("Jam pengiriman setiap hari dalam WIB. Nomor mengikuti jadwal global kecuali memiliki jadwal khusus. Jadwal khusus menggantikan jadwal global untuk nomor tersebut. Di luar jadwal, pesan antrean menunggu tanpa mengonsumsi percobaan atau kuota. Batas usia antrean tetap berlaku. Perubahan terbaca pada pemeriksaan berikutnya tanpa restart."),
   [WARMUP_DAILY_LIMITS_KEY]: uiText("Batas percobaan per hari untuk setiap tahap pemanasan, dipisahkan koma. Contoh: 25,50,100,200,350,500. Setiap tahap berlangsung dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum. Perubahan berlaku pada pengiriman berikutnya tanpa mengulang tanggal mulai pemanasan."),
   [DEVICE_DAILY_QUOTA_KEY]: uiText("Kuota percobaan pengiriman per nomor per hari (WIB). Berlaku untuk nomor yang mengikuti kuota global. Nomor custom memakai batasnya sendiri; batas pemanasan tetap berlaku. Perubahan berlaku pada pengiriman berikutnya tanpa restart."),
@@ -63,15 +65,18 @@ export default function GlobalSettings() {
   const delaySetting = (editing?.key || formKey) === DISPATCH_DELAY_KEY;
   const senderSetting = (editing?.key || formKey) === EMAIL_FROM_KEY;
   const hoursSetting = (editing?.key || formKey) === OPERATING_HOURS_KEY;
+  const resetSetting = (editing?.key || formKey) === QUOTA_RESET_KEY;
+  const resetMode = Form.useWatch(["quotaReset", "mode"], form);
   const show = (setting?: Setting) => {
     setEditing(setting); form.resetFields();
+    form.setFieldValue("quotaReset", setting?.key === QUOTA_RESET_KEY ? parseQuotaReset(setting.value) || DEFAULT_QUOTA_RESET : DEFAULT_QUOTA_RESET);
     const range = setting?.key === DISPATCH_DELAY_KEY ? parseDispatchDelayRange(setting.value) || DEFAULT_DISPATCH_DELAY : DEFAULT_DISPATCH_DELAY;
     form.setFieldsValue({ ...(setting || { label: "", key: "", value: "" }), ...range, operatingHours: setting?.key === OPERATING_HOURS_KEY ? parseOperatingHours(setting.value) || DEFAULT_OPERATING_HOURS : DEFAULT_OPERATING_HOURS, visibleFields: setting?.key === PHONE_FORM_FIELDS_KEY ? parsePhoneFormFields(setting.value) || DEFAULT_PHONE_FORM_FIELDS : DEFAULT_PHONE_FORM_FIELDS }); setOpen(true);
   };
   const save = async (values: Values) => {
     setBusy(true);
     try {
-      const data = { label: values.label, value: hoursSetting ? JSON.stringify(values.operatingHours) : fieldsSetting ? JSON.stringify(values.visibleFields || []) : delaySetting ? JSON.stringify({ minSeconds: values.minSeconds, maxSeconds: values.maxSeconds }) : String(values.value), ...(editing ? { id: editing.id } : { key: values.key || "" }) };
+      const data = { label: values.label, value: resetSetting ? JSON.stringify(values.quotaReset) : hoursSetting ? JSON.stringify(values.operatingHours) : fieldsSetting ? JSON.stringify(values.visibleFields || []) : delaySetting ? JSON.stringify({ minSeconds: values.minSeconds, maxSeconds: values.maxSeconds }) : String(values.value), ...(editing ? { id: editing.id } : { key: values.key || "" }) };
       await axios({ method: editing ? "PATCH" : "POST", url: "/api/admin/global-settings", data, headers: api.headers, timeout: 15000 });
       message.success(uiText("Setting berhasil disimpan.")); setOpen(false); api.reload();
     } catch (error: unknown) {
@@ -86,7 +91,7 @@ export default function GlobalSettings() {
       { title: uiText("Key"), dataIndex: "key", render: (value: string) => <code>{value}</code> },
       { title: uiText("Value"), dataIndex: "value", width: 320, render: (value: string, row) => row.secret
         ? <Input.Password readOnly value={value} autoComplete="off" aria-label={uiText("Value {{v0}}", { v0: row.label })} />
-        : <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 100, overflow: "auto" }}>{row.key === OPERATING_HOURS_KEY ? (() => { const hours = parseOperatingHours(value); return hours ? operatingHoursLabel(hours) : value; })() : row.key === PHONE_FORM_FIELDS_KEY ? (() => { const fields = parsePhoneFormFields(value); return fields ? fields.length ? PHONE_FORM_FIELDS.filter(field => fields.includes(field.value)).map(field => uiText(field.label)).join(", ") : uiText("Semua input tambahan disembunyikan") : value; })() : row.key === DISPATCH_DELAY_KEY ? (() => { const range = parseDispatchDelayRange(value); return range ? uiText("{{v0}}–{{v1}} detik", { v0: range.minSeconds, v1: range.maxSeconds }) : value; })() : row.key === DISPATCH_QUEUE_ORDER_KEY ? uiText(DISPATCH_QUEUE_ORDER_OPTIONS.find(option => option.value === value)?.label || value) : value}</div> },
+        : <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 100, overflow: "auto" }}>{row.key === QUOTA_RESET_KEY ? (() => { const reset = parseQuotaReset(value); return reset ? reset.mode === "midnight" ? uiText("Pukul 00.00 WIB (default)") : uiText("{{v0}} jam setelah kuota terpenuhi", { v0: reset.hours }) : value; })() : row.key === OPERATING_HOURS_KEY ? (() => { const hours = parseOperatingHours(value); return hours ? operatingHoursLabel(hours) : value; })() : row.key === PHONE_FORM_FIELDS_KEY ? (() => { const fields = parsePhoneFormFields(value); return fields ? fields.length ? PHONE_FORM_FIELDS.filter(field => fields.includes(field.value)).map(field => uiText(field.label)).join(", ") : uiText("Semua input tambahan disembunyikan") : value; })() : row.key === DISPATCH_DELAY_KEY ? (() => { const range = parseDispatchDelayRange(value); return range ? uiText("{{v0}}–{{v1}} detik", { v0: range.minSeconds, v1: range.maxSeconds }) : value; })() : row.key === DISPATCH_QUEUE_ORDER_KEY ? uiText(DISPATCH_QUEUE_ORDER_OPTIONS.find(option => option.value === value)?.label || value) : value}</div> },
       { title: uiText("Aksi"), width: 90, render: (_, row) => <Button icon={<EditOutlined />} onClick={() => show(row)} aria-label={uiText("Edit setting {{v0}}", { v0: row.label })}>{uiText("Edit")}</Button> },
     ]} />
     <Modal centered={fieldsSetting || hoursSetting} width={fieldsSetting ? 680 : hoursSetting ? 600 : 520} title={hoursSetting ? uiText("Jam operasional pengiriman") : fieldsSetting ? uiText("Tampilan form perangkat") : editing ? uiText("Edit setting") : uiText("Tambah setting")} open={open} onCancel={() => !busy && setOpen(false)} footer={fieldsSetting || hoursSetting ? <div className={styles.footer}>
@@ -96,7 +101,11 @@ export default function GlobalSettings() {
       <Form id="global-setting-form" className={fieldsSetting ? styles.visibilityBody : hoursSetting ? styles.hoursBody : undefined} form={form} layout="vertical" disabled={busy} onFinish={save} requiredMark={false}>
         <Form.Item hidden={(fieldsSetting || hoursSetting) && !!editing} name="label" label={uiText("Label")} rules={[{ required: true, whitespace: true, message: uiText("Label wajib diisi.") }, { max: 200 }]}><Input maxLength={200} /></Form.Item>
         <Form.Item hidden={(fieldsSetting || hoursSetting) && !!editing} name="key" label={uiText("Key")} extra={editing ? uiText("Key tidak dapat diubah setelah dibuat.") : uiText("Opsional. Jika kosong, key dibuat dari label. Contoh: Postmark Server Token → postmark-server-token.")}><Input disabled={!!editing || busy} maxLength={200} placeholder={uiText("Otomatis dari label")} /></Form.Item>
-        {hoursSetting ? <><OperatingHoursFields name="operatingHours" stackedToggle /><Alert className={styles.hoursInfo} type="info" showIcon message={uiText("Nomor tanpa jadwal khusus mengikuti jam global ini.")} description={uiText("Di luar jadwal, pesan tetap mengantre tanpa memakai percobaan atau kuota. Batas usia antrean tetap berlaku.")} /></> : fieldsSetting ? <>
+        {resetSetting ? <>
+          <Form.Item name={["quotaReset", "mode"]} label={uiText("Waktu reset")} rules={[{ required: true }]}><Select options={[{ value: "midnight", label: uiText("Pukul 00.00 WIB (default)") }, { value: "after-full", label: uiText("Beberapa jam setelah kuota terpenuhi") }]} /></Form.Item>
+          <Form.Item hidden={resetMode !== "after-full"} name={["quotaReset", "hours"]} label={uiText("Jeda setelah kuota terpenuhi (jam)")} rules={[{ required: true }, { type: "integer", min: 1, max: 168 }]}><InputNumber min={1} max={168} precision={0} style={{ width: "100%" }} /></Form.Item>
+          <Alert type="info" showIcon message={uiText("Reset dihitung per nomor")} description={settingHelp(uiText)[QUOTA_RESET_KEY]} />
+        </> : hoursSetting ? <><OperatingHoursFields name="operatingHours" stackedToggle /><Alert className={styles.hoursInfo} type="info" showIcon message={uiText("Nomor tanpa jadwal khusus mengikuti jam global ini.")} description={uiText("Di luar jadwal, pesan tetap mengantre tanpa memakai percobaan atau kuota. Batas usia antrean tetap berlaku.")} /></> : fieldsSetting ? <>
           <p className={styles.intro}>{uiText("Pilih input yang muncul saat menambah atau mengedit perangkat. Berlaku untuk semua pengguna.")}</p>
           <div className={styles.selectionHeading}>
             <div className={styles.selectionTitle}>{uiText("Input yang ditampilkan")}<span className={styles.count}>{selectedFields.length}  {uiText("dari")} {PHONE_FORM_FIELDS.length}</span></div>

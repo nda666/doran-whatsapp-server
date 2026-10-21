@@ -1,10 +1,13 @@
 'use strict';
 // Explicitly approved additive upgrades only. No migrate deploy/resolve, data
-// mutation, migration-history writes, or arbitrary SQL from a deployment diff.
+// mutation of existing rows, migration-history writes, or arbitrary SQL from a deployment diff.
+// Quota initialization only copies current usage into a newly created quota table.
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261021100000_device_quota_reset_override': '631199dee16c982ffd78a032ff59fc2d34130e0fe0b8e0be0a616806cd29bb0a',
+  '20261021090000_device_quota_reset': '0c7abc9ac2f9f201fc6029233fcf4769a979f622fbb4749dd0ee43ebac381e02',
   '20261020030000_sender_groups': '4f9613fe539447a90cbf22c39005fa1ae10aadd66bd0fb9dc18679cdf6adfcf3',
   '20261020040000_operating_hours': '239a206e4f4c025c54626593dead34cb4e80da12ced89d75eb2b5db99dcccf22',
 };
@@ -35,6 +38,12 @@ function operations(root = path.resolve(__dirname, '..')) {
         }
         continue;
       }
+      if (name === '20261021090000_device_quota_reset' && /^INSERT INTO `device_quota_windows` /.test(sql)) {
+        const table = result.find(op => op.kind === 'table' && op.table === 'device_quota_windows');
+        if (!table) throw Error('Quota seed requires its new table');
+        table.seedSql = sql;
+        continue;
+      }
       const alter = /^ALTER TABLE `([a-zA-Z0-9_]+)`\s+([\s\S]+)$/.exec(sql);
       if (!alter) throw Error('Only approved additive DDL is supported');
       for (const action of actions(alter[2])) {
@@ -56,7 +65,7 @@ function validateDiff(diff, ops = operations()) {
     if (alter && actions(alter[2]).every(action => allowed.has(normalize(`ALTER TABLE \`${alter[1]}\` ${action}`)))) continue;
     const index = /^CREATE (UNIQUE )?INDEX `([a-zA-Z0-9_]+)` ON `([a-zA-Z0-9_]+)`\s*(\([\s\S]+\))$/.exec(sql);
     if (index && allowed.has(normalize(`ALTER TABLE \`${index[3]}\` ADD ${index[1] || ''}INDEX \`${index[2]}\` ${index[4]}`))) continue;
-    throw Error('Schema drift outside the two approved additive migrations');
+    throw Error('Schema drift outside the approved additive migrations');
   }
 }
 async function exists(db, op) {
@@ -83,7 +92,7 @@ function requireBackups(directory) {
 async function apply(db, diff, backup) {
   requireBackups(backup);
   const pending = await plan(db, diff);
-  const result = { approved_migrations: Object.keys(approved), executed: [], created_tables: [], history_updated: false };
+  const result = { approved_migrations: Object.keys(approved), executed: [], created_tables: [], created_table_counts: {}, history_updated: false };
   const record = () => fs.writeFileSync(path.join(backup, 'feature-schema-result.json'), JSON.stringify(result), { mode: 0o600 });
   record();
   for (const op of pending) {
@@ -91,7 +100,15 @@ async function apply(db, diff, backup) {
     if (await exists(db, op)) continue;
     await db.$executeRawUnsafe(op.sql);
     result.executed.push(`${op.table}.${op.name}`);
-    if (op.kind === 'table') result.created_tables.push(op.table);
+    if (op.kind === 'table') {
+      result.created_tables.push(op.table);
+      // Hash-pinned seed SQL only runs directly after creating its empty table.
+      if (op.seedSql) await db.$executeRawUnsafe(op.seedSql);
+      if (op.table === 'device_quota_windows') {
+        const [row] = await db.$queryRaw`SELECT COUNT(*) AS total FROM device_quota_windows`;
+        result.created_table_counts[op.table] = String(row.total);
+      }
+    }
     record();
   }
   return result;

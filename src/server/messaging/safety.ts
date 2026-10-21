@@ -8,6 +8,8 @@ import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits, getG
 import { effectiveOperatingHours, operatingHoursState } from "../../lib/operatingHours";
 import { randomDispatchDelay } from "../dispatch/timing";
 import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
+import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
+import { getQuotaReset } from "../dispatch/settings";
 
 export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
   return Math.max(globalDelayMs, (minimumSeconds ?? 0) * 1000) * multiplier;
@@ -49,6 +51,7 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
   const globalRange = await getDispatchDelayRange();
   const warmupLimits = await getWarmupDailyLimits();
   const globalHours = await getGlobalOperatingHours();
+  const quotaReset = await getQuotaReset();
   await prisma.deviceSendPolicy.createMany({ data: [{ phoneId }], skipDuplicates: true });
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT phoneId FROM device_send_policies WHERE phoneId = ${phoneId} FOR UPDATE`;
@@ -59,9 +62,16 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
     const usage = await tx.deviceDailyUsage.upsert({ where: { phoneId_day: { phoneId, day } }, create: { phoneId, day }, update: {} });
     const health = healthAssessment(usage.attempts, usage.failures);
     if (policy.paused || (policy.adaptiveEnabled && health.stop)) throw new SendGuardError("DEVICE_SAFETY_PAUSED", new Date(Date.now() + 300000));
-    if (usage.attempts >= warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), Date.now(), warmupLimits)) throw new SendGuardError("DEVICE_DAILY_LIMIT", new Date(`${day}T17:00:00Z`));
+    const now = new Date();
+    const limit = warmupLimit(policy.warmupStartedAt, deviceDailyQuota(policy, globalQuota), now.getTime(), warmupLimits);
+    const window = await tx.deviceQuotaWindow.findUnique({ where: { phoneId } });
+    const quota = quotaWindowState(window, usage.attempts, limit, effectiveQuotaReset(quotaReset, policy.quotaReset), now);
+    if (quota.used >= limit) throw new SendGuardError("DEVICE_DAILY_LIMIT", quota.resetAt!);
     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
     await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
+    const quotaData = { attempts: quota.used + 1, startedAt: quota.startedAt, lastAttemptAt: now,
+      reachedAt: quota.used + 1 >= limit ? quota.reachedAt ?? now : null };
+    await tx.deviceQuotaWindow.upsert({ where: { phoneId }, create: { phoneId, ...quotaData }, update: quotaData });
     // Match the quota admission event, including retries, before transport runs.
     await tx.phone.update({ where: { id: phoneId }, data: { lastSendProcessedAt: new Date() } });
     const multiplier = policy.adaptiveEnabled ? health.multiplier : 1;

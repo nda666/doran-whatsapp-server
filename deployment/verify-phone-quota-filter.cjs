@@ -9,7 +9,7 @@ function load(file, mocks = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
   const localRequire = createRequire(path.resolve(file));
-  new Function('require', 'module', 'exports', code)(key => key in mocks ? mocks[key] : localRequire(key), module, module.exports);
+  new Function('require', 'module', 'exports', code)(key => key in mocks ? mocks[key] : key.startsWith('.') ? load(path.resolve(path.dirname(file), key + '.ts'), mocks) : localRequire(key), module, module.exports);
   return module.exports;
 }
 const phones = ['a', 'b', 'c', 'd', 'e', 'foreign'].map(id => ({ id, userId: id === 'foreign' ? 'other' : 'owner', senderGroupId: id === 'e' ? null : 'group', active: 1 }));
@@ -21,6 +21,7 @@ const policies = [
 const usages = [{ phoneId: 'a', attempts: 100 }, { phoneId: 'b', attempts: 11 }, { phoneId: 'c', attempts: 25 }, { phoneId: 'd', attempts: 4 }, { phoneId: 'foreign', attempts: 999 }];
 const matches = (row, where) => Object.entries(where).every(([key, value]) => value && typeof value === 'object' ? value.in.includes(row[key]) : row[key] === value);
 let day;
+let windows = [], reset = { mode: "midnight", hours: 2 };
 const db = {
   phone: {
     findMany: async args => {
@@ -31,6 +32,7 @@ const db = {
     },
     count: async ({ where }) => phones.filter(row => matches(row, where)).length,
   },
+  deviceQuotaWindow: { findMany: async () => windows },
   deviceSendPolicy: { findMany: async ({ where }) => policies.filter(row => where.phoneId.in.includes(row.phoneId)) },
   deviceDailyUsage: { findMany: async ({ where }) => { day = where.day; return usages.filter(row => where.phoneId.in.includes(row.phoneId)); } },
   waDispatch: { groupBy: async () => [] },
@@ -43,7 +45,8 @@ const sort = load('src/lib/phonePolicySort.ts');
 const service = load('src/server/messaging/phonePolicySort.ts', {
   '../../lib/prisma': { prisma: db }, '../../lib/phonePolicySort': sort,
   '../../lib/deviceQuota': load('src/lib/deviceQuota.ts'), './safety': safety,
-  '../dispatch/settings': { getGlobalDeviceQuota: async () => 100, getWarmupDailyLimits: async () => [25, 50], getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 2 }) },
+  '../../lib/quotaReset': load('src/lib/quotaReset.ts'),
+  '../dispatch/settings': { getQuotaReset: async () => reset, getGlobalDeviceQuota: async () => 100, getWarmupDailyLimits: async () => [25, 50], getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 2 }) },
 });
 const handler = load('src/pages/api/phones/index.ts', {
   '@/server/dispatch/settings': { getDispatchDisplayWindow: async () => ({ days: 1, createdAt: {} }) },
@@ -76,6 +79,19 @@ async function request(query, id = 'owner') {
   assert.equal((await request({ quota_status: 'invalid' })).total, 5);
   assert.equal((await request({ quota_status: '' })).total, 5);
   assert.equal((await request({ quota_status: 'fulfilled', page: '9' })).data.length, 0);
+  reset = { mode: 'after-full', hours: 2 };
+  windows = [{ phoneId: 'e', attempts: 100, startedAt: new Date(Date.now() - 86400000), reachedAt: new Date(), lastAttemptAt: new Date() }];
+  assert.equal((await request({ quota_status: 'fulfilled' })).total, 4, 'Cross-day full cycle remains exhausted');
+  windows[0].reachedAt = new Date(Date.now() - 7200001);
+  assert.equal((await request({ quota_status: 'fulfilled' })).total, 3, 'Expired cycle is immediately available');
+  assert((await request({ quota_status: 'available' })).data.some(row => row.id === 'e'));
+  reset = { mode: 'midnight', hours: 2 };
+  assert.equal((await request({ quota_status: 'fulfilled' })).total, 3, 'Switching to midnight uses daily consumption');
+  policies.push({ phoneId: 'e', dailyLimit: 100, useGlobalQuota: false, warmupStartedAt: null, quotaReset: { mode: 'after-full', hours: 2 } });
+  windows[0].reachedAt = new Date();
+  assert.equal((await request({ quota_status: 'fulfilled' })).total, 4, 'Per-number hours overrides global midnight');
+  policies.pop();
+  assert.equal((await request({ quota_status: 'fulfilled' })).total, 3, 'Removing override returns to global');
   const search = load('src/lib/phoneSearchState.ts', { './phonePolicySort': sort });
   for (const quota_status of ['fulfilled', 'available', '']) {
     const state = search.readPhoneSearchState({ quota_status, page: '3', sender_group: 'group', sort: 'quota', order: 'desc' });

@@ -2,6 +2,7 @@ import type { NextApiResponse } from "next";
 import { DEFAULT_EMAIL_FROM, EMAIL_FROM_KEY, EMAIL_FROM_LABEL, emailFromInput } from "@/lib/emailSettings";
 import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_DAILY_LIMITS_LABEL, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
 import { z } from "zod";
+import { DEFAULT_QUOTA_RESET, QUOTA_RESET_KEY, QUOTA_RESET_LABEL, parseQuotaReset } from "@/lib/quotaReset";
 import { prisma } from "@/lib/prisma";
 import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import type { AuthNextApiRequest } from "@/types/global";
@@ -19,6 +20,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   const decode = (row: { id: string; label: string; key: string; value: string }) => ({ ...row, value: decryptSetting(row.value), secret: secretSetting(row.key) });
   if (req.method === "GET") {
     await prisma.globalSetting.createMany({ data: [
+      { key: QUOTA_RESET_KEY, label: QUOTA_RESET_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_QUOTA_RESET)) },
       { key: OPERATING_HOURS_KEY, label: OPERATING_HOURS_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_OPERATING_HOURS)) },
       { key: WARMUP_DAILY_LIMITS_KEY, label: WARMUP_DAILY_LIMITS_LABEL, value: encryptSetting(DEFAULT_WARMUP_DAILY_LIMITS.join(",")) },
       { key: DEVICE_DAILY_QUOTA_KEY, label: DEVICE_DAILY_QUOTA_LABEL, value: encryptSetting(String(DEFAULT_DEVICE_DAILY_QUOTA)) },
@@ -44,6 +46,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (id && !previous) return res.status(404).json({ message: "Setting tidak ditemukan." });
   const key = previous?.key || slugSettingKey(parsed.data.key?.trim() || label);
   if (!key || key.length > 120) return res.status(400).json({ message: "Key harus menghasilkan slug sepanjang 1–120 karakter." });
+  if (key === QUOTA_RESET_KEY && !parseQuotaReset(value)) return res.status(400).json({ message: "Pilih reset pukul 00.00 WIB atau 1–168 jam setelah kuota terpenuhi." });
   if (previous && parsed.data.key !== undefined && parsed.data.key !== previous.key) return res.status(409).json({ message: "Key tidak dapat diubah setelah dibuat." });
   if (key === DISPATCH_MAX_AGE_DAYS_KEY && parseDispatchMaxAgeDays(value) === null) return res.status(400).json({ message: "Maksimal usia data antrean harus berupa bilangan bulat 1–3650 hari." });
   if (key === DISPATCH_QUEUE_ORDER_KEY && parseDispatchQueueOrder(value) === null) return res.status(400).json({ message: "Pilih data terlama dahulu atau data terbaru dahulu." });
