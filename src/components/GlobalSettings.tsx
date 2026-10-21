@@ -116,7 +116,7 @@ export default function GlobalSettings() {
             </Radio.Group>
           </Form.Item>
           <div className={styles.resetDuration} hidden={resetMode !== "after-full"}>
-            <Form.Item name={["quotaReset", "hours"]} label={uiText("Durasi jeda")} extra={uiText("1–168 jam, dihitung per nomor.")} rules={[{ required: true }, { type: "integer", min: 1, max: 168 }]}><InputNumber min={1} max={168} precision={0} addonAfter={uiText("jam")} style={{ width: "100%" }} /></Form.Item>
+            <Form.Item name={["quotaReset", "hours"]} label={uiText("Durasi jeda")} extra={uiText("1â€“168 jam, dihitung per nomor.")} rules={[{ required: true }, { type: "integer", min: 1, max: 168 }]}><InputNumber min={1} max={168} precision={0} addonAfter={uiText("jam")} style={{ width: "100%" }} /></Form.Item>
           </div>
           <div className={styles.resetNote}><InfoCircleOutlined /><span>{resetMode === "after-full" ? uiText("Kuota yang belum habis tetap terpakai melewati tengah malam. Pengiriman tetap mengikuti jam operasional.") : uiText("Reset berlaku setiap hari, termasuk saat kuota belum habis.")}</span></div>
         </> : hoursSetting ? <><OperatingHoursFields name="operatingHours" stackedToggle /><Alert className={styles.hoursInfo} type="info" showIcon message={uiText("Nomor tanpa jadwal khusus mengikuti jam global ini.")} description={uiText("Di luar jadwal, pesan tetap mengantre tanpa memakai percobaan atau kuota. Batas usia antrean tetap berlaku.")} /></> : fieldsSetting ? <>
