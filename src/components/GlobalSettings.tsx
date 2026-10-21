@@ -3,7 +3,7 @@ import { DEVICE_DAILY_QUOTA_KEY } from "@/lib/deviceQuota";
 import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
 import { useState } from "react";
 import { DEFAULT_QUOTA_RESET, QUOTA_RESET_KEY, parseQuotaReset, type QuotaReset } from "@/lib/quotaReset";
-import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Popover, Select, Space, Table, message } from "antd";
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Popover, Radio, Select, Space, Table, message } from "antd";
 import { EditOutlined, InfoCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { EMAIL_FROM_KEY } from "@/lib/emailSettings";
@@ -94,17 +94,31 @@ export default function GlobalSettings() {
         : <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 100, overflow: "auto" }}>{row.key === QUOTA_RESET_KEY ? (() => { const reset = parseQuotaReset(value); return reset ? reset.mode === "midnight" ? uiText("Pukul 00.00 WIB (default)") : uiText("{{v0}} jam setelah kuota terpenuhi", { v0: reset.hours }) : value; })() : row.key === OPERATING_HOURS_KEY ? (() => { const hours = parseOperatingHours(value); return hours ? operatingHoursLabel(hours) : value; })() : row.key === PHONE_FORM_FIELDS_KEY ? (() => { const fields = parsePhoneFormFields(value); return fields ? fields.length ? PHONE_FORM_FIELDS.filter(field => fields.includes(field.value)).map(field => uiText(field.label)).join(", ") : uiText("Semua input tambahan disembunyikan") : value; })() : row.key === DISPATCH_DELAY_KEY ? (() => { const range = parseDispatchDelayRange(value); return range ? uiText("{{v0}}–{{v1}} detik", { v0: range.minSeconds, v1: range.maxSeconds }) : value; })() : row.key === DISPATCH_QUEUE_ORDER_KEY ? uiText(DISPATCH_QUEUE_ORDER_OPTIONS.find(option => option.value === value)?.label || value) : value}</div> },
       { title: uiText("Aksi"), width: 90, render: (_, row) => <Button icon={<EditOutlined />} onClick={() => show(row)} aria-label={uiText("Edit setting {{v0}}", { v0: row.label })}>{uiText("Edit")}</Button> },
     ]} />
-    <Modal centered={fieldsSetting || hoursSetting} width={fieldsSetting ? 680 : hoursSetting ? 600 : 520} title={hoursSetting ? uiText("Jam operasional pengiriman") : fieldsSetting ? uiText("Tampilan form perangkat") : editing ? uiText("Edit setting") : uiText("Tambah setting")} open={open} onCancel={() => !busy && setOpen(false)} footer={fieldsSetting || hoursSetting ? <div className={styles.footer}>
+    <Modal centered={fieldsSetting || hoursSetting || resetSetting} width={fieldsSetting ? 680 : hoursSetting ? 600 : resetSetting ? 560 : 520} title={resetSetting ? uiText("Reset kuota pengiriman") : hoursSetting ? uiText("Jam operasional pengiriman") : fieldsSetting ? uiText("Tampilan form perangkat") : editing ? uiText("Edit setting") : uiText("Tambah setting")} open={open} onCancel={() => !busy && setOpen(false)} footer={fieldsSetting || hoursSetting || resetSetting ? <div className={styles.footer}>
       <Button disabled={busy} onClick={() => setOpen(false)}>{uiText("Batal")}</Button>
       <Button type="primary" htmlType="submit" form="global-setting-form" loading={busy}>{uiText("Simpan perubahan")}</Button>
     </div> : null} destroyOnHidden>
-      <Form id="global-setting-form" className={fieldsSetting ? styles.visibilityBody : hoursSetting ? styles.hoursBody : undefined} form={form} layout="vertical" disabled={busy} onFinish={save} requiredMark={false}>
-        <Form.Item hidden={(fieldsSetting || hoursSetting) && !!editing} name="label" label={uiText("Label")} rules={[{ required: true, whitespace: true, message: uiText("Label wajib diisi.") }, { max: 200 }]}><Input maxLength={200} /></Form.Item>
-        <Form.Item hidden={(fieldsSetting || hoursSetting) && !!editing} name="key" label={uiText("Key")} extra={editing ? uiText("Key tidak dapat diubah setelah dibuat.") : uiText("Opsional. Jika kosong, key dibuat dari label. Contoh: Postmark Server Token → postmark-server-token.")}><Input disabled={!!editing || busy} maxLength={200} placeholder={uiText("Otomatis dari label")} /></Form.Item>
+      <Form id="global-setting-form" className={resetSetting ? styles.resetBody : fieldsSetting ? styles.visibilityBody : hoursSetting ? styles.hoursBody : undefined} form={form} layout="vertical" disabled={busy} onFinish={save} requiredMark={false}>
+        <Form.Item hidden={(fieldsSetting || hoursSetting || resetSetting) && !!editing} name="label" label={uiText("Label")} rules={[{ required: true, whitespace: true, message: uiText("Label wajib diisi.") }, { max: 200 }]}><Input maxLength={200} /></Form.Item>
+        <Form.Item hidden={(fieldsSetting || hoursSetting || resetSetting) && !!editing} name="key" label={uiText("Key")} extra={editing ? uiText("Key tidak dapat diubah setelah dibuat.") : uiText("Opsional. Jika kosong, key dibuat dari label. Contoh: Postmark Server Token → postmark-server-token.")}><Input disabled={!!editing || busy} maxLength={200} placeholder={uiText("Otomatis dari label")} /></Form.Item>
         {resetSetting ? <>
-          <Form.Item name={["quotaReset", "mode"]} label={uiText("Waktu reset")} rules={[{ required: true }]}><Select options={[{ value: "midnight", label: uiText("Pukul 00.00 WIB (default)") }, { value: "after-full", label: uiText("Beberapa jam setelah kuota terpenuhi") }]} /></Form.Item>
-          <Form.Item hidden={resetMode !== "after-full"} name={["quotaReset", "hours"]} label={uiText("Jeda setelah kuota terpenuhi (jam)")} rules={[{ required: true }, { type: "integer", min: 1, max: 168 }]}><InputNumber min={1} max={168} precision={0} style={{ width: "100%" }} /></Form.Item>
-          <Alert type="info" showIcon message={uiText("Reset dihitung per nomor")} description={settingHelp(uiText)[QUOTA_RESET_KEY]} />
+          <p className={styles.resetIntro}>{uiText("Pilih kapan kuota pengiriman kembali tersedia. Nomor dengan pengaturan khusus mengikuti pilihannya sendiri.")}</p>
+          <Form.Item name={["quotaReset", "mode"]} className={styles.resetChoiceField} rules={[{ required: true }]}>
+            <Radio.Group className={styles.resetChoices} aria-label={uiText("Waktu reset kuota")}>
+              <Radio value="midnight">
+                <span className={styles.resetChoiceTitle}>{uiText("Setiap tengah malam")}<span className={styles.resetDefault}>{uiText("Default")}</span></span>
+                <span className={styles.resetChoiceDescription}>{uiText("Kuota kembali penuh setiap pukul 00.00 WIB.")}</span>
+              </Radio>
+              <Radio value="after-full">
+                <span className={styles.resetChoiceTitle}>{uiText("Setelah kuota terpenuhi")}</span>
+                <span className={styles.resetChoiceDescription}>{uiText("Mulai hitung jeda saat kuota masing-masing nomor habis.")}</span>
+              </Radio>
+            </Radio.Group>
+          </Form.Item>
+          <div className={styles.resetDuration} hidden={resetMode !== "after-full"}>
+            <Form.Item name={["quotaReset", "hours"]} label={uiText("Durasi jeda")} extra={uiText("1�168 jam, dihitung per nomor.")} rules={[{ required: true }, { type: "integer", min: 1, max: 168 }]}><InputNumber min={1} max={168} precision={0} addonAfter={uiText("jam")} style={{ width: "100%" }} /></Form.Item>
+          </div>
+          <div className={styles.resetNote}><InfoCircleOutlined /><span>{resetMode === "after-full" ? uiText("Kuota yang belum habis tetap terpakai melewati tengah malam. Pengiriman tetap mengikuti jam operasional.") : uiText("Reset berlaku setiap hari, termasuk saat kuota belum habis.")}</span></div>
         </> : hoursSetting ? <><OperatingHoursFields name="operatingHours" stackedToggle /><Alert className={styles.hoursInfo} type="info" showIcon message={uiText("Nomor tanpa jadwal khusus mengikuti jam global ini.")} description={uiText("Di luar jadwal, pesan tetap mengantre tanpa memakai percobaan atau kuota. Batas usia antrean tetap berlaku.")} /></> : fieldsSetting ? <>
           <p className={styles.intro}>{uiText("Pilih input yang muncul saat menambah atau mengedit perangkat. Berlaku untuk semua pengguna.")}</p>
           <div className={styles.selectionHeading}>
@@ -129,7 +143,7 @@ export default function GlobalSettings() {
         </> : <Form.Item name="value" label={warmupSetting ? uiText("Batas percobaan pemanasan per hari") : quotaSetting ? uiText("Kuota per nomor per hari") : senderSetting ? uiText("Email pengirim") : orderSetting ? uiText("Urutan pengiriman") : ageSetting ? uiText("Maksimal usia data (hari)") : "Value"} extra={warmupSetting ? settingHelp(uiText)[WARMUP_DAILY_LIMITS_KEY] : quotaSetting ? settingHelp(uiText)[DEVICE_DAILY_QUOTA_KEY] : senderSetting ? settingHelp(uiText)[EMAIL_FROM_KEY] : orderSetting ? uiText("Berdasarkan waktu masuk antrean. Berlaku pada pemilihan pesan berikutnya tanpa restart.") : ageSetting ? uiText("Masukkan bilangan bulat 1–3650 hari. Batas berlaku untuk data yang masih menunggu.") : uiText("Disimpan sebagai teks. Karakter kontrol dibersihkan; HTML tidak dijalankan.")} rules={warmupSetting ? [{ validator: (_, value) => typeof value === "string" && parseWarmupDailyLimits(value) ? Promise.resolve() : Promise.reject(new Error(uiText(WARMUP_LIMITS_ERROR))) }] : quotaSetting ? [{ required: true, message: uiText("Kuota wajib diisi.") }, { validator: (_, value) => /^\d+$/.test(String(value)) && Number(value) >= 1 && Number(value) <= 100000 ? Promise.resolve() : Promise.reject(new Error(uiText("Masukkan bilangan bulat 1–100000."))) }] : senderSetting ? [{ required: true, message: uiText("Email pengirim wajib diisi.") }, { type: "email", message: uiText("Masukkan alamat email yang valid.") }, { max: 254 }] : orderSetting ? [{ required: true, message: uiText("Pilih urutan pengiriman.") }] : ageSetting ? [{ required: true, message: uiText("Jumlah hari wajib diisi.") }] : [{ required: true, message: uiText("Value wajib diisi.") }, { max: 16000 }]}>
           {warmupSetting ? <Input placeholder={DEFAULT_WARMUP_DAILY_LIMITS.join(",")} maxLength={16000} /> : quotaSetting ? <InputNumber min={1} max={100000} precision={0} style={{ width: "100%" }} /> : senderSetting ? <Input type="email" maxLength={254} placeholder={uiText("wa@dorandev.com")} /> : orderSetting ? <Select options={DISPATCH_QUEUE_ORDER_OPTIONS.map(option => ({ ...option, label: uiText(option.label) }))} /> : ageSetting ? <InputNumber min={1} max={MAX_DISPATCH_MAX_AGE_DAYS} precision={0} stringMode style={{ width: "100%" }} /> : editing?.secret ? <Input.Password autoComplete="new-password" maxLength={16000} /> : <Input.TextArea autoSize={{ minRows: 3, maxRows: 10 }} maxLength={16000} />}
         </Form.Item>}
-        {!fieldsSetting && !hoursSetting && <Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan setting")}</Button>}
+        {!fieldsSetting && !hoursSetting && !resetSetting && <Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan setting")}</Button>}
       </Form>
     </Modal>
   </Space>;
