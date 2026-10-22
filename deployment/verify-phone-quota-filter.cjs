@@ -49,6 +49,8 @@ const service = load('src/server/messaging/phonePolicySort.ts', {
   '../dispatch/settings': { getQuotaReset: async () => reset, getGlobalDeviceQuota: async () => 100, getWarmupDailyLimits: async () => [25, 50], getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 2 }) },
 });
 const handler = load('src/pages/api/phones/index.ts', {
+  '@/server/messaging/safety': safety,
+  '@/lib/dispatchDateFilter': load('src/lib/dispatchDateFilter.ts'),
   '@/server/dispatch/settings': { getDispatchDisplayWindow: async () => ({ days: 1, createdAt: {} }) },
   '@/lib/tableQuery': load('src/lib/tableQuery.ts'), '@/lib/access': { isSuperAdmin: user => user.id === 'admin', ownerScope: user => user.id === 'admin' ? {} : { userId: user.id } },
   '@/lib/prisma': { prisma: db }, '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },

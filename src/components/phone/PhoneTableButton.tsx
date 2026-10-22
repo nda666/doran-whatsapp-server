@@ -26,6 +26,7 @@ export interface PhoneTableButtonProps {
   phone: PhoneRow;
   generatingToken?: boolean;
   onGenerateTokenClick?: () => void;
+  onReassignSender?: () => void;
   policyAvailable?: boolean;
   onPolicyClick?: () => void;
   onAutoReply?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
@@ -44,6 +45,7 @@ export default function PhoneTableButton({
   phone,
   generatingToken,
   onGenerateTokenClick,
+  onReassignSender,
   policyAvailable,
   onPolicyClick,
   onAutoReply,
@@ -59,6 +61,7 @@ export default function PhoneTableButton({
   const router = useRouter();
   const [modal, contextHolder] = Modal.useModal();
   const items: MenuProps["items"] = [
+    { label: uiText("Ubah nomor pengiriman"), key: `${phone.id}-reassign`, icon: <SendOutlined />, onClick: () => onReassignSender?.() },
     {
       label: t("scan_qrcode"),
       key: `${phone.id}-2`,

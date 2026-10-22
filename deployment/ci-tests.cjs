@@ -14,6 +14,7 @@ const tests = [
   'verify-phone-last-offline.cjs', 'verify-phone-last-send.cjs',
   'verify-phone-sender-group.cjs', 'verify-phone-search-return.cjs',
   'verify-sender-number-membership.cjs',
+  'verify-manual-sender-reassignment.cjs',
   'verify-phone-quota-filter.cjs',
   'verify-daily-warmup.cjs',
   'verify-quota-recovery.cjs', 'verify-device-quota-reset.cjs',

@@ -26,6 +26,7 @@ import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import TestSendModal from "@/components/phone/TestSendModal";
+import ReassignSenderModal from "@/components/phone/ReassignSenderModal";
 import PhoneCleanupModal from "@/components/phone/PhoneCleanupModal";
 import PhoneFormModal, {
   PhoneFormData,
@@ -55,6 +56,7 @@ const PhonePage = () => {
   };
   const table = useTableState({ value: searchState.table, onChange: next => replaceSearch({ ...searchState, table: next }) });
   const [testPhone, setTestPhone] = useState<Phone>();
+  const [reassignPhone, setReassignPhone] = useState<Phone>();
   const [cleanupPhone, setCleanupPhone] = useState<Phone>();
   const [state, setState] = useState<{
     openForm: boolean;
@@ -208,6 +210,11 @@ const PhonePage = () => {
       render: (_v, phone) => <Space size={8} style={{ whiteSpace: "nowrap" }}><PhoneConnectionStatus connection={phone.connection} />{phone.connection?.action === "scan_qr" && <Button size="small" onClick={() => onGetQrCodeClick(phone)}>{uiText("Scan QR")}</Button>}</Space>,
     },
     ...policies.columns.filter(column => column.key === "quota"),
+    {
+      title: uiText("Menunggu pengiriman hari ini"),
+      key: "pendingToday",
+      render: (_value: unknown, phone: PhoneRow) => <Tag color={phone.pendingToday ? "gold" : "default"}>{phone.pendingToday ?? "—"}</Tag>,
+    },
     ...policies.columns.filter(column => column.key === "lastSendProcessedAt"),
     {
       title: uiText("Terakhir Offline"),
@@ -314,6 +321,7 @@ const PhonePage = () => {
         return (
           <PhoneTableButton
             phone={phone}
+            onReassignSender={() => setReassignPhone(phone)}
             generatingToken={generatingTokens}
             policyAvailable={policies.hasPolicy(phone.id)}
             onPolicyClick={() => policies.open(phone.id)}
@@ -530,6 +538,11 @@ const PhonePage = () => {
         <TestSendModal open={!!testPhone} phone={testPhone} token={session?.user?.token}
           onClose={() => setTestPhone(undefined)} />
         {policies.modal}
+        {reassignPhone && <ReassignSenderModal key={reassignPhone.id} phone={reassignPhone} token={session?.user?.token}
+          onClose={() => setReassignPhone(undefined)} onSaved={count => {
+            setReassignPhone(undefined); refreshPhones.current(); policies.reload();
+            notif.success({ message: uiText("{{v0}} pesan antrean berhasil dialihkan.", { v0: count }) });
+          }} />}
 
         {contextHolder}
         {notificationContext}

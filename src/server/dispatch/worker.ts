@@ -95,6 +95,7 @@ export async function processPhone(phoneId: string) {
   let heartbeatBusy = false;
   let senderId = phoneId;
   let grouped = false;
+  let independentSender = false;
   let alternateLease = false;
   let attemptId: string | undefined;
   let attemptResult: { status: string; error: string | null } | undefined;
@@ -114,6 +115,7 @@ export async function processPhone(phoneId: string) {
     sendRange = range;
     const job = await prisma.waDispatch.findFirst({ where: { phoneId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable()] }, include: { campaign: true, media: true }, orderBy: dispatchQueueOrderBy(order) });
     if (!job) return;
+    independentSender = !!job.senderPhoneId && job.senderPhoneId !== phoneId;
     const selection = await selectDispatchSender(origin, job, token, leaseMs);
     grouped = selection.grouped;
     const { phone, socket } = selection;
@@ -121,13 +123,22 @@ export async function processPhone(phoneId: string) {
       const offlineError = selection.outsideHours ? "OUTSIDE_OPERATING_HOURS" : grouped ? "SENDER_GROUP_UNAVAILABLE" : origin.active !== 1 ? "DEVICE_INACTIVE" : "DEVICE_OFFLINE";
       // Defer this job without blocking newer, unsent jobs that can use a backup.
       sendGap = grouped ? 1000 : 30_000;
-      await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: {
+      await updateDispatches({ where: { id: job.id, status: "QUEUED", senderPhoneId: job.senderPhoneId, messageId: job.messageId }, data: {
         lastError: job.messageId && !selection.outsideHours ? job.lastError : offlineError, nextAttemptAt: new Date(Date.now() + 30_000),
       } });
       return;
     }
     senderId = phone.id;
     alternateLease = selection.leased;
+    // Manual assignments retain their origin identity, but share the actual
+    // sender's queue order with its own jobs. Both workers hold the same sender
+    // lease before checking the turn, so an alias cannot overtake an older job.
+    const senderTurn = await prisma.waDispatch.findFirst({ where: {
+      userId: job.userId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null,
+      nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable(),
+        { OR: [{ id: job.id }, { senderPhoneId: senderId }, { senderPhoneId: null, phoneId: senderId }] }],
+    }, orderBy: dispatchQueueOrderBy(order), select: { id: true } });
+    if (senderTurn?.id !== job.id) { sendGap = 1000; return; }
     if (await recipientBlocked(job.userId, job.recipient)) {
       await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: { status: "SUPPRESSED", lastError: "RECIPIENT_OPTED_OUT" } });
       return;
@@ -170,7 +181,7 @@ export async function processPhone(phoneId: string) {
       const held = await tx.waSenderLease.findFirst({ where: { phoneId, leaseToken: token, leaseUntil: { gt: new Date() } } });
       if (!held) return false;
       if (alternateLease && !await tx.waSenderLease.findFirst({ where: { phoneId: senderId, leaseToken: token, leaseUntil: { gt: new Date() } } })) return false;
-      const claim = await updateDispatches({ where: { id: job.id, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, AND: [ageEligible(claimCutoff), retryEligible(), dispatchDeadline()] },
+      const claim = await updateDispatches({ where: { id: job.id, status: "QUEUED", senderPhoneId: job.senderPhoneId, messageId: job.messageId, sentAt: null, deliveredAt: null, readAt: null, AND: [ageEligible(claimCutoff), retryEligible(), dispatchDeadline()] },
         data: { status: "PROCESSING", attempts: { increment: 1 }, messageId, leaseToken: token,
           senderPhoneId: senderId, senderGroupId: selection.groupId,
           leaseUntil: new Date(Date.now() + leaseMs), lastError: null } }, tx);
@@ -183,6 +194,7 @@ export async function processPhone(phoneId: string) {
     if (!claimed) return;
     progress.worker_last_claim = Date.now();
     claims.set(phoneId, progress.worker_last_claim);
+    claims.set(senderId, progress.worker_last_claim);
     jobId = job.id;
     let timeout: NodeJS.Timeout | undefined;
     let ackObservation: AckObservation = { tag: null, code: null };
@@ -272,7 +284,7 @@ export async function processPhone(phoneId: string) {
     const nextSendAt = new Date(Math.max(policy?.nextAllowedAt.getTime() || 0,
       Date.now() + (sendGap ?? (jobId ? 0 : randomDispatchDelay(sendRange)))));
     await prisma.waSenderLease.updateMany({ where: { phoneId, leaseToken: token },
-      data: { leaseToken: null, leaseUntil: null, nextSendAt: grouped ? new Date(Date.now() + (sendGap ?? 0)) : nextSendAt } });
+      data: { leaseToken: null, leaseUntil: null, nextSendAt: grouped ? new Date(Date.now() + (sendGap ?? 0)) : independentSender ? new Date(Date.now() + 1000) : nextSendAt } });
     if (alternateLease) await prisma.waSenderLease.updateMany({ where: { phoneId: senderId, leaseToken: token },
       data: { leaseToken: null, leaseUntil: null, nextSendAt } });
   }
@@ -330,13 +342,13 @@ export function startDispatchWorker() {
     if (stopping || sampling) return;
     const startedAt = Date.now();
     sampling = getDispatchAgeCutoff().then(cutoff => prisma.$queryRaw<QueueSample[]>`
-      SELECT d.phoneId, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
+      SELECT COALESCE(d.senderPhoneId, d.phoneId) AS phoneId, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
       FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId
       WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS')) AND d.sentAt IS NULL
       AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
       AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
       AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))
-      GROUP BY d.phoneId`).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
+      GROUP BY COALESCE(d.senderPhoneId, d.phoneId)`).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
       .catch(error => logFailure("DISPATCH_HEALTH_SAMPLE_FAILED", error, startedAt))
       .finally(() => { sampling = undefined; });
   };

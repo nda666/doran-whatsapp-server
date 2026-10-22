@@ -7,7 +7,7 @@ import type { Phone, SenderGroup, User } from "@prisma/client";
 import type { PhoneCleanupOptions } from "./phoneCleanup";
 import type { PhoneConnectionInfo } from "./phoneConnectionStatus";
 
-export type PhoneRow = Phone & { user?: Pick<User, "id" | "name" | "email">; senderGroup?: Pick<SenderGroup, "id" | "name" | "enabled"> | null; connection?: PhoneConnectionInfo };
+export type PhoneRow = Phone & { pendingToday?: number; user?: Pick<User, "id" | "name" | "email">; senderGroup?: Pick<SenderGroup, "id" | "name" | "enabled"> | null; connection?: PhoneConnectionInfo };
 
 type ResponseResult = {
   success: boolean;

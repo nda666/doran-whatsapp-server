@@ -58,7 +58,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   const phones = await prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: Array.from(new Set(jobs.flatMap(job => [job.phoneId, job.senderPhoneId || job.phoneId]))) } }, select: { id: true, name: true, number: true, active: true, status: true } });
   return res.status(200).json({ result: true, total, page, max_age_days: maxAgeDays, display_cutoff: cutoff, counts: Object.fromEntries(counts.map(item => [item.status, item._count._all])),
     data: jobs.map(job => ({ ...dispatchSummary(job), updated_at: job.updatedAt, job_id: job.clientJobId, transaction_id: job.transactionId, store_id: job.storeId,
-      message_key: job.messageKey, source: job.source, waiting_reason: dispatchWaitingReason(job, phones.find(phone => phone.id === job.phoneId)),
+      message_key: job.messageKey, source: job.source, waiting_reason: dispatchWaitingReason(job, phones.find(phone => phone.id === (job.senderPhoneId || job.phoneId))),
       sender: phones.find(phone => phone.id === (job.senderPhoneId || job.phoneId))?.number || job.senderPhoneId || job.phoneId,
       origin_sender: phones.find(phone => phone.id === job.phoneId)?.number || job.phoneId })) });
 }

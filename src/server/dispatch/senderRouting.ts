@@ -17,16 +17,19 @@ export function pinnedSender(job: Pick<WaDispatch, "phoneId" | "senderPhoneId" |
 }
 
 export async function selectDispatchSender(origin: Phone, job: WaDispatch, token: string, leaseMs: number) {
-  const grouped = job.source === "API" && !job.campaignId && await hasEnabledSenderGroup(origin);
+  // Manual assignments have no group, and remain independent on ACK retries.
+  const manual = !!job.senderPhoneId && !job.senderGroupId;
+  const assigned = manual && !job.messageId ? job.senderPhoneId : null;
+  const grouped = !manual && job.source === "API" && !job.campaignId && await hasEnabledSenderGroup(origin);
   const pinned = pinnedSender(job);
   // A pinned sender remains usable after membership changes, but only within the owner.
-  const phones = pinned
-    ? await prisma.phone.findMany({ where: { id: pinned, userId: origin.userId } })
+  const phones = pinned || assigned
+    ? await prisma.phone.findMany({ where: { id: (pinned || assigned)!, userId: origin.userId } })
     : grouped
       ? await prisma.phone.findMany({ where: { senderGroupId: origin.senderGroupId, userId: origin.userId }, orderBy: [{ senderPriority: "asc" }, { id: "asc" }] })
       : [origin];
   // Preserve the caller's primary number; priority orders the fallback numbers.
-  if (!pinned) phones.sort((a, b) => Number(b.id === origin.id) - Number(a.id === origin.id));
+  if (!pinned && !assigned) phones.sort((a, b) => Number(b.id === origin.id) - Number(a.id === origin.id));
   const [globalQuota, warmupLimits] = grouped ? await Promise.all([getGlobalDeviceQuota(), getWarmupDailyLimits()]) : [0, []];
   const globalHours = await getGlobalOperatingHours();
   const quotaReset = grouped ? await getQuotaReset() : DEFAULT_QUOTA_RESET;
@@ -59,7 +62,7 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
         data: { leaseToken: token, leaseUntil: new Date(Date.now() + leaseMs) } });
       if (!held.count) continue;
     }
-    return { phone, socket, groupId: grouped ? origin.senderGroupId : job.senderGroupId,
+    return { phone, socket, groupId: assigned ? null : grouped ? origin.senderGroupId : job.senderGroupId,
       grouped, leased: phone.id !== origin.id, outsideHours: false };
   }
   return { grouped, phone: null, socket: null, groupId: grouped ? origin.senderGroupId : job.senderGroupId, leased: false, outsideHours };

@@ -25,7 +25,7 @@ async function scenario(options = {}) {
   const policy = { phoneId: 'p', dailyLimit: 45, useGlobalQuota: true, paused: false,
     adaptiveEnabled: true, warmupStartedAt: null, nextAllowedAt: new Date(now.getTime() + 10000), ...options.policy };
   const usage = { attempts: 45, failures: 0, ...options.usage };
-  const job = { phoneId: 'p', status: 'QUEUED', lastError: 'DEVICE_DAILY_LIMIT',
+  const job = { phoneId: 'p', senderPhoneId: null, status: 'QUEUED', lastError: 'DEVICE_DAILY_LIMIT',
     nextAttemptAt: midnight, messageId: null, sentAt: null, deliveredAt: null, readAt: null, ...options.job };
   const others = [
     { ...job, lastError: 'DEVICE_OFFLINE' }, { ...job, status: 'UNCERTAIN' },
@@ -39,7 +39,7 @@ async function scenario(options = {}) {
   };
   let reads = 0;
   const db = {
-    waDispatch: { findMany: async ({ where }) => jobs.filter(row => matches(row, where)).map(row => ({ phoneId: row.phoneId })),
+    waDispatch: { findMany: async ({ where }) => jobs.filter(row => matches(row, where)).map(row => ({ phoneId: row.phoneId, senderPhoneId: row.senderPhoneId })),
       updateMany: async args => update(jobs, args) },
     deviceQuotaWindow: { findUnique: async () => options.window || null },
     deviceSendPolicy: { findUnique: async () => policy },
@@ -81,6 +81,7 @@ async function scenario(options = {}) {
   await scenario({ policy: { warmupStartedAt: new Date('2026-10-19T00:00:00Z') }, blocked: true });
   await scenario({ policy: { warmupStartedAt: new Date('2026-10-19T00:00:00Z') }, warmupLimits: [50, 100] });
   await scenario({ job: { messageId: 'existing-safe-retry' } });
+  await scenario({ job: { phoneId: 'origin', senderPhoneId: 'p' } });
   const window = { attempts: 45, startedAt: new Date('2026-10-18T00:00:00Z'), lastAttemptAt: new Date('2026-10-19T03:00:00Z'), reachedAt: new Date('2026-10-19T03:00:00Z') };
   await scenario({ globalQuota: 45, reset: { mode: 'after-full', hours: 2 }, window, blocked: true });
   await scenario({ globalQuota: 45, window, policy: { quotaReset: { mode: 'after-full', hours: 2 } }, blocked: true });

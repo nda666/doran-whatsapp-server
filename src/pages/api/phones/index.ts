@@ -10,6 +10,8 @@ import { enqueueDeviceEvent, updateDevice } from "@/server/deviceWebhook/events"
 import { getPhoneConnectionInfo } from "@/server/phoneConnectionInfo";
 import { isPhonePolicySort } from "@/lib/phonePolicySort";
 import { phonePolicyPage, phoneQuotaWhere } from "@/server/messaging/phonePolicySort";
+import { usageDay } from "@/server/messaging/safety";
+import { dispatchDateFilter } from "@/lib/dispatchDateFilter";
 const input = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
   webhookUrl: z.string().max(2000).refine(v => !v || /^https?:\/\//.test(v), "Webhook URL tidak valid").nullable().optional(),
   warmupEnabled: z.boolean().optional(), readReceipt: z.boolean().optional(), rejectCall: z.boolean().optional(), showOnline: z.boolean().optional(), showTyping: z.boolean().optional(), autoReplyEnabled: z.boolean().optional(), saveIncomingMessages: z.boolean().optional() });
@@ -59,7 +61,17 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     }
     const window = await getDispatchDisplayWindow();
     const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...ownerScope(req.user!), createdAt: window.createdAt, phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
-    const rows = await Promise.all(data.map(async p => ({ ...p, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
+    const today = usageDay();
+    const ids = data.map(p => p.id);
+    const pending = await prisma.waDispatch.groupBy({ by: ["phoneId", "senderPhoneId"],
+      where: { ...ownerScope(req.user!), status: "QUEUED", createdAt: dispatchDateFilter(today, today),
+        OR: [{ senderPhoneId: { in: ids } }, { senderPhoneId: null, phoneId: { in: ids } }] }, _count: { _all: true } });
+    const pendingBySender = new Map<string, number>();
+    for (const row of pending) {
+      const id = row.senderPhoneId || row.phoneId;
+      pendingBySender.set(id, (pendingBySender.get(id) || 0) + row._count._all);
+    }
+    const rows = await Promise.all(data.map(async p => ({ ...p, pendingToday: pendingBySender.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
     // Preserve array shape for integrations that don't request pagination.
     return res.json(req.query.page ? { data: rows, total, page, pageSize: limit } : rows);
   }

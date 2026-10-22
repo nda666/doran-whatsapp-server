@@ -11,11 +11,12 @@ export async function recoverQuotaDispatches(now = new Date()) {
   const waiting = { status: "QUEUED" as const, lastError: "DEVICE_DAILY_LIMIT",
     sentAt: null, deliveredAt: null, readAt: null };
   const senders = await prisma.waDispatch.findMany({ where: { ...waiting, nextAttemptAt: { gt: now } },
-    distinct: ["phoneId"], select: { phoneId: true } });
+    distinct: ["phoneId", "senderPhoneId"], select: { phoneId: true, senderPhoneId: true } });
   if (!senders.length) return;
   const [globalQuota, warmupLimits] = await Promise.all([getGlobalDeviceQuota(), getWarmupDailyLimits()]);
   const quotaReset = await getQuotaReset();
-  for (const { phoneId } of senders) {
+  for (const phoneId of Array.from(new Set(senders.map(sender => sender.senderPhoneId || sender.phoneId)))) {
+    const senderWhere = { OR: [{ senderPhoneId: phoneId }, { senderPhoneId: null, phoneId }] };
     const [policy, usage] = await Promise.all([
       prisma.deviceSendPolicy.findUnique({ where: { phoneId } }),
       prisma.deviceDailyUsage.findUnique({ where: { phoneId_day: { phoneId, day: usageDay(now) } } }),
@@ -32,7 +33,7 @@ export async function recoverQuotaDispatches(now = new Date()) {
         const idle = await tx.waSenderLease.updateMany({ where: { phoneId,
           OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] },
           data: { nextSendAt: new Date(Math.max(quota.resetAt!.getTime(), policy.nextAllowedAt.getTime())) } });
-        if (idle.count) await tx.waDispatch.updateMany({ where: { ...waiting, phoneId, nextAttemptAt: { gt: now } }, data: { nextAttemptAt: quota.resetAt! } });
+        if (idle.count) await tx.waDispatch.updateMany({ where: { ...waiting, ...senderWhere, nextAttemptAt: { gt: now } }, data: { nextAttemptAt: quota.resetAt! } });
       });
       continue;
     }
@@ -43,7 +44,7 @@ export async function recoverQuotaDispatches(now = new Date()) {
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] },
         data: { nextSendAt: new Date(Math.max(now.getTime(), policy.nextAllowedAt.getTime())) } });
       if (!idle.count) return;
-      await tx.waDispatch.updateMany({ where: { ...waiting, phoneId, nextAttemptAt: { gt: now } },
+      await tx.waDispatch.updateMany({ where: { ...waiting, ...senderWhere, nextAttemptAt: { gt: now } },
         data: { nextAttemptAt: now } });
     });
   }

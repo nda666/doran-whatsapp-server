@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
-let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead;
+let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead, beforeClaim, blockSenderTurn;
 class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
 function matches(item, where = {}) {
   return Object.entries(where).every(([key, val]) => {
@@ -24,17 +24,17 @@ async function update({ where, data }) {
 }
 const prisma = {
   recipientSuppression: { findUnique: async () => null },
-  waSenderLease: { updateMany: async () => ({ count: 1 }), findFirst: async () => ({}) },
-  phone: { findUnique: async () => ({ id: 'phone', userId: 'owner', active: 1, showTyping: true }), findMany: async () => [{ id: 'phone', userId: 'owner', active: 1, showTyping: true }] },
+  waSenderLease: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }), findFirst: async () => ({}) },
+  phone: { findUnique: async () => ({ id: 'phone', userId: 'owner', active: 1, showTyping: true }), findMany: async ({ where }) => [{ id: where.id || 'phone', userId: 'owner', active: 1, showTyping: true }] },
   deviceSendPolicy: { findUnique: async () => null, updateMany: async () => ({ count: 1 }) },
   deviceDailyUsage: { updateMany: async () => ({ count: 1 }) },
   waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async () => ({ count: 1 }) },
   waDispatch: {
-    findFirst: async ({ where }) => matches(row, where) ? { ...row } : null,
+    findFirst: async ({ where, select }) => select?.id && blockSenderTurn ? { id: 'earlier-job-on-actual-sender' } : matches(row, where) ? { ...row } : null,
     findUnique: async () => { if (beforeRead) { const fn = beforeRead; beforeRead = null; await fn(); } return { ...row }; },
   },
   campaign: { updateMany: async () => ({ count: 0 }) },
-  $transaction: async fn => fn(prisma), $executeRaw: async () => 0,
+  $transaction: async fn => { if (beforeClaim) { const hook = beforeClaim; beforeClaim = null; await hook(); } return fn(prisma); }, $executeRaw: async () => 0,
 };
 const socket = {
   ws: { isOpen: true }, user: { id: 'mock' }, sendPresenceUpdate: async () => {},
@@ -52,7 +52,7 @@ const socket = {
 const stubs = {
   'src/lib/prisma.ts': { prisma },
   'src/server/dispatchWebhook/events.ts': { updateDispatches: update },
-  'src/server/libs/makeWASocket.ts': { session: new Map([['phone', socket]]) },
+  'src/server/libs/makeWASocket.ts': { session: new Map([['phone', socket], ['backup', socket]]) },
   'src/server/dispatch/settings.ts': { getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getDispatchAgeCutoff: async () => new Clock(0), getDispatchQueueOrder: async () => 'oldest', getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 1 }), dispatchDeadline: () => ({}) },
   'src/server/dispatch/media.ts': {}, 'src/server/campaigns/media.ts': {}, 'src/server/campaigns/content.ts': {},
 };
@@ -80,7 +80,7 @@ const receipts = load('src/server/dispatch/receipts.ts');
 function reset() {
   row = { id: 'dispatch', phoneId: 'phone', senderPhoneId: null, senderGroupId: null, source: 'API', status: 'QUEUED', messageId: null, sentAt: null, deliveredAt: null, readAt: null,
     attempts: 0, nextAttemptAt: new Clock(0), createdAt: new Clock(now - 1000), lastError: null, recipient: 'mock', message: 'test', campaignId: null };
-  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null;
+  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null; beforeClaim = null; blockSenderTurn = false;
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function timeoutAttempt() {
@@ -138,6 +138,18 @@ async function timeoutAttempt() {
   reset(); mode = 'error'; await worker.processPhone('phone'); assert.equal(row.status, 'UNCERTAIN', 'early transport failure does not retry');
   reset(); row.status = 'UNCERTAIN'; await worker.processPhone('phone'); assert.equal(sends.length, 0, 'old uncertain not replayed');
   reset(); row.messageId = 'unexplained'; await worker.processPhone('phone'); assert.equal(sends.length, 0, 'unmarked queued send excluded');
+  reset(); mode = 'ack';
+  beforeClaim = () => { row.senderPhoneId = 'backup'; };
+  await worker.processPhone('phone');
+  assert.equal(sends.length, 0, 'Stale origin claim cannot send after manual reassignment');
+  assert.equal(row.status, 'QUEUED'); assert.equal(row.attempts, 0);
+  await worker.processPhone('phone');
+  assert.equal(row.status, 'SENT'); assert.equal(row.phoneId, 'phone'); assert.equal(row.senderPhoneId, 'backup');
+  assert.equal(sends.length, 1, 'Reassigned message sent once by backup through the normal worker');
+  reset(); mode = 'ack'; row.senderPhoneId = 'backup'; blockSenderTurn = true;
+  await worker.processPhone('phone');
+  assert.equal(sends.length, 0, 'Reassigned job respects the actual sender queue order');
+  assert.equal(row.attempts, 0); assert.equal(row.status, 'QUEUED');
   assert.equal(timers.size, 0);
   console.log('ACK_RETRY_TESTS_PASSED: 40s timeout, 1/2/4/8m schedule, five-attempt cap, stable IDs, no premature retry, late ACK/receipts, race cancellation, invalid/temporary ACKs, permanent 463 rejection, normal success, early errors and old UNCERTAIN preserved');
 })().catch(error => { console.error(error); process.exitCode = 1; });
