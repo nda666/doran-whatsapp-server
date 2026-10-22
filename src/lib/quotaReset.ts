@@ -22,10 +22,10 @@ export const quotaUsageDay = (now = new Date()) => new Date(now.getTime() + 7 * 
 type Window = { attempts: number; startedAt: Date; lastAttemptAt: Date; reachedAt: Date | null };
 
 // Compare against the next WIB midnight at the moment quota became full.
-// The seven-hour threshold is fixed; the configured delay remains adjustable.
+// The configured delay also determines which reset deadline to use.
 export function fullQuotaResetAt(reachedAt: Date, hours: number) {
   const midnight = new Date(`${quotaUsageDay(reachedAt)}T17:00:00Z`);
-  return midnight.getTime() - reachedAt.getTime() > 7 * 3600000
+  return midnight.getTime() - reachedAt.getTime() > hours * 3600000
     ? midnight
     : new Date(reachedAt.getTime() + hours * 3600000);
 }
