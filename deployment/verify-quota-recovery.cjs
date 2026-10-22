@@ -82,7 +82,9 @@ async function scenario(options = {}) {
   await scenario({ policy: { warmupStartedAt: new Date('2026-10-19T00:00:00Z') }, warmupLimits: [50, 100] });
   await scenario({ job: { messageId: 'existing-safe-retry' } });
   const window = { attempts: 45, startedAt: new Date('2026-10-18T00:00:00Z'), lastAttemptAt: new Date('2026-10-19T03:00:00Z'), reachedAt: new Date('2026-10-19T03:00:00Z') };
-  await scenario({ globalQuota: 45, reset: { mode: 'after-full', hours: 2 }, window });
-  await scenario({ globalQuota: 45, window, policy: { quotaReset: { mode: 'after-full', hours: 2 } } });
+  await scenario({ globalQuota: 45, reset: { mode: 'after-full', hours: 2 }, window, blocked: true });
+  await scenario({ globalQuota: 45, window, policy: { quotaReset: { mode: 'after-full', hours: 2 } }, blocked: true });
+  await scenario({ globalQuota: 45, reset: { mode: 'after-full', hours: 7 },
+    window: { ...window, lastAttemptAt: new Date('2026-10-18T16:00:00Z'), reachedAt: new Date('2026-10-18T16:00:00Z') } });
   console.log('QUOTA_RECOVERY_OK: global/custom increases, exhausted/reduced limits, warmup, pauses, active leases, interval, existing retries and confirmed-job protection.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

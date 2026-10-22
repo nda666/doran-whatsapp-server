@@ -82,7 +82,7 @@ async function request(query, id = 'owner') {
   reset = { mode: 'after-full', hours: 2 };
   windows = [{ phoneId: 'e', attempts: 100, startedAt: new Date(Date.now() - 86400000), reachedAt: new Date(), lastAttemptAt: new Date() }];
   assert.equal((await request({ quota_status: 'fulfilled' })).total, 4, 'Cross-day full cycle remains exhausted');
-  windows[0].reachedAt = new Date(Date.now() - 7200001);
+  windows[0].reachedAt = new Date(Date.now() - 2 * 86400000);
   assert.equal((await request({ quota_status: 'fulfilled' })).total, 3, 'Expired cycle is immediately available');
   assert((await request({ quota_status: 'available' })).data.some(row => row.id === 'e'));
   reset = { mode: 'midnight', hours: 2 };

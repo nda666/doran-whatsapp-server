@@ -71,6 +71,7 @@ function load(file, mocks) {
   now++; await send(); assert.equal(window.attempts, 1); assert.equal(window.reachedAt, null);
   // Partially used quota continues across a day boundary without starting a timer.
   now += 86400000; await send(); assert.equal(window.attempts, 2); assert.equal(window.reachedAt, null);
+  now += 22 * 3600000; // Fill the quota at 23:00 WIB, selecting the delay branch.
   await send(); assert.equal(window.attempts, 3); assert.equal(window.reachedAt.getTime(), now);
   // A device override takes precedence over the global midnight setting.
   policy.quotaReset = { mode: 'after-full', hours: 2 }; reset = { mode: 'midnight', hours: 24 };
@@ -83,5 +84,12 @@ function load(file, mocks) {
   const quotaHelpers = load('src/lib/quotaReset.ts', { zod: require('zod') });
   for (const value of ['{}', '{"mode":"after-full","hours":0}', '{"mode":"after-full","hours":1.5}', '{"mode":"bad","hours":2}', '{"mode":"after-full","hours":169}', 'bad']) assert.equal(quotaHelpers.parseQuotaReset(value), null);
   assert.deepEqual(JSON.parse(JSON.stringify(quotaHelpers.parseQuotaReset('{"mode":"after-full","hours":6}'))), { mode: 'after-full', hours: 6 });
+  reset = { mode: 'after-full', hours: 7 }; window = null; usages = {};
+  now = Date.parse('2026-10-25T03:00:00Z'); policy.nextAllowedAt = new Date(0);
+  await send(); await send(); await send();
+  // Full at 10:00 WIB waits for midnight, even after the seven-hour delay passes.
+  now += 7 * 3600000;
+  await assert.rejects(send(), e => e.code === 'DEVICE_DAILY_LIMIT' && e.retryAt.toISOString() === '2026-10-25T17:00:00.000Z');
+  now = Date.parse('2026-10-25T17:00:00Z'); await send(); assert.equal(window.attempts, 1);
   console.log('PHONE_LAST_SEND_OK: atomic quota/timestamp, retries, rejected sends, concurrency, DB rollback, WIB midnight retained history, after-full deadlines, midnight continuity, partial cycles and setting validation');
 })().catch(error => { console.error(error); process.exitCode = 1; });

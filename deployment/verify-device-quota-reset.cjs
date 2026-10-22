@@ -50,5 +50,29 @@ async function request(extra) {
   const global = { mode: 'midnight', hours: 24 };
   assert.equal(reset.effectiveQuotaReset(global, null), global);
   assert.deepEqual(reset.effectiveQuotaReset(global, { mode: 'after-full', hours: 6 }), { mode: 'after-full', hours: 6 });
+  const cases = [
+    // WIB: full at 10:00 -> midnight; 16:59:59.999 -> midnight.
+    ['2026-10-22T03:00:00Z', 7, '2026-10-22T17:00:00Z'],
+    ['2026-10-22T09:59:59.999Z', 7, '2026-10-22T17:00:00Z'],
+    // Exactly 17:00 WIB belongs to the configured-delay branch.
+    ['2026-10-22T10:00:00Z', 3, '2026-10-22T13:00:00Z'],
+    ['2026-10-22T10:00:00.001Z', 7, '2026-10-22T17:00:00.001Z'],
+    ['2026-10-22T13:00:00Z', 7, '2026-10-22T20:00:00Z'],
+    ['2026-10-22T16:59:59Z', 7, '2026-10-22T23:59:59Z'],
+    ['2026-10-22T17:00:00Z', 7, '2026-10-23T17:00:00Z'],
+    // The threshold stays seven hours when the configured delay changes.
+    ['2026-10-22T03:00:00Z', 1, '2026-10-22T17:00:00Z'],
+    ['2026-12-31T16:00:00Z', 7, '2026-12-31T23:00:00Z'],
+  ];
+  for (const [full, hours, expected] of cases) {
+    const reachedAt = new Date(full), resetAt = new Date(expected);
+    assert.equal(reset.fullQuotaResetAt(reachedAt, hours).toISOString(), resetAt.toISOString());
+    const window = { attempts: 50, startedAt: reachedAt, lastAttemptAt: reachedAt, reachedAt };
+    const setting = { mode: 'after-full', hours };
+    const pending = reset.quotaWindowState(window, 0, 50, setting, new Date(resetAt.getTime() - 1));
+    assert.equal(pending.used, 50, 'Full quota stays blocked until its deadline, including across midnight');
+    assert.equal(pending.resetAt.toISOString(), resetAt.toISOString(), 'Deadline depends on full timestamp, never on current time');
+    assert.equal(reset.quotaWindowState(window, 0, 50, setting, resetAt).used, 0);
+  }
   console.log('DEVICE_QUOTA_RESET_OK: per-number override, global fallback, validation, omitted values and owner scope');
 })().catch(error => { console.error(error); process.exitCode = 1; });
