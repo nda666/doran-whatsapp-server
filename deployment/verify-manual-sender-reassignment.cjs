@@ -13,7 +13,7 @@ const foreign = { ...target, id: foreignId, userId: 'other' };
 const phones = [source, target, foreign];
 const socket = { ws: { isOpen: true }, user: { id: 'mock' } };
 const sessions = new Map([[targetId, socket], [foreignId, socket]]);
-let jobs = [], policy = null, usage = { attempts: 10, failures: 0 }, window = null, leaseAvailable = true;
+let jobs = [], policy = null, sourcePolicy = null, sourceUsage = { attempts: 0, failures: 0 }, sourceWindow = null, usage = { attempts: 10, failures: 0 }, window = null, leaseAvailable = true;
 const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {
   if (key === 'AND') return value.every(v => matches(row, v));
   if (key === 'OR') return value.some(v => matches(row, v));
@@ -28,11 +28,18 @@ const matches = (row, where = {}) => Object.entries(where).every(([key, value]) 
   }
   return actual === value;
 });
+let senderLease = null;
 const db = {
   phone: { findFirst: async ({ where }) => phones.find(p => matches(p, where)), findMany: async ({ where }) => phones.filter(p => matches(p, where)), count: async () => phones.length },
-  deviceSendPolicy: { findUnique: async () => policy }, deviceDailyUsage: { findUnique: async () => usage }, deviceQuotaWindow: { findUnique: async () => window },
-  waSenderLease: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: Number(leaseAvailable) }) },
+  deviceSendPolicy: { findUnique: async ({ where }) => where.phoneId === sourceId ? sourcePolicy : policy },
+  deviceDailyUsage: { findUnique: async ({ where }) => where.phoneId_day.phoneId === sourceId ? sourceUsage : usage },
+  deviceQuotaWindow: { findUnique: async ({ where }) => where.phoneId === sourceId ? sourceWindow : window },
+  waSenderLease: { createMany: async () => ({ count: 1 }), updateMany: async ({ where, data }) => {
+    if (senderLease && matches(senderLease, where)) Object.assign(senderLease, data);
+    return { count: Number(leaseAvailable) };
+  } },
   waDispatch: {
+    findMany: async ({ where }) => jobs.filter(j => matches(j, where)),
     count: async ({ where }) => jobs.filter(j => matches(j, where)).length,
     updateMany: async ({ where, data }) => { const found = jobs.filter(j => matches(j, where)); found.forEach(j => Object.assign(j, data)); return { count: found.length }; },
     groupBy: async ({ by, where }) => {
@@ -46,6 +53,7 @@ const db = {
     },
   },
 };
+db.$transaction = async callback => callback(db);
 const stubs = {
   'src/lib/prisma.ts': { prisma: db },
   'src/middleware/apiAuthMiddleware.ts': { default: handler => handler, __esModule: true },
@@ -138,6 +146,79 @@ async function request(method, body, id = sourceId, userId = 'owner', fn = handl
   policy = null; usage = { attempts: 20, failures: 8 };
   assert.equal(await reassignment.replacementQuota(target), null, 'Unhealthy number excluded');
   usage = { attempts: 10, failures: 0 };
+  source.status = 'OPEN';
+  jobs = [
+    { ...base },
+    { ...base, id: 'restricted-unprocessed', lastError: null, createdAt: new Date(now - day) },
+    { ...base, id: 'restricted-skipped', lastError: 'DEVICE_SAFETY_PAUSED', sendAttempts: [{ status: 'SKIPPED' }] },
+    ...exclusions.map(job => ({ ...job })),
+    { ...base, id: 'restriction-failed', status: 'FAILED', lastError: 'WA_ACK_463_ACCOUNT_RESTRICTED' },
+    { ...base, id: 'restriction-attempted', sendAttempts: [{ status: 'FAILED', error: 'WA_ACK_463_ACCOUNT_RESTRICTED' }] },
+    { ...base, id: 'restriction-pinned', lastError: 'DEVICE_SAFETY_PAUSED', messageId: 'pinned-id' },
+  ];
+  // Exclusions were assigned to another sender by neither preview nor save above.
+  const restrictedBefore = JSON.stringify(jobs.slice(3));
+  for (const value of [null, { paused: true, pauseReason: null }, { paused: false, pauseReason: 'WhatsApp 463' }]) {
+    sourcePolicy = value;
+    assert.equal((await request('GET')).data.count, 1, 'Connected source needs an active restriction to include its held queue');
+  }
+  sourcePolicy = { paused: true, pauseReason: 'WhatsApp menolak pengiriman dengan kode 463.' };
+  source.active = 0;
+  assert.equal((await request('GET')).data.count, 0, 'Inactive source stays excluded');
+  source.active = 1;
+  assert.equal((await request('GET')).data.count, 3, 'Restricted connected source includes unsent and skipped backlog');
+  policy = { paused: true, pauseReason: 'WhatsApp 463' };
+  assert.equal((await request('POST', { targetPhoneId: targetId })).code, 409, 'Restricted destination stays excluded');
+  policy = null;
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 3);
+  for (const job of jobs.slice(0, 3)) {
+    assert.equal(job.senderPhoneId, targetId);
+    assert.equal(job.lastError, null);
+  }
+  assert.equal(JSON.stringify(jobs.slice(3)), restrictedBefore, 'Restriction does not revive failed or attempted messages or bypass other exclusions');
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 0);
+  sourcePolicy = null;
+  const quotaBackoff = new Date(Date.now() + day);
+  jobs = [
+    { ...base, id: 'quota-unsent', lastError: null, createdAt: new Date(now - day) },
+    { ...base, id: 'quota-waiting', lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff, sendAttempts: [{ status: 'SKIPPED' }] },
+    { ...base, id: 'quota-other-backoff', lastError: 'DEVICE_THROTTLED', nextAttemptAt: quotaBackoff },
+    ...exclusions.map(job => ({ ...job })),
+  ];
+  const quotaExcludedBefore = JSON.stringify(jobs.slice(3));
+  sourceUsage = { attempts: 199, failures: 0 };
+  assert.equal((await request('GET')).data.count, 0, 'Connected source below its global quota stays excluded');
+  sourceUsage.attempts = 200;
+  assert.equal((await request('GET')).data.count, 3, 'Full global quota includes pending backlog before a worker records the limit');
+  sourcePolicy = { useGlobalQuota: false, dailyLimit: 250 };
+  assert.equal((await request('GET')).data.count, 0, 'Custom quota overrides global quota');
+  sourcePolicy.dailyLimit = 200;
+  assert.equal((await request('GET')).data.count, 3, 'Custom quota exhaustion allows reassignment');
+  sourcePolicy = { useGlobalQuota: true, warmupStartedAt: new Date() };
+  sourceUsage.attempts = 25;
+  assert.equal((await request('GET')).data.count, 3, 'Warmup quota exhaustion allows reassignment');
+  sourcePolicy = { useGlobalQuota: true, quotaReset: { mode: 'after-full', hours: 24 } };
+  sourceUsage.attempts = 0;
+  sourceWindow = { attempts: 200, startedAt: now, lastAttemptAt: now, reachedAt: now };
+  assert.equal((await request('GET')).data.count, 3, 'After-full quota uses the current cycle instead of daily usage');
+  sourceWindow = { ...sourceWindow, reachedAt: new Date(now - 2 * day) };
+  assert.equal((await request('GET')).data.count, 0, 'Expired quota cycle no longer qualifies');
+  sourceWindow = null; sourcePolicy = null; sourceUsage.attempts = 200;
+  const savedAt = Date.now();
+  senderLease = { phoneId: sourceId, nextSendAt: quotaBackoff, leaseUntil: null };
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 3);
+  assert.equal(jobs[1].senderPhoneId, targetId);
+  assert.ok(jobs[1].nextAttemptAt.getTime() >= savedAt && jobs[1].nextAttemptAt <= new Date(), 'Old sender quota sleep cleared');
+  assert.equal(jobs[2].nextAttemptAt, quotaBackoff, 'Other backoffs remain unchanged');
+  assert.ok(senderLease.nextSendAt <= new Date(), 'Idle origin wakes from its quota sleep after reassignment');
+  assert.equal(JSON.stringify(jobs.slice(3)), quotaExcludedBefore, 'Full quota preserves all safety exclusions');
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 0);
+  jobs = [{ ...base, lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff }];
+  senderLease = { phoneId: sourceId, nextSendAt: quotaBackoff, leaseUntil: quotaBackoff };
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 1);
+  assert.equal(senderLease.nextSendAt, quotaBackoff, 'Active origin lease is never overwritten');
+  senderLease = null;
+  source.status = 'CLOSED'; sourceUsage.attempts = 0;
   const today = load('src/server/messaging/safety.ts').usageDay();
   jobs = [
     { ...base, createdAt: new Date(`${today}T00:00:00+07:00`) },

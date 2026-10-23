@@ -2497,5 +2497,6 @@
   "हिन्दी": "हिन्दी",
   "— kolom pesan:": "- columna de mensaje:",
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan untuk menggunakan rentang jeda acak khusus perangkat ini.": "Retraso aleatorio global actual: {{v0}}–{{v1}} segundos. Desactiva para usar un intervalo personalizado para este dispositivo.",
-  "Khusus: {{v0}}–{{v1}} detik": "Personalizado: {{v0}}–{{v1}} segundos"
+  "Khusus: {{v0}}–{{v1}} detik": "Personalizado: {{v0}}–{{v1}} segundos",
+  "{{v0}} pesan menunggu koneksi, tertahan karena pembatasan WhatsApp, atau menunggu kuota tersedia dapat dialihkan, termasuk antrean hari sebelumnya.": "Se pueden reasignar {{v0}} mensajes en espera de conexión, retenidos por restricciones de WhatsApp o a la espera de cuota disponible, incluidas las colas de días anteriores."
 }

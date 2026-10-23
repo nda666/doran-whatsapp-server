@@ -2497,5 +2497,6 @@
   "हिन्दी": "हिन्दी",
   "— kolom pesan:": "— أعمدة الرسائل:",
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan untuk menggunakan rentang jeda acak khusus perangkat ini.": "التأخير العشوائي العام الحالي: {{v0}}–{{v1}} ثانية. أوقفه لاستخدام نطاق تأخير عشوائي مخصص لهذا الجهاز.",
-  "Khusus: {{v0}}–{{v1}} detik": "مخصص: {{v0}}–{{v1}} ثانية"
+  "Khusus: {{v0}}–{{v1}} detik": "مخصص: {{v0}}–{{v1}} ثانية",
+  "{{v0}} pesan menunggu koneksi, tertahan karena pembatasan WhatsApp, atau menunggu kuota tersedia dapat dialihkan, termasuk antrean hari sebelumnya.": "يمكن إعادة تعيين {{v0}} رسالة تنتظر الاتصال أو متوقفة بسبب قيود WhatsApp أو تنتظر حصة إرسال متاحة، بما في ذلك قوائم انتظار الأيام السابقة."
 }

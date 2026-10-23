@@ -2497,5 +2497,6 @@
   "हिन्दी": "हिन्दी",
   "— kolom pesan:": "— kolom pesan:",
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan untuk menggunakan rentang jeda acak khusus perangkat ini.": "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan untuk menggunakan rentang jeda acak khusus perangkat ini.",
-  "Khusus: {{v0}}–{{v1}} detik": "Khusus: {{v0}}–{{v1}} detik"
+  "Khusus: {{v0}}–{{v1}} detik": "Khusus: {{v0}}–{{v1}} detik",
+  "{{v0}} pesan menunggu koneksi, tertahan karena pembatasan WhatsApp, atau menunggu kuota tersedia dapat dialihkan, termasuk antrean hari sebelumnya.": "{{v0}} pesan menunggu koneksi, tertahan karena pembatasan WhatsApp, atau menunggu kuota tersedia dapat dialihkan, termasuk antrean hari sebelumnya."
 }

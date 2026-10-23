@@ -34,10 +34,27 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ message: "Nomor pengganti harus berbeda dan berasal dari pemilik yang sama." });
   }
   if (!await replacementQuota(target)) return res.status(409).json({ message: "Nomor pengganti sudah tidak tersedia, tidak sehat, atau kuotanya habis. Muat ulang daftar nomor." });
-  // One conditional UPDATE races safely with worker claims: processing rows and
-  // rows whose assignment changed are never overwritten. No age/backoff is reset.
-  const result = await prisma.waDispatch.updateMany({ where: await reassignmentWhere(source),
-    data: { senderPhoneId: target.id, senderGroupId: null, lastError: null } });
-  return res.json({ count: result.count });
+  // Conditional updates race safely with worker claims: processing rows and
+  // rows whose assignment changed are never overwritten. Only the old sender's
+  // quota sleep is cleared; message age and other backoffs remain unchanged.
+  const where = await reassignmentWhere(source);
+  const data = { senderPhoneId: target.id, senderGroupId: null, lastError: null };
+  const count = await prisma.$transaction(async tx => {
+    const quotaWhere = { ...where, lastError: "DEVICE_DAILY_LIMIT" };
+    const origins = await tx.waDispatch.findMany({ where: quotaWhere, distinct: ["phoneId"], select: { phoneId: true } });
+    const quotaWaiting = await tx.waDispatch.updateMany({ where: quotaWhere,
+      data: { ...data, nextAttemptAt: new Date() } });
+    const remaining = await tx.waDispatch.updateMany({ where, data });
+    if (quotaWaiting.count) {
+      // Polling still runs by origin phoneId even when the actual sender changes.
+      // Wake idle origins from their quota sleep; never release an active lease.
+      const now = new Date();
+      await tx.waSenderLease.updateMany({ where: { phoneId: { in: origins.map(origin => origin.phoneId) },
+        nextSendAt: { gt: now }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] },
+        data: { nextSendAt: now } });
+    }
+    return quotaWaiting.count + remaining.count;
+  });
+  return res.json({ count });
 }
 export default apiAuthMiddleware(handler);
