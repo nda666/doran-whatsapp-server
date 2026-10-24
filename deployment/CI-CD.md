@@ -57,7 +57,8 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 
 ### Optimasi waktu build (24 Oktober 2026)
 
-- GitHub mengambil hanya commit saat ini dan menyimpan cache compiler Next.js
+- GitHub tetap mengambil riwayat Git lengkap untuk tes skema historis,
+  dan menyimpan cache compiler Next.js
   (`.next/cache/webpack` dan `swc`) antar-run dengan key OS/arsitektur,
   Node, dependency, konfigurasi build, dan commit. Restore hanya memakai prefix
   konfigurasi yang cocok. Cache npm yang sudah ada tetap digunakan;
