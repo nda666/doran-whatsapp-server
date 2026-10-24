@@ -841,6 +841,7 @@
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.": "Current global random delay {{v0}}–{{v1}} seconds. Turn it off only if the device requires additional minimum limits.",
   "Jeda acak pengiriman (detik)": "Random delivery delay (seconds)",
   "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.": "The delay is randomly selected between the minimum and maximum values for each device. Example: minimum 5 and maximum 15 means the device waits 5 to 15 seconds before sending the next message.",
+  "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.": "The delay must be an integer of at least 1 second; End must be equal to or greater than Start.",
   "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.": "The pause should be an integer 1–30 seconds; Till must be equal to or greater than Start.",
   "Jeda maksimum (detik)": "Maximum delay (seconds)",
   "Jeda minimum (detik)": "Minimum delay (seconds)",

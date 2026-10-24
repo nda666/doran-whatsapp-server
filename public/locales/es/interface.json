@@ -841,6 +841,7 @@
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.": "Retraso aleatorio global actual {{v0}}–{{v1}} segundos. Apáguelo solo si el dispositivo requiere límites mínimos adicionales.",
   "Jeda acak pengiriman (detik)": "Retraso de entrega aleatorio (segundos)",
   "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.": "El retraso se selecciona aleatoriamente entre los valores mínimo y máximo para cada dispositivo. Ejemplo: mínimo 5 y máximo 15 significa que el dispositivo espera de 5 a 15 segundos antes de enviar el siguiente mensaje.",
+  "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.": "La pausa debe ser un número entero de al menos 1 segundo; Hasta debe ser igual o mayor que Inicio.",
   "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.": "La pausa debe ser de un número entero de 1 a 30 segundos; Hasta debe ser igual o mayor que Inicio.",
   "Jeda maksimum (detik)": "Retraso máximo (segundos)",
   "Jeda minimum (detik)": "Retraso mínimo (segundos)",

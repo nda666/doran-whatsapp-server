@@ -11,10 +11,15 @@ async function request(value){const res={code:200,setHeader(){},status(code){thi
 (async()=>{
  assert.deepEqual(await settings.getDispatchDelayRange(),{minSeconds:2,maxSeconds:5});
  row={id:'22222222-2222-4222-8222-222222222222',key:constants.DISPATCH_DELAY_KEY,label:constants.DISPATCH_DELAY_LABEL,value:crypto.encryptSetting(JSON.stringify({minSeconds:2,maxSeconds:5}))};
- for(const value of ['bad','null','[]','{"minSeconds":0,"maxSeconds":5}','{"minSeconds":5,"maxSeconds":2}','{"minSeconds":2.5,"maxSeconds":5}','{"minSeconds":"2","maxSeconds":5}','{"minSeconds":1,"maxSeconds":31}','{"minSeconds":1}']){
+ for(const value of ['bad','null','[]','{"minSeconds":0,"maxSeconds":5}','{"minSeconds":5,"maxSeconds":2}','{"minSeconds":2.5,"maxSeconds":5}','{"minSeconds":"2","maxSeconds":5}','{"minSeconds":1}']){
   assert.equal(constants.parseDispatchDelayRange(value),null);assert.equal((await request(value)).code,400);
  }
  assert.equal((await request('{"minSeconds":3,"maxSeconds":7}')).code,200);assert.deepEqual(await settings.getDispatchDelayRange(),{minSeconds:3,maxSeconds:7});
  assert.equal((await request('{"minSeconds":4,"maxSeconds":4}')).code,200);assert.deepEqual(await settings.getDispatchDelayRange(),{minSeconds:4,maxSeconds:4});
+ for (const range of [{minSeconds:1,maxSeconds:31},{minSeconds:60,maxSeconds:300},{minSeconds:3600,maxSeconds:86400},{minSeconds:300,maxSeconds:300}]) {
+  assert.deepEqual(constants.parseDispatchDelayRange(JSON.stringify(range)),range);
+  assert.equal((await request(JSON.stringify(range))).code,200);
+  assert.deepEqual(await settings.getDispatchDelayRange(),range);
+ }
  console.log('DISPATCH_DELAY_SETTING_TESTS_PASSED: encrypted atomic range, validation, defaults, equal bounds and reload without restart; no database or messages');
 })().catch(e=>{console.error(e);process.exitCode=1});

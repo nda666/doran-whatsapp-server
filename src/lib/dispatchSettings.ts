@@ -5,14 +5,13 @@ export const DISPATCH_MAX_AGE_LABEL = "Maksimal usia data antrean (hari)";
 export const DISPATCH_DELAY_KEY = "dispatch-random-delay";
 export const DISPATCH_DELAY_LABEL = "Jeda acak pengiriman (detik)";
 export const DEFAULT_DISPATCH_DELAY = { minSeconds: 2, maxSeconds: 5 };
-export const MAX_DISPATCH_DELAY_SECONDS = 30;
 export type DispatchDelayRange = typeof DEFAULT_DISPATCH_DELAY;
 export function parseDispatchDelayRange(value: string): DispatchDelayRange | null {
   try {
     const range = JSON.parse(value);
     if (!range || typeof range !== "object" || Array.isArray(range) || Object.keys(range).some(key => !["minSeconds", "maxSeconds"].includes(key))) return null;
     const { minSeconds, maxSeconds } = range;
-    return Number.isInteger(minSeconds) && Number.isInteger(maxSeconds) && minSeconds >= 1 && maxSeconds >= minSeconds && maxSeconds <= MAX_DISPATCH_DELAY_SECONDS ? { minSeconds, maxSeconds } : null;
+    return Number.isInteger(minSeconds) && Number.isInteger(maxSeconds) && minSeconds >= 1 && maxSeconds >= minSeconds ? { minSeconds, maxSeconds } : null;
   } catch { return null; }
 }
 

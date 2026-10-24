@@ -841,6 +841,7 @@
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.": "التأخير العشوائي العالمي الحالي {{v0}} – {{v1}} ثانية. قم بإيقاف تشغيله فقط إذا كان الجهاز يتطلب حدودًا دنيا إضافية.",
   "Jeda acak pengiriman (detik)": "تأخير التسليم العشوائي (ثواني)",
   "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.": "يتم اختيار التأخير بشكل عشوائي بين الحد الأدنى والحد الأقصى للقيم لكل جهاز. مثال: الحد الأدنى 5 والحد الأقصى 15 يعني أن الجهاز ينتظر من 5 إلى 15 ثانية قبل إرسال الرسالة التالية.",
+  "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.": "يجب أن يكون التأخير عددًا صحيحًا لا يقل عن ثانية واحدة؛ ويجب أن تكون النهاية مساوية للبداية أو أكبر منها.",
   "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.": "يجب أن يكون الإيقاف المؤقت عددًا صحيحًا من 1 إلى 30 ثانية؛ حتى يجب أن يكون مساويًا أو أكبر من البداية.",
   "Jeda maksimum (detik)": "الحد الأقصى للتأخير (ثواني)",
   "Jeda minimum (detik)": "الحد الأدنى للتأخير (ثواني)",

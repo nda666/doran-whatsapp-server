@@ -52,7 +52,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (key === DISPATCH_QUEUE_ORDER_KEY && parseDispatchQueueOrder(value) === null) return res.status(400).json({ message: "Pilih data terlama dahulu atau data terbaru dahulu." });
   if (key === WARMUP_DAILY_LIMITS_KEY && parseWarmupDailyLimits(value) === null) return res.status(400).json({ message: WARMUP_LIMITS_ERROR });
   if (key === DEVICE_DAILY_QUOTA_KEY && parseDeviceDailyQuota(value) === null) return res.status(400).json({ message: "Kuota harian harus berupa bilangan bulat 1–100000." });
-  if (key === DISPATCH_DELAY_KEY && parseDispatchDelayRange(value) === null) return res.status(400).json({ message: "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai." });
+  if (key === DISPATCH_DELAY_KEY && parseDispatchDelayRange(value) === null) return res.status(400).json({ message: "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai." });
   if (key === OPERATING_HOURS_KEY && parseOperatingHours(value) === null) return res.status(400).json({ message: OPERATING_HOURS_ERROR });
   if (key === PHONE_FORM_FIELDS_KEY && parsePhoneFormFields(value) === null) return res.status(400).json({ message: "Pilih input form perangkat yang valid, tanpa duplikasi." });
   if (key === POSTMARK_TOKEN_KEY && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) return res.status(400).json({ message: "Format token server Postmark tidak valid." });

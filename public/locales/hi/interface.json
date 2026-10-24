@@ -841,6 +841,7 @@
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.": "वर्तमान वैश्विक यादृच्छिक विलंब {{v0}}–{{v1}} सेकंड। इसे केवल तभी बंद करें जब डिवाइस को अतिरिक्त न्यूनतम सीमा की आवश्यकता हो।",
   "Jeda acak pengiriman (detik)": "यादृच्छिक वितरण विलंब (सेकंड)",
   "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.": "विलंब को प्रत्येक डिवाइस के लिए न्यूनतम और अधिकतम मानों के बीच यादृच्छिक रूप से चुना जाता है। उदाहरण: न्यूनतम 5 और अधिकतम 15 का अर्थ है कि डिवाइस अगला संदेश भेजने से पहले 5 से 15 सेकंड तक प्रतीक्षा करता है।",
+  "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.": "विराम कम से कम 1 सेकंड का पूर्णांक होना चाहिए; अंत आरंभ के बराबर या उससे बड़ा होना चाहिए।",
   "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.": "विराम 1-30 सेकंड का पूर्णांक होना चाहिए; टिल स्टार्ट के बराबर या उससे बड़ा होना चाहिए।",
   "Jeda maksimum (detik)": "अधिकतम विलंब (सेकंड)",
   "Jeda minimum (detik)": "न्यूनतम विलंब (सेकंड)",

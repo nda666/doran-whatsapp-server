@@ -841,6 +841,7 @@
   "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.": "Jeda acak global saat ini {{v0}}–{{v1}} detik. Matikan hanya jika perangkat memerlukan batas minimum tambahan.",
   "Jeda acak pengiriman (detik)": "Jeda acak pengiriman (detik)",
   "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.": "Jeda dipilih secara acak antara nilai minimum dan maksimum untuk setiap perangkat. Contoh: minimum 5 dan maksimum 15 berarti perangkat menunggu 5 sampai 15 detik sebelum mengirim pesan berikutnya.",
+  "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.": "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai.",
   "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.": "Jeda harus bilangan bulat 1–30 detik; Hingga harus sama atau lebih besar dari Mulai.",
   "Jeda maksimum (detik)": "Jeda maksimum (detik)",
   "Jeda minimum (detik)": "Jeda minimum (detik)",
