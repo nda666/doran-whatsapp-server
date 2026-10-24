@@ -51,11 +51,12 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     const policyPage = isPhonePolicySort(req.query.sort)
       ? await phonePolicyPage(where, req.query.sort, req.query.order === "asc" ? "asc" : "desc", skip, limit)
       : undefined;
-    const [data, total] = await Promise.all([prisma.phone.findMany({
+    const [data, total, online] = await Promise.all([prisma.phone.findMany({
       where: policyPage ? { ...where, id: { in: policyPage.ids } } : where,
       ...(!policyPage ? { take: limit, skip, orderBy } : {}),
       include: { senderGroup: { select: { id: true, name: true, enabled: true } }, ...(admin ? { user: { select: { id: true, name: true, email: true } } } : {}) },
-    }), policyPage ? Promise.resolve(policyPage.total) : prisma.phone.count({ where })]);
+    }), policyPage ? Promise.resolve(policyPage.total) : prisma.phone.count({ where }),
+    req.query.page ? prisma.phone.count({ where: { AND: [where, { isOnline: true }] } }) : Promise.resolve(0)]);
     if (policyPage) {
       const positions = new Map(policyPage.ids.map((id, position) => [id, position]));
       data.sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
@@ -74,7 +75,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     }
     const rows = await Promise.all(data.map(async p => ({ ...p, pendingToday: pendingBySender.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
     // Preserve array shape for integrations that don't request pagination.
-    return res.json(req.query.page ? { data: rows, total, page, pageSize: limit } : rows);
+    return res.json(req.query.page ? { data: rows, total, page, pageSize: limit, online, offline: total - online } : rows);
   }
   if (req.method !== "POST") return res.status(405).end();
   const parsed = input.safeParse(req.body);
