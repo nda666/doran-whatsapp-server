@@ -12,14 +12,15 @@ function load(file, mocks = {}) {
   new Function('require', 'module', 'exports', code)(key => key in mocks ? mocks[key] : key.startsWith('.') ? load(path.resolve(path.dirname(file), key + '.ts'), mocks) : localRequire(key), module, module.exports);
   return module.exports;
 }
-const phones = ['a', 'b', 'c', 'd', 'e', 'foreign'].map(id => ({ id, userId: id === 'foreign' ? 'other' : 'owner', senderGroupId: id === 'e' ? null : 'group', active: 1 }));
+const phones = ['a', 'b', 'c', 'd', 'e', 'foreign'].map(id => ({ id, userId: id === 'foreign' ? 'other' : 'owner', senderGroupId: id === 'e' ? null : 'group', active: 1, isOnline: ['a', 'c', 'foreign'].includes(id) }));
 const policies = [
   { phoneId: 'b', dailyLimit: 10, useGlobalQuota: false, warmupStartedAt: null },
   { phoneId: 'c', dailyLimit: 100, useGlobalQuota: true, warmupStartedAt: new Date() },
   { phoneId: 'd', dailyLimit: 5, useGlobalQuota: false, warmupStartedAt: new Date() },
 ];
 const usages = [{ phoneId: 'a', attempts: 100 }, { phoneId: 'b', attempts: 11 }, { phoneId: 'c', attempts: 25 }, { phoneId: 'd', attempts: 4 }, { phoneId: 'foreign', attempts: 999 }];
-const matches = (row, where) => Object.entries(where).every(([key, value]) => value && typeof value === 'object' ? value.in.includes(row[key]) : row[key] === value);
+const matches = (row, where) => Object.entries(where).every(([key, value]) => key === 'AND' ? value.every(clause => matches(row, clause))
+  : value && typeof value === 'object' ? value.in.includes(row[key]) : row[key] === value);
 let day;
 let windows = [], reset = { mode: "midnight", hours: 2 };
 const db = {
@@ -66,15 +67,23 @@ async function request(query, id = 'owner') {
   let result = await request({ quota_status: 'fulfilled', limit: '2' });
   assert.deepEqual(result.data.map(row => row.id), ['a', 'b']);
   assert.equal(result.total, 3, 'Exact quota, over quota and warmup quota count as fulfilled');
+  assert.equal(result.online, 2, 'Online total includes matching devices beyond this page');
+  assert.equal(result.offline, 1);
   assert.equal(day, safety.usageDay(), 'Use current WIB day');
   result = await request({ quota_status: 'fulfilled', limit: '2', page: '2' });
   assert.deepEqual(result.data.map(row => row.id), ['c']);
   assert.equal(result.total, 3);
+  assert.equal(result.online, 2);
+  assert.equal(result.offline, 1);
   result = await request({ quota_status: 'available' });
   assert.deepEqual(result.data.map(row => row.id), ['d', 'e'], 'Custom maximum during warmup and missing usage');
+  assert.equal(result.online, 0);
+  assert.equal(result.offline, 2);
   result = await request({ quota_status: 'fulfilled', sort: 'quota', order: 'asc' });
   assert.deepEqual(result.data.map(row => row.id), ['b', 'c', 'a'], 'Computed sort uses quota-filtered set');
   assert.equal(result.total, 3);
+  assert.equal(result.online, 2, 'Computed sorting preserves filtered online count');
+  assert.equal(result.offline, 1);
   assert.equal((await request({ quota_status: 'fulfilled', sender_group: 'none' })).total, 0);
   assert.equal((await request({ quota_status: 'available', sender_group: 'none' })).total, 1);
   assert.equal((await request({ quota_status: 'fulfilled' }, 'admin')).total, 4);

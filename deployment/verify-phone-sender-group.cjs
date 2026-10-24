@@ -14,10 +14,11 @@ const phones = [
   { id: 'two', userId: 'owner', senderGroupId: null, name: 'Nota', number: '6282', isOnline: false, active: 1 },
   { id: 'three', userId: 'other', senderGroupId: 'group-b', name: 'Nota', number: '6283', isOnline: true, active: 1 },
 ];
-const matches = (row, where) => Object.entries(where).every(([key, value]) => key === 'OR' ? value.some(clause => matches(row, clause))
+const matches = (row, where) => Object.entries(where).every(([key, value]) => key === 'AND' ? value.every(clause => matches(row, clause))
+  : key === 'OR' ? value.some(clause => matches(row, clause))
   : value && typeof value === 'object' ? String(row[key] || '').includes(value.contains) : row[key] === value);
 const plain = value => JSON.parse(JSON.stringify(value));
-let lastQuery, lastCount;
+let lastQuery, countQueries = [];
 const access = { isSuperAdmin: user => user.id === 'admin', ownerScope: user => user.id === 'admin' ? {} : { userId: user.id } };
 const handler = load('src/pages/api/phones/index.ts', {
   '@/lib/messagingChannel': load('src/lib/messagingChannel.ts', {}),
@@ -27,7 +28,7 @@ const handler = load('src/pages/api/phones/index.ts', {
   '@/lib/tableQuery': load('src/lib/tableQuery.ts', {}), '@/lib/access': access,
   '@/lib/prisma': { prisma: {
     phone: { findMany: async query => { lastQuery = query; return phones.filter(row => matches(row, query.where)).map(row => ({ ...row, senderGroup: groups.find(group => group.id === row.senderGroupId) || null })); },
-      count: async ({ where }) => { lastCount = where; return phones.filter(row => matches(row, where)).length; } },
+      count: async ({ where }) => { countQueries.push(where); return phones.filter(row => matches(row, where)).length; } },
     senderGroup: { findMany: async ({ where, select }) => groups.filter(row => matches(row, where)).map(row => Object.fromEntries(Object.keys(select).map(key => [key, row[key]]))) },
     waDispatch: { groupBy: async () => [] },
   } },
@@ -36,6 +37,7 @@ const handler = load('src/pages/api/phones/index.ts', {
   '@/lib/phonePolicySort': { isPhonePolicySort: () => false }, '@/server/messaging/phonePolicySort': {}, zod: require('zod'),
 }).default;
 async function request(query, id = 'owner') {
+  countQueries = [];
   let result;
   await handler({ method: 'GET', user: { id }, query: { page: '1', ...query } }, { setHeader() {}, json: value => { result = value; } });
   return result;
@@ -45,10 +47,30 @@ async function request(query, id = 'owner') {
   assert.deepEqual(plain(result.data.map(row => row.id)), ['one']);
   assert.equal(result.data[0].senderGroup.name, 'Store A');
   assert.equal(result.data[0].senderGroup.enabled, false, 'Disabled group membership remains visible');
-  assert.deepEqual(plain(lastQuery.where), plain(lastCount));
+  assert.deepEqual(plain(countQueries), [plain(lastQuery.where), { AND: [plain(lastQuery.where), { isOnline: true }] }]);
+  assert.equal(result.total, 1);
+  assert.equal(result.online, 1);
+  assert.equal(result.offline, 0);
   assert.deepEqual(plain(lastQuery.include.senderGroup.select), { id: true, name: true, enabled: true });
   result = await request({ sender_group: 'none' });
   assert.deepEqual(plain(result.data.map(row => row.id)), ['two']);
+  assert.equal(result.online, 0);
+  assert.equal(result.offline, 1);
+  result = await request({});
+  assert.equal(result.total, 2);
+  assert.equal(result.online, 1);
+  assert.equal(result.offline, 1);
+  result = await request({ is_online: '0' });
+  assert.equal(result.total, 1);
+  assert.equal(result.online, 0);
+  assert.equal(result.offline, 1, 'Online count must preserve the offline filter');
+  result = await request({ sender_group: 'group-b' });
+  assert.equal(result.total, 0);
+  assert.equal(result.online, 0);
+  assert.equal(result.offline, 0);
+  result = await request({ page: undefined });
+  assert(Array.isArray(result), 'Legacy response without page remains an array');
+  assert.equal(countQueries.length, 1, 'Legacy response does not query online totals');
   assert.equal((await request({ sender_group: 'group-b' })).total, 0, 'Foreign group filter cannot bypass owner scope');
   assert.equal((await request({ sender_group: '' })).total, 2);
   assert.equal((await request({ sender_group: 'group-b' }, 'admin')).total, 1);
