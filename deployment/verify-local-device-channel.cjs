@@ -10,6 +10,7 @@ const db = {
   $executeRawUnsafe: async sql => { executed.push(sql); present = true; },
 };
 (async () => {
+  fs.mkdirSync(path.resolve('tmp'), { recursive: true });
   const backupDirectory = fs.mkdtempSync(path.resolve('tmp/local-channel-fixture-'));
   const options = { db, environment: { DATABASE_URL: 'mysql://offline:unused@127.0.0.1:3306/wa_local' }, backupDirectory };
   for (const url of ['mysql://u:p@production.example/wa_local', 'mysql://u:p@localhost/dory8752_from_local', 'mysql://u:p@localhost/other']) {
