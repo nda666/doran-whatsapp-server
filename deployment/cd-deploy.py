@@ -123,7 +123,7 @@ def compare_counts(before, after, added_tables=(), created_table_counts=None):
 
 def file_digest(path):
     digest = hashlib.sha256()
-    with path.open('rb') as source:
+    with open(str(path), 'rb') as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
@@ -134,14 +134,52 @@ def private_hashes(app):
     result = {p.name: file_digest(p) for p in app.glob('.env*') if p.is_file()}
     auth = app / 'storage/whatsapp-auth'
     if auth.exists():
-        # scandir-based walk avoids building hundreds of thousands of Path objects
-        # and repeated stats before the first file is hashed.
-        for folder, _directories, files in os.walk(str(auth)):
-            for name in files:
-                path = Path(folder) / name
-                if path.is_file():
-                    result[str(path.relative_to(app))] = file_digest(path)
+        # DirEntry reuses the directory listing's file type metadata. Avoid a
+        # separate Path/stat/relative_to call for every session key (~1M files).
+        folders = [(str(auth), os.path.join('storage', 'whatsapp-auth'))]
+        while folders:
+            folder, relative = folders.pop()
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    key = os.path.join(relative, entry.name)
+                    if entry.is_dir(follow_symlinks=False):
+                        folders.append((entry.path, key))
+                    elif entry.is_file():
+                        result[key] = file_digest(entry.path)
     return result
+
+
+def restore_compiler_cache(app, stage):
+    """Reuse compiler intermediates only; always rebuild the production runtime."""
+    inputs = ['package.json', 'package-lock.json', '.nvmrc', '.npmrc', 'next.config.js',
+              'next-i18next.config.js', 'tsconfig.json', 'tsconfig.server.json']
+    if any(not (root / name).is_file() for root in (app, stage) for name in inputs):
+        return False
+    if any((app / name).read_bytes() != (stage / name).read_bytes() for name in inputs):
+        return False
+    # Do not carry compiler output across changes to build-time environment.
+    def environments(root):
+        return {p.name: p.read_bytes() for p in root.glob('.env*')
+                if p.is_file() and p.name != '.env.example'}
+    if environments(app) != environments(stage):
+        return False
+    restored = False
+    # Exclude fetch/data caches, old pages, BUILD_ID and generated runtime files.
+    for name in ('webpack', 'swc'):
+        source = app / '.next/cache' / name
+        target = stage / '.next/cache' / name
+        if source.is_dir():
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(str(source), str(target))
+                restored = True
+            except OSError:
+                # A compiler cache is optional. A failed copy must not leave a
+                # partial cache for the subsequent build to consume.
+                if target.exists():
+                    shutil.rmtree(str(target))
+                print('COMPILER_CACHE_COPY_SKIPPED', name, flush=True)
+    return restored
 
 
 def backup_private_files(app, destination):
@@ -175,7 +213,10 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     active_build = (APP / '.next/BUILD_ID').read_bytes()
     stamp = str(int(time.time() * 1000000))
-    stage = APP.parent / ('.doran-cd-' + stamp)
+    # Next's webpack cache version includes the absolute node_modules path.
+    # Keep the build path stable across deployments so restored packs are usable.
+    # mkdir below deliberately refuses a leftover stage (e.g. failed rollback).
+    stage = APP.parent / '.doran-cd-build'
     backup = Path('/home/jeblast/backups') / ('doran-cd-' + stamp)
     stage.mkdir(mode=0o700)
     guard = StageCleanup(APP.parent, stage)
@@ -197,8 +238,13 @@ def main():
     # npm ci must include build tools even under NODE_ENV=production.
     def run(command, cwd=stage, capture=False):
         enforce_read_only_prisma(command)
+        started = time.monotonic()
+        label = ' '.join(str(part) for part in command)
+        print('DEPLOY_STEP_STARTED', label, flush=True)
         result = subprocess.run(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=1800)
+        print('DEPLOY_STEP_FINISHED', label, 'seconds=%.2f' % (time.monotonic() - started),
+              'exit=' + str(result.returncode), flush=True)
         if result.returncode:
             # Build/database errors may include environment values; keep full output server-side.
             with (backup / 'commands.log').open('ab') as log:
@@ -206,7 +252,11 @@ def main():
             raise RuntimeError('Deployment command failed; inspect private server commands.log')
         return result.stdout if capture else None
 
-    run(['npm', 'ci', '--include=dev'])
+    cache_started = time.monotonic()
+    cache_restored = restore_compiler_cache(APP, stage)
+    print('COMPILER_CACHE', 'restored' if cache_restored else 'cold',
+          'seconds=%.2f' % (time.monotonic() - cache_started), flush=True)
+    run(['npm', 'ci', '--include=dev', '--prefer-offline', '--no-audit', '--no-fund'])
     run(['npx', '--no-install', 'prisma', 'generate'])
     run(['npx', '--no-install', 'prisma', 'validate'])
     run(['npm', 'run', 'build'])

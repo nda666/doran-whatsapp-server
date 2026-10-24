@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 import copy
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('cd_deploy', Path(__file__).with_name('cd-deploy.py'))
 deploy = importlib.util.module_from_spec(spec)
@@ -14,6 +15,88 @@ spec.loader.exec_module(deploy)
 
 
 class DeploymentGuards(unittest.TestCase):
+    def cache_fixture(self, root):
+        app, stage = root / 'app', root / 'stage'
+        app.mkdir()
+        stage.mkdir()
+        for name in ['package.json', 'package-lock.json', '.nvmrc', '.npmrc',
+                     'next.config.js', 'next-i18next.config.js', 'tsconfig.json',
+                     'tsconfig.server.json', '.env', '.env.production']:
+            for folder in (app, stage):
+                (folder / name).write_bytes(b'fixture-config')
+        for name in ['webpack/server-production', 'swc', 'fetch-cache']:
+            folder = app / '.next/cache' / name
+            folder.mkdir(parents=True)
+            (folder / 'fixture').write_bytes(b'cached-content')
+        (app / '.next/BUILD_ID').write_bytes(b'old-runtime')
+        return app, stage
+
+    def test_compiler_cache_reuse_excludes_runtime_and_data(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            app, stage = self.cache_fixture(Path(temp))
+            self.assertTrue(deploy.restore_compiler_cache(app, stage))
+            for name in ['webpack/server-production', 'swc']:
+                self.assertEqual((stage / '.next/cache' / name / 'fixture').read_bytes(), b'cached-content')
+            self.assertFalse((stage / '.next/cache/fetch-cache').exists())
+            self.assertFalse((stage / '.next/BUILD_ID').exists())
+            # Staging and the running app must not share writable cache files.
+            (stage / '.next/cache/swc/fixture').write_bytes(b'new-build')
+            self.assertEqual((app / '.next/cache/swc/fixture').read_bytes(), b'cached-content')
+
+    def test_compiler_cache_invalidates_for_dependencies_config_and_environment(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            app, stage = self.cache_fixture(Path(temp))
+            for name in ['package.json', 'package-lock.json', '.nvmrc', '.npmrc',
+                         'next.config.js', 'next-i18next.config.js', 'tsconfig.json',
+                         'tsconfig.server.json', '.env', '.env.production']:
+                path = stage / name
+                original = path.read_bytes()
+                path.write_bytes(b'changed-config')
+                with self.subTest(name=name):
+                    self.assertFalse(deploy.restore_compiler_cache(app, stage))
+                    self.assertFalse((stage / '.next').exists())
+                path.write_bytes(original)
+            (stage / '.env.local').write_bytes(b'extra-config')
+            self.assertFalse(deploy.restore_compiler_cache(app, stage))
+            (stage / '.env.local').unlink()
+            (stage / 'package-lock.json').unlink()
+            self.assertFalse(deploy.restore_compiler_cache(app, stage))
+
+    def test_failed_cache_copy_allows_cold_build_without_partial_files(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            app, stage = self.cache_fixture(Path(temp))
+            def fail_copy(source, target):
+                Path(target).mkdir()
+                (Path(target) / 'partial').write_bytes(b'incomplete')
+                raise OSError('fixture copy failure')
+            with mock.patch.object(deploy.shutil, 'copytree', side_effect=fail_copy):
+                self.assertFalse(deploy.restore_compiler_cache(app, stage))
+            self.assertFalse((stage / '.next/cache/webpack').exists())
+            self.assertFalse((stage / '.next/cache/swc').exists())
+            self.assertEqual((app / '.next/cache/swc/fixture').read_bytes(), b'cached-content')
+
+    def test_session_snapshot_detects_nested_changes_additions_and_deletions(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            app = Path(temp)
+            auth = app / 'storage/whatsapp-auth/device/nested'
+            auth.mkdir(parents=True)
+            (app / '.env').write_bytes(b'fixture-env')
+            key = auth / 'session.json'
+            key.write_bytes(b'original')
+            initial = deploy.private_hashes(app)
+            self.assertEqual(initial, {'.env': hashlib.sha256(b'fixture-env').hexdigest(),
+                str(key.relative_to(app)): hashlib.sha256(b'original').hexdigest()})
+            key.write_bytes(b'changed!')  # Same size; compare contents, not metadata.
+            self.assertNotEqual(deploy.private_hashes(app), initial)
+            key.write_bytes(b'original')
+            extra = auth / 'new-key.json'
+            extra.write_bytes(b'new')
+            self.assertNotEqual(deploy.private_hashes(app), initial)
+            extra.unlink()
+            self.assertEqual(deploy.private_hashes(app), initial)
+            key.unlink()
+            self.assertNotEqual(deploy.private_hashes(app), initial)
+
     def test_unrelated_process_guard_handles_only_recovered_sms_restart(self):
         def process(name, pid):
             return {'name': name, 'pid': pid, 'pm2_env': {

@@ -55,6 +55,33 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 
 ## Proses deploy
 
+### Optimasi waktu build (24 Oktober 2026)
+
+- GitHub mengambil hanya commit saat ini dan menyimpan cache compiler Next.js
+  (`.next/cache/webpack` dan `swc`) antar-run dengan key OS/arsitektur,
+  Node, dependency, konfigurasi build, dan commit. Restore hanya memakai prefix
+  konfigurasi yang cocok. Cache npm yang sudah ada tetap digunakan;
+  `npm ci --prefer-offline --no-audit --no-fund` mengurangi akses registry tambahan.
+- VPS menyalin cache compiler dari runtime aktif ke staging sebelum build jika
+  package/lockfile, Node, konfigurasi build, dan seluruh file environment cocok.
+  File cache disalin terpisah agar build tidak menulis ke runtime aktif.
+  Cache data/fetch, halaman hasil build dan BUILD_ID tidak digunakan ulang.
+  Cache tidak tersedia atau gagal disalin berarti build berjalan tanpa cache.
+  Path staging tetap `.doran-cd-build` karena key internal webpack menyertakan
+  path absolut instalasi Next.js. Lock deploy tetap berlaku; direktori staging
+  yang tertinggal untuk pemulihan membuat deploy baru berhenti, bukan ditimpa.
+- Build dan suite tes tetap dijalankan pada GitHub serta VPS. Artifact GitHub
+  tetap berupa source; build VPS tetap memakai environment produksi.
+- Snapshot integritas sesi memakai metadata `os.scandir` langsung untuk mengurangi
+  operasi stat dan objek Path per file. Isi **seluruh** file tetap di-hash dua kali;
+  backup lengkap dan pemeriksaan jumlah record tetap dijalankan.
+- Log `COMPILER_CACHE` dan `DEPLOY_STEP_STARTED`/`DEPLOY_STEP_FINISHED`
+  menampilkan status cache serta durasi/exit code per perintah tanpa output sensitif.
+  Efek cache terlihat setelah cache terisi; waktu produksi perlu dibandingkan
+  lewat run CI/CD berikutnya, bukan diasumsikan dari pengujian lokal.
+
+### Langkah deploy
+
 - Antar-deploy diserialkan GitHub concurrency dan lock Linux di VPS.
 - Source diekstrak ke staging terisolasi; link/path traversal/runtime data ditolak.
 - Dependency, Prisma client, build dan tes dijalankan ulang di VPS.
