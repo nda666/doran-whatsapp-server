@@ -94,7 +94,7 @@ nextApp.prepare().then(async () => {
     stopMessagingAlerts = startMessagingAlerts();
     stopDailyWarmup = startDailyWarmup();
     stopDispatchWebhookWorker = startDispatchWebhookWorker();
-    if (process.env.DISPATCH_QUEUE_ENABLED === "true" && process.env.WHATSAPP_ENABLED !== "false") stopDispatchWorker = startDispatchWorker();
+    if (process.env.DISPATCH_QUEUE_ENABLED === "true" && (process.env.WHATSAPP_ENABLED !== "false" || process.env.TELEGRAM_ENABLED === "true")) stopDispatchWorker = startDispatchWorker();
     if (process.env.NODE_ENV !== "production") {
       console.info(
         `> Ready on http://localhost:${port} or http://0.0.0.0:${port}`

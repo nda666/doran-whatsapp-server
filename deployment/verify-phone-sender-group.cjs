@@ -20,6 +20,7 @@ const plain = value => JSON.parse(JSON.stringify(value));
 let lastQuery, lastCount;
 const access = { isSuperAdmin: user => user.id === 'admin', ownerScope: user => user.id === 'admin' ? {} : { userId: user.id } };
 const handler = load('src/pages/api/phones/index.ts', {
+  '@/lib/messagingChannel': load('src/lib/messagingChannel.ts', {}),
   '@/server/messaging/safety': { usageDay: () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) },
   '@/lib/dispatchDateFilter': load('src/lib/dispatchDateFilter.ts', {}),
   '@/server/dispatch/settings': { getDispatchDisplayWindow: async () => ({ days: 1, createdAt: {} }) },

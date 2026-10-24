@@ -45,7 +45,7 @@ export async function captureStop(userId: string, jid: string, text: string) {
 
 /** Shared transport boundary: every API, campaign, conversation and auto reply passes here. */
 export async function reserveSend(userId: string, phoneId: string, jid: string) {
-  const number = jid.endsWith("@s.whatsapp.net") ? normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`) : null;
+  const number = jid.startsWith("+") ? normalizePhoneRecipient(jid) : jid.endsWith("@s.whatsapp.net") ? normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`) : null;
   if (number && await recipientBlocked(userId, number)) throw new SendGuardError("RECIPIENT_OPTED_OUT");
   const globalQuota = await getGlobalDeviceQuota();
   const globalRange = await getDispatchDelayRange();

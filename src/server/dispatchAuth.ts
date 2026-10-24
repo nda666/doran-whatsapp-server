@@ -38,10 +38,17 @@ export async function resolveIntegrationIdentity(req: Pick<NextApiRequest, "head
 
 export async function resolveDispatchDevice(req: Pick<NextApiRequest, "headers" | "query">, input: any) {
   const identity = await resolveIntegrationIdentity(req, input);
-  if (identity.mode === "device") return { phone: identity.device!, token: identity.token, mode: identity.mode };
+  const checkChannel = (phone: { channel?: string }) => {
+    if (input?.channel !== undefined && input.channel !== (phone.channel || "whatsapp")) throw new DispatchAuthError(400, "channel tidak cocok dengan perangkat. Pilih token/device_id dari kanal yang dimaksud.");
+  };
+  if (identity.mode === "device") {
+    checkChannel(identity.device!);
+    return { phone: identity.device!, token: identity.token, mode: identity.mode };
+  }
   if (!identity.deviceId) throw new DispatchAuthError(400, "device_id wajib untuk token user.");
   // No super-admin bypass: a user token can only select that user's own device.
   const phone = await prisma.phone.findFirst({ where: { id: identity.deviceId, userId: identity.user.id } });
   if (!phone) throw new DispatchAuthError(403, "Device tidak tersedia untuk akun ini.");
+  checkChannel(phone);
   return { phone, token: identity.token, mode: "user" as const };
 }

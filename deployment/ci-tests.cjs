@@ -2,6 +2,10 @@
 // Explicit offline allowlist. Never glob verify-*-live scripts into CI.
 const { spawnSync } = require('node:child_process');
 const tests = [
+  'verify-telegram.cjs',
+  'verify-telegram-dispatch.cjs',
+  'verify-test-send-types.cjs',
+  'verify-local-device-channel.cjs',
   'test-cd-readiness.cjs',
   'verify-registered-phones.cjs', 'verify-device-webhook.cjs',
   'verify-connection-status.cjs', 'verify-user-active.cjs',

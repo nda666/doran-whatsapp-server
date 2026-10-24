@@ -302,6 +302,7 @@ enum PhoneStatus {
 
 model Phone {
   id                   String             @id @default(uuid())
+  channel              String             @default("whatsapp") @db.VarChar(16)
   name                 String
   number               String?
   account_name         String?

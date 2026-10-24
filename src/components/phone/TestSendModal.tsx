@@ -8,6 +8,7 @@ import { matchesTestMedia, testSendTypes } from "@/lib/testSend";
 import MessageTemplatePicker from "@/components/MessageTemplatePicker";
 import StickerPhotoUpload from "@/components/StickerPhotoUpload";
 import StickerPreview from "@/components/StickerPreview";
+import { isTelegramDevice, telegramMessageTypes } from "@/lib/messagingChannel";
 
 const required = (uiText: UiTranslator) => ([{ required: true, message: uiText("Isi bagian ini.") }]);
 const requiredText = (uiText: UiTranslator) => ([{ required: true, whitespace: true, message: uiText("Isi bagian ini.") }]);
@@ -17,6 +18,7 @@ export default function TestSendModal({ open, phone, token, onClose }: { open: b
   const uiText = useUiTranslation();
   const [form] = Form.useForm();
   const phoneId = phone?.id;
+  const telegram = !!phone && isTelegramDevice(phone);
   const type = Form.useWatch("type", form) || "text";
   const recipient = Form.useWatch("number", form) || "";
   const [sending, setSending] = useState(false);
@@ -33,14 +35,14 @@ export default function TestSendModal({ open, phone, token, onClose }: { open: b
   useEffect(() => {
     if (open) {
       form.resetFields();
-      form.setFieldsValue({ number: "", type: "text", message: "Pesan test dari dashboard WhatsApp.",
+      form.setFieldsValue({ number: "", type: "text", message: telegram ? "Pesan test dari dashboard Telegram." : "Pesan test dari dashboard WhatsApp.",
         buttons: [{ id: "test-1", text: "Pilihan 1" }, { id: "test-2", text: "Pilihan 2" }],
         rows: [{ id: "opsi-1", title: "Pilihan 1" }, { id: "opsi-2", title: "Pilihan 2" }],
         title: "Daftar pilihan", buttonText: "Lihat pilihan", pollName: "Pilih opsi test", values: ["Pilihan 1", "Pilihan 2"], selectableCount: 1 });
       setResult(undefined);
       setUploadedMedia([]);
     }
-  }, [open, phone?.id, form]);
+  }, [open, phone?.id, form, telegram]);
   useEffect(() => {
     if (!open || !phoneId) return;
     let current = true;
@@ -77,7 +79,7 @@ export default function TestSendModal({ open, phone, token, onClose }: { open: b
   const needsMessage = ["text", "button", "list"].includes(type);
   const options = [...uploadedMedia, ...media.filter(item => !uploadedMedia.some(uploaded => uploaded.id === item.id))].filter(item => matchesTestMedia(type, item.mime));
   return (
-    <Modal title={uiText("Test Kirim WhatsApp")} open={open} onCancel={() => !busy && onClose()} width={640} style={{ top: 24 }}
+    <Modal title={uiText(telegram ? "Test Kirim Telegram" : "Test Kirim WhatsApp")} open={open} onCancel={() => !busy && onClose()} width={640} style={{ top: 24 }}
       styles={{ body: { maxHeight: "calc(100dvh - 200px)", overflowY: "auto" } }}
       closable={!busy} maskClosable={!busy} keyboard={!busy}
       okText={uiText("Kirim 1 Pesan Test")} cancelText={uiText("Tutup")} confirmLoading={sending}
@@ -90,7 +92,7 @@ export default function TestSendModal({ open, phone, token, onClose }: { open: b
         <Form.Item name="number" label={uiText("Nomor tujuan")} extra={uiText("Boleh memakai 08…, 62…, atau +62…; spasi dan tanda hubung juga diterima.")} rules={[...required(uiText), { validator: async (_, value) => { if (!value) return; try { normalizePhoneRecipient(value); } catch { throw new Error(uiText("Isi satu nomor yang valid, contoh 0812… atau 62812…")); } } }]}>
           <Input placeholder={uiText("0812… atau 62812…")} inputMode="tel" autoComplete="tel" maxLength={32} />
         </Form.Item>
-        <Form.Item name="type" label={uiText("Tipe pengiriman")} rules={required(uiText)}><Select options={testSendTypes.map(option => ({ ...option, label: uiText(option.label) }))} /></Form.Item>
+        <Form.Item name="type" label={uiText("Tipe pengiriman")} rules={required(uiText)}><Select options={testSendTypes.filter(option => !telegram || (telegramMessageTypes as readonly string[]).includes(option.value)).map(option => ({ ...option, label: uiText(option.label) }))} /></Form.Item>
         {hasMedia && <>
           <Form.Item name="mediaId" label={type === "sticker" ? uiText("File sticker WebP") : uiText("File yang dikirim")} rules={required(uiText)}
             extra={type === "sticker" ? uiText("Pilih WebP yang sudah tersedia atau unggah foto untuk diubah menjadi stiker. Stiker dikirim tanpa caption.") : uiText("File berasal dari File Manager milik pemilik perangkat. Maksimal 25 MB/file.")}>

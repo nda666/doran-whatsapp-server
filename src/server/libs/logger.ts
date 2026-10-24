@@ -1,13 +1,13 @@
 import pino from "pino";
 
 const isDev = process.env.NODE_ENV !== "production";
-export const logger = (saveLocation: string) =>
+export const logger = (saveLocation: string, level = "error") =>
   pino({
     enabled: true,
     transport: {
       targets: [
         {
-          level: "error",
+          level,
           target: "pino-roll",
           options: {
             file: saveLocation,

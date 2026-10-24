@@ -88,6 +88,7 @@ async function main() {
     while (!(await portOpen(3306)) && Date.now() < databaseDeadline) await pause(1000);
     if (!(await portOpen(3306))) throw new Error('Database belum aktif. Buka Laragon, klik Start All, lalu klik shortcut ini lagi.');
   }
+  if (await require('./local-device-channel.cjs').ensureLocalDeviceChannel()) console.log('Kolom kanal perangkat lokal siap; perangkat lama tetap WhatsApp.');
   console.log('Menjalankan Doran WA Local. Browser akan terbuka setelah aplikasi siap.');
   console.log('Biarkan jendela ini terbuka. Tekan Ctrl+C untuk menghentikan aplikasi.');
   const child = spawn(process.execPath, [path.join(__dirname, 'watch-typescript.cjs'), 'server'], { cwd: root, env: process.env, stdio: 'inherit' });

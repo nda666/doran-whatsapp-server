@@ -14,6 +14,8 @@ import { deviceToken } from "@/server/deviceToken";
 import type { Phone } from "@prisma/client";
 import { DispatchAuthError, resolveDispatchDevice, resolveIntegrationIdentity } from "@/server/dispatchAuth";
 import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
+import { isTelegramDevice } from "@/lib/messagingChannel";
+import { telegramRecipient } from "@/server/telegram/dispatch";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store"); res.setHeader("Referrer-Policy", "no-referrer");
@@ -35,7 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!device) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
       phone = device;
     }
-    if (action === "session") return res.json({ active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number });
+    if (action === "session") return res.json({ channel: phone.channel || "whatsapp", active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number });
+    if (isTelegramDevice(phone) && !["send-message", "send-media", "session", "disconnect"].includes(action)) return res.status(422).json({ result: false, message: "Endpoint ini belum didukung provider Telegram. Gunakan send-message atau send-media untuk gambar." });
     if (action === "disconnect") {
       // Inactivate first so periodic reconnect cannot undo explicit disconnection.
       await prisma.$transaction(tx => updateDevice(tx, { id: phone.id, userId: phone.userId }, { active: 0, isOnline: false, status: "CLOSE" }, "device.active_changed"));
@@ -65,6 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof body.media_id !== "string") throw new DispatchError(400, "media_id wajib diisi; upload melalui File Manager.");
       const media = await prisma.mediaAsset.findFirst({ where: { id: body.media_id, userId: phone.userId } });
       if (!media || (action === "send-sticker" && media.mime !== "image/webp")) throw new DispatchError(400, "Media tidak tersedia/format sticker harus WebP.");
+      if (isTelegramDevice(phone) && !/^image\/(jpeg|png|gif|webp)$/.test(media.mime)) throw new DispatchError(422, "Provider Telegram saat ini hanya mendukung media gambar.");
       mediaId = media.id;
       if (action === "send-sticker") payload = { kind: "sticker" };
     } else if (action !== "send-message") {
@@ -73,6 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       payloadContent(payload);
     }
     const prepared = prepareDispatch(phone.id, phone.userId, { ...body, message: body.message || (payload && "text" in payload ? payload.text : `[${action}]`) });
+    prepared.jobs = prepared.jobs.map(job => telegramRecipient(job, phone));
     const jobs = prepared.jobs.map(j => ({ ...j, mediaId, payload, payloadHash: mediaId || payload ? createHash("sha256").update(JSON.stringify([j.message, j.image, mediaId, payload || null])).digest("hex") : j.payloadHash }));
     const data = await prisma.$transaction(async tx => {
       const previous = await existingRequestJob(phone.id, body, tx);

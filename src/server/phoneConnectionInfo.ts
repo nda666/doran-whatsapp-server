@@ -5,8 +5,16 @@ import { session } from "./libs/makeWASocket";
 import { phoneMaintenance } from "./libs/phoneMaintenance";
 import { isPairingInProgress } from "./libs/pairingState";
 import { waRecovery } from "./libs/waRecoveryState";
+import { isTelegramDevice } from "../lib/messagingChannel";
+import { telegramEnabled } from "./telegram/availability";
 
-export async function getPhoneConnectionInfo(phone: { id: string; userId: string; active: number }) {
+export async function getPhoneConnectionInfo(phone: { id: string; userId: string; active: number; channel?: string }) {
+  if (isTelegramDevice(phone)) return {
+    state: phone.active !== 1 ? "inactive" as const : telegramEnabled() ? "configured" as const : "disabled" as const,
+    label: phone.active !== 1 ? "Perangkat nonaktif" : telegramEnabled() ? "Provider dikonfigurasi" : "Telegram dinonaktifkan",
+    description: "Telegram menggunakan API provider. Status konfigurasi bukan verifikasi koneksi atau keberhasilan pengiriman. Tidak memerlukan QR.",
+    qrRequired: false, action: "none" as const, checkedAt: new Date().toISOString(),
+  };
   const socket = session.get(phone.id);
   const health = socket && waRecovery.sockets.get(socket);
   const online = !!socket?.ws.isOpen && !!health?.connected;

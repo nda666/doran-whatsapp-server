@@ -12,7 +12,8 @@ import { isPhonePolicySort } from "@/lib/phonePolicySort";
 import { phonePolicyPage, phoneQuotaWhere } from "@/server/messaging/phonePolicySort";
 import { usageDay } from "@/server/messaging/safety";
 import { dispatchDateFilter } from "@/lib/dispatchDateFilter";
-const input = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
+import { isTelegramDevice, telegramUnsupportedSettings } from "@/lib/messagingChannel";
+const input = z.object({ id: z.string().uuid().optional(), channel: z.enum(["whatsapp", "telegram"]).optional(), name: z.string().trim().min(1).max(200), is_save_group: z.boolean().optional(),
   webhookUrl: z.string().max(2000).refine(v => !v || /^https?:\/\//.test(v), "Webhook URL tidak valid").nullable().optional(),
   warmupEnabled: z.boolean().optional(), readReceipt: z.boolean().optional(), rejectCall: z.boolean().optional(), showOnline: z.boolean().optional(), showTyping: z.boolean().optional(), autoReplyEnabled: z.boolean().optional(), saveIncomingMessages: z.boolean().optional() });
 async function saveWarmup(tx: import("@prisma/client").Prisma.TransactionClient, phoneId: string, enabled: boolean) {
@@ -31,7 +32,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       const active = states.filter(row => row.active === 1).reduce((sum, row) => sum + row._count._all, 0);
       return res.json({ total, online, offline: total - online, active, inactive: total - active });
     }
-    if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, name: true, number: true, active: true, isOnline: true, autoReplyEnabled: true, saveIncomingMessages: true } }));
+    if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, channel: true, name: true, number: true, active: true, isOnline: true, autoReplyEnabled: true, saveIncomingMessages: true } }));
     if (req.query.sender_group_options === "1") return res.json(await prisma.senderGroup.findMany({
       where: ownerScope(req.user!), select: { id: true, name: true, enabled: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
     }));
@@ -78,12 +79,18 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
   const parsed = input.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
-  const { id, warmupEnabled, ...data } = parsed.data;
+  const { id, warmupEnabled, channel, ...data } = parsed.data;
+  const validateTelegramSettings = () => {
+    if (telegramUnsupportedSettings.some(key => data[key] === true) || data.webhookUrl) throw new Error("Provider Telegram belum mendukung pengaturan pesan masuk, sesi, grup, typing, atau read receipt.");
+  };
   if (id) {
+    try {
     const phone = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM device_webhook_settings WHERE id = 1 FOR UPDATE`;
       const before = await tx.phone.findFirst({ where: { id, ...ownerScope(req.user!) } });
       if (!before) return null;
+      if (channel && channel !== (before.channel || "whatsapp")) throw new Error("Kanal perangkat tidak dapat diubah. Buat perangkat baru agar antrean tidak berpindah kanal.");
+      if (isTelegramDevice(before)) validateTelegramSettings();
       const updated = await updateDevice(tx, { id, ...ownerScope(req.user!) }, { ...data,
         ...(data.saveIncomingMessages === true && !before.saveIncomingMessages ? { saveIncomingSince: new Date() } : {}),
       });
@@ -92,13 +99,17 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     });
     if (!phone) return res.status(404).end();
     return res.json(phone);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error && /^(Kanal perangkat|Provider Telegram)/.test(error.message) ? error.message : "Pengaturan perangkat belum dapat disimpan." });
+    }
   }
   try {
+    if (channel === "telegram") validateTelegramSettings();
     const phone = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
       const owner = await tx.user.findUniqueOrThrow({ where: { id: userId } });
       if (!isSuperAdmin(owner) && await tx.phone.count({ where: { userId } }) >= owner.deviceLimit) throw new Error("Limit device telah tercapai.");
-      const created = await tx.phone.create({ data: { readReceipt: false, showOnline: true, showTyping: false, ...data, userId, ...(data.saveIncomingMessages ? { saveIncomingSince: new Date() } : {}) } });
+      const created = await tx.phone.create({ data: { readReceipt: false, showOnline: channel !== "telegram", showTyping: false, ...data, channel: channel || "whatsapp", userId, ...(data.saveIncomingMessages ? { saveIncomingSince: new Date() } : {}) } });
       if (warmupEnabled !== undefined) await saveWarmup(tx, created.id, warmupEnabled);
       await enqueueDeviceEvent(tx, "device.created", created);
       return created;

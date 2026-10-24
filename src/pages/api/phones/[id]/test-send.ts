@@ -11,6 +11,8 @@ import { normalizePhoneRecipient } from "@/utils/normalizePhoneRecipient";
 import { testSendRequest } from "@/lib/testSend";
 import { prepareTestContent, enqueueTestContent } from "@/server/dispatch/testSend";
 import { DispatchError } from "@/server/dispatch/queue";
+import { isTelegramDevice, telegramMessageTypes } from "@/lib/messagingChannel";
+import { telegramEnabled } from "@/server/telegram/availability";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -24,11 +26,14 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     const data = await prisma.mediaAsset.findMany({ where: { userId: phone.userId }, orderBy: { createdAt: "desc" }, take: 1000, select: { id: true, name: true, mime: true } });
     return res.json({ data });
   }
-  if (process.env.WHATSAPP_ENABLED === "false") return res.status(503).json({ message: "WhatsApp sedang dinonaktifkan." });
-  if (phone.active !== 1 || !phone.isOnline) return res.status(409).json({ message: "Test kirim hanya tersedia untuk perangkat aktif dan online." });
+  const telegram = isTelegramDevice(phone);
+  if (telegram ? !telegramEnabled() : process.env.WHATSAPP_ENABLED === "false") return res.status(503).json({ message: "Kanal pengiriman sedang dinonaktifkan atau belum dikonfigurasi." });
+  if (telegram && process.env.DISPATCH_QUEUE_ENABLED !== "true") return res.status(503).json({ message: "Aktifkan antrean pengiriman untuk Telegram." });
+  if (phone.active !== 1 || (!telegram && !phone.isOnline)) return res.status(409).json({ message: "Test kirim hanya tersedia untuk perangkat aktif dan siap mengirim." });
   const parsed = testSendRequest.safeParse(req.body || {});
   if (!parsed.success) return res.status(400).json({ message: "Periksa tipe pesan, satu nomor tujuan, dan pesan maksimal 1.000 karakter." });
   const input = parsed.data;
+  if (telegram && !(telegramMessageTypes as readonly string[]).includes(input.type)) return res.status(422).json({ message: "Provider Telegram saat ini mendukung teks dan gambar. Tipe pesan ini belum didukung." });
   const { number, message } = input;
   let recipient: string;
   try { recipient = normalizePhoneRecipient(number); }

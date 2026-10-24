@@ -25,7 +25,7 @@ const response = () => ({ code: 200, status(code) { this.code = code; return thi
   let lookup, stored;
   let asset = { id: 'media', mime: 'image/png', userId: 'owner' };
   const tx = { $queryRaw: async () => [], waDispatch: { count: async () => 0, findMany: async () => stored }, waSenderLease: { createMany: async () => {} } };
-  const db = { mediaAsset: { findFirst: async ({ where }) => { lookup = where; return asset && asset.userId === where.userId ? asset : null; } }, $transaction: async fn => fn(tx) };
+  const db = { phone: { findFirst: async () => ({ id: 'phone', userId: 'owner', channel: 'whatsapp' }) }, mediaAsset: { findFirst: async ({ where }) => { lookup = where; return asset && asset.userId === where.userId ? asset : null; } }, $transaction: async fn => fn(tx) };
   const helper = load('src/server/dispatch/testSend.ts', {
     '../../lib/prisma': { prisma: db }, './queue': { DispatchError, prepareDispatch: (_, __, body) => ({ jobs: [{ id: 'job', recipient: body.number, message: body.message }] }), dispatchResponse: (_, jobs) => ({ result: true, queued: true, data: jobs }) },
     '../dispatchWebhook/events': { createDispatches: async (_, { data }) => { stored = data; } },
@@ -84,5 +84,13 @@ const response = () => ({ code: 200, status(code) { this.code = code; return thi
   process.env.DISPATCH_QUEUE_ENABLED = 'false'; res = response(); await handler(req, res); assert.equal(res.code, 503); assert.equal(sends, 0);
   res = response(); await handler({ ...req, body: { number: '081217357535', message: 'Backward compatible text' } }, res); assert.equal(res.code, 200); assert.equal(sends, 1);
   process.env.WHATSAPP_ENABLED = 'false'; res = response(); await handler(req, res); assert.equal(res.code, 503);
+  // Telegram uses the same authenticated test-send endpoint without WA sessions.
+  phone.channel = 'telegram'; phone.isOnline = false;
+  process.env.TELEGRAM_ENABLED = 'true'; process.env.TELEGRAM_API_KEY = 'offline-fixture-key'; process.env.DISPATCH_QUEUE_ENABLED = 'true';
+  res = response(); await handler({ ...req, body: { number: '081217357535', type: 'text', message: 'Telegram test' } }, res);
+  assert.equal(res.code, 200); assert.equal(res.body.queued, true); assert.equal(sends, 1, 'Telegram never uses legacy WhatsApp send');
+  res = response(); await handler(req, res); assert.equal(res.code, 422, 'Unsupported Telegram type rejected');
+  process.env.DISPATCH_QUEUE_ENABLED = 'false'; res = response(); await handler(req, res); assert.equal(res.code, 503);
+  process.env.TELEGRAM_ENABLED = 'false'; res = response(); await handler(req, res); assert.equal(res.code, 503);
   console.log('TEST_SEND_11_TYPES_QUEUE_PAYLOAD_MEDIA_OWNERSHIP_VALIDATION_AND_LEGACY_TEXT_OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

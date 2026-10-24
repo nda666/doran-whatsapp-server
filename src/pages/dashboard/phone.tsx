@@ -178,6 +178,7 @@ const PhonePage = () => {
   }, [socketOption, state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<PhoneRow> = [
+    { title: uiText("Kanal"), key: "channel", dataIndex: "channel", render: value => <Tag color={value === "telegram" ? "blue" : "green"}>{value === "telegram" ? "Telegram" : "WhatsApp"}</Tag> },
     {
       title: t("number"),
       key: "number",
@@ -253,6 +254,7 @@ const PhonePage = () => {
       dataIndex: "is_save_group",
       render: (v, phone) => (
         <Switch
+          disabled={phone.channel === "telegram"}
           defaultChecked={v ? true : false}
           checkedChildren={uiText("On")}
           unCheckedChildren={uiText("Off")}

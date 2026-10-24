@@ -50,6 +50,7 @@ const createWASocket = async (
     throw new Error("Koneksi WhatsApp dinonaktifkan sementara.");
   }
   const phone = await getPhoneById(phoneId);
+  if (phone?.channel === "telegram") throw new Error("Perangkat Telegram menggunakan API provider; sesi WhatsApp tidak tersedia.");
   if (!phone || phone.userId !== userId || phone.active !== 1) {
     throw new Error(`Device ${phoneId} is not active`);
   }

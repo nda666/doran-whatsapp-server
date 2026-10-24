@@ -1,5 +1,7 @@
 'use strict';
 // Real MySQL, mock WhatsApp transport. Never uses DATABASE_URL or real sockets.
+// The fixture explicitly enables its mock channel; CI disables real transports.
+process.env.WHATSAPP_ENABLED = 'true';
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), cp = require('node:child_process');
 const { randomUUID } = require('node:crypto');

@@ -1,5 +1,5 @@
 export type PhoneConnectionInfo = {
-  state: "online" | "inactive" | "maintenance" | "disabled" | "scan_qr" | "pairing" | "reconnecting" | "waiting" | "conflict" | "rejected" | "session_error" | "unknown";
+  state: "configured" | "online" | "inactive" | "maintenance" | "disabled" | "scan_qr" | "pairing" | "reconnecting" | "waiting" | "conflict" | "rejected" | "session_error" | "unknown";
   label: string;
   description: string;
   qrRequired: boolean | null;

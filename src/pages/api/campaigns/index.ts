@@ -8,6 +8,8 @@ import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
 import { campaignInput, campaignJobs, validCampaignMedia } from "@/server/campaigns/prepare";
+import { isTelegramDevice } from "@/lib/messagingChannel";
+import { telegramRecipient } from "@/server/telegram/dispatch";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -27,7 +29,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
   const input = parsed.data;
   const [phones, contacts, selectedContacts, groups, media] = await Promise.all([
-    prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true } }),
+    prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true, channel: true } }),
     prisma.contact.findMany({ where: { ...ownerScope(req.user!), ...(input.allContacts ? {} : { OR: [{ groupId: { in: input.groupIds } }, { id: { in: input.contactIds } }] }) }, take: 10001 }),
     prisma.contact.count({ where: { ...ownerScope(req.user!), id: { in: input.contactIds } } }),
     prisma.contactGroup.count({ where: { ...ownerScope(req.user!), id: { in: input.groupIds } } }),
@@ -36,7 +38,8 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (phones.length !== new Set(input.phoneIds).size || selectedContacts !== new Set(input.contactIds).size || groups !== new Set(input.groupIds).size || (input.mediaId && !media)) return res.status(400).json({ message: "Device, kontak, grup, atau media tidak tersedia." });
   if (!validCampaignMedia(input, media, userId)) return res.status(400).json({ message: "Pilih stiker WebP maksimal 100 KB milik Anda. Konversi foto melalui unggah stiker." });
   try {
-    const jobs = campaignJobs(input, userId, contacts);
+    if (phones.some(isTelegramDevice) && (input.messageType === "sticker" || (media && !/^image\/(jpeg|png|gif|webp)$/.test(media.mime)))) return res.status(422).json({ message: "Campaign Telegram saat ini mendukung teks dan gambar." });
+    const jobs = campaignJobs(input, userId, contacts).map(job => telegramRecipient(job, phones.find(phone => phone.id === job.phoneId)!));
     const result = await prisma.$transaction(async tx => {
       // Serialize admission and duplicate retries for this owner.
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;

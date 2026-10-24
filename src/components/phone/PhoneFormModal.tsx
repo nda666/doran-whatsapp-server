@@ -13,6 +13,7 @@ import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import { parsePhoneNumber } from "libphonenumber-js";
 import { PhoneFormField, parsePhoneFormFields } from "@/lib/phoneFormFields";
 import { Phone } from "@prisma/client";
+import { telegramUnsupportedSettings, type MessagingChannel } from "@/lib/messagingChannel";
 
 export interface PhoneFormModalRef {
   resetForm: () => void;
@@ -20,6 +21,7 @@ export interface PhoneFormModalRef {
 
 export type PhoneFormData = {
   id?: string;
+  channel?: MessagingChannel;
   name: string;
   is_save_group?: boolean;
   webhookUrl?: string | null;
@@ -46,6 +48,8 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
   const uiText = useUiTranslation();
     const { t } = useTranslation("common");
     const [form] = Form.useForm();
+    const channel = Form.useWatch("channel", form) || editPhone?.channel || "whatsapp";
+    const telegram = channel === "telegram";
     const [visibleFields, setVisibleFields] = useState<PhoneFormField[]>([]);
     const [warmupLimits, setWarmupLimits] = useState(DEFAULT_WARMUP_DAILY_LIMITS);
     const [warmupStartedAt, setWarmupStartedAt] = useState<string | null>(null);
@@ -86,6 +90,7 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
     useEffect(() => {
       if (editPhone) {
         form.setFieldValue("id", editPhone.id);
+        form.setFieldValue("channel", editPhone.channel || "whatsapp");
         form.setFieldValue("name", editPhone.name);
         form.setFieldValue("autoReplyEnabled", editPhone.autoReplyEnabled);
         form.setFieldValue("saveIncomingMessages", editPhone.saveIncomingMessages);
@@ -124,6 +129,10 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
             ?.validateFields()
             .then((values) => {
               const submitted = { ...values };
+              if (telegram) {
+                for (const key of telegramUnsupportedSettings) delete submitted[key];
+                delete submitted.webhookUrl;
+              }
               for (const key of ["saveIncomingMessages", "autoReplyEnabled", "readReceipt", "rejectCall", "showOnline", "showTyping"] as PhoneFormField[]) {
                 if (!visibleFields.includes(key)) delete submitted[key];
               }
@@ -138,11 +147,15 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
           form={form}
           layout="vertical"
           name="phone-form"
-          initialValues={{ warmupEnabled: false, modifier: "public", showOnline: true, readReceipt: false, rejectCall: false, showTyping: false, autoReplyEnabled: false, saveIncomingMessages: false }}
+          initialValues={{ channel: "whatsapp", warmupEnabled: false, modifier: "public", showOnline: true, readReceipt: false, rejectCall: false, showTyping: false, autoReplyEnabled: false, saveIncomingMessages: false }}
         >
           <Form.Item name="id" hidden>
             <Input />
           </Form.Item>
+          <Form.Item name="channel" label={uiText("Kanal pengiriman")} rules={[{ required: true }]}>
+            <Radio.Group disabled={!!editPhone} options={[{ value: "whatsapp", label: "WhatsApp" }, { value: "telegram", label: "Telegram" }]} />
+          </Form.Item>
+          {telegram && <Alert type="info" showIcon style={{ marginBottom: 16 }} message={uiText("Telegram menggunakan API provider server, tanpa scan QR. Kuota, jeda, jam operasional, pause, dan pemanasan mengikuti pengaturan pengiriman yang sama. Provider saat ini mendukung teks dan gambar; fitur sesi dan pesan masuk belum tersedia.")} />}
           <Form.Item
             name="name"
             label={t("phone_label")}
@@ -157,7 +170,7 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
           >
             <Input />
           </Form.Item>
-          <Form.Item name="webhookUrl" label={uiText("Webhook URL")}
+          <Form.Item hidden={telegram} name="webhookUrl" label={uiText("Webhook URL")}
             tooltip={{
               title: uiText("Meneruskan data pesan WhatsApp yang masuk ke aplikasi atau sistem lain melalui URL ini. Tetap berjalan meski Balasan Otomatis nonaktif. Balasan ke customer perlu diatur di sistem penerima. Kosongkan jika tidak digunakan."),
               icon: <InfoCircleOutlined tabIndex={0} aria-label={uiText("Informasi Webhook URL")} />,
@@ -169,15 +182,15 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
                 <div>{uiText("Batasi pengiriman bertahap: {{v0}} percobaan per hari, masing-masing selama dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum.", { v0: warmupLimits.join(" → ") })}</div>
                 {fieldsReady && warmupStartedAt && <p className="device-setting-note">{uiText("Pemanasan aktif sejak {{v0}}. Tetap aktif tidak mengulang tanggal mulai. Matikan lalu Simpan untuk mengakhiri pemanasan.", { v0: new Date(warmupStartedAt).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta" }) })}</p>}
               </>} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("saveIncomingMessages")} name="saveIncomingMessages" label={uiText("Simpan Pesan Masuk")}
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("saveIncomingMessages")} name="saveIncomingMessages" label={uiText("Simpan Pesan Masuk")}
               description={uiText("Simpan pesan baru agar bisa dibaca dan dibalas melalui menu Percakapan. Pesan lama sebelum fitur aktif tidak ikut diambil.")} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("autoReplyEnabled")} name="autoReplyEnabled" label={uiText("Aktifkan Balasan Otomatis")}
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("autoReplyEnabled")} name="autoReplyEnabled" label={uiText("Aktifkan Balasan Otomatis")}
               description={uiText("Jika dinonaktifkan, semua aturan balasan pada perangkat ini tidak akan dijalankan.")} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("readReceipt")} name="readReceipt" label={uiText("Read receipt")}
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("readReceipt")} name="readReceipt" label={uiText("Read receipt")}
               description={uiText("Jika aktif, server otomatis menandai pesan masuk sebagai sudah dibaca. Customer dapat melihat centang biru sesuai pengaturan privasi WhatsApp. Jika nonaktif, server tidak otomatis menandainya sebagai dibaca; membuka chat di HP tetap dapat menandainya sebagai dibaca.")} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("rejectCall")} name="rejectCall" label={uiText("Tolak panggilan")} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("showOnline")} name="showOnline" label={uiText("Tampilkan online (berlaku setelah reconnect)")} />
-            <SettingToggle hidden={!fieldsReady || !visibleFields.includes("showTyping")} name="showTyping" label={uiText("Tampilkan typing saat mengirim")} />
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("rejectCall")} name="rejectCall" label={uiText("Tolak panggilan")} />
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("showOnline")} name="showOnline" label={uiText("Tampilkan online (berlaku setelah reconnect)")} />
+            <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("showTyping")} name="showTyping" label={uiText("Tampilkan typing saat mengirim")} />
           </div>
         </Form>
       </Modal>

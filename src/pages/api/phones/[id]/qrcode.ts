@@ -23,6 +23,7 @@ const GET = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   res.setHeader("Cache-Control", "no-store");
   const phone = await prisma.phone.findFirst({ where: { id: phoneId, ...ownerScope(req.user!) } });
   if (!phone) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
+  if (phone.channel === "telegram") return res.status(422).json({ message: "Telegram menggunakan API provider dan tidak memerlukan QR WhatsApp." });
   if (phone.active !== 1) return res.status(409).json({ code: "DEVICE_INACTIVE", message: "Perangkat masih nonaktif. Aktifkan perangkat sebelum memindai QR." });
   try {
     if (isPairingInProgress(phoneId)) return res.status(200).json({ pairing: true, timeout: 0 });

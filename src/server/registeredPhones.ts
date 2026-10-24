@@ -5,7 +5,7 @@ import { isApproved, isSuperAdmin, ownerScope } from "@/lib/access";
 
 // Tokens are selected only for the designated admin; QR credentials stay private.
 const detailSelect = {
-  id: true, name: true, number: true, account_name: true,
+  id: true, channel: true, name: true, number: true, account_name: true,
   status: true, isOnline: true, active: true, is_save_group: true,
   webhookUrl: true, readReceipt: true, rejectCall: true,
   showOnline: true, showTyping: true, createdAt: true, updatedAt: true,

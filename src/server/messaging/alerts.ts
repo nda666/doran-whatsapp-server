@@ -23,6 +23,8 @@ export async function processDeviceAlert(phoneId: string) {
   try {
     const [phone, state] = await Promise.all([prisma.phone.findUnique({ where: { id: phoneId } }), prisma.deviceAlertState.findUniqueOrThrow({ where: { phoneId } })]);
     if (!phone) return;
+    // This provider has no session/health endpoint: do not invent offline alerts.
+    if (phone.channel === "telegram") return;
     const preference = await prisma.messagingPreference.findUnique({ where: { userId: phone.userId } });
     if (!preference?.offlineAlertsEnabled || !preference.alertEmail) {
       await prisma.deviceAlertState.update({ where: { phoneId }, data: { offlineAt: null, notifiedAt: null, recoveryPending: false } });

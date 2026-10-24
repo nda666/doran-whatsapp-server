@@ -1,7 +1,7 @@
 export const dispatchStatusInfo: Record<string, { label: string; color: string; description: string }> = {
   QUEUED: { label: "Menunggu pengiriman", color: "gold", description: "Pesan berada dalam antrean pengiriman atau menunggu percobaan ulang. Lihat keterangan untuk rinciannya." },
-  PROCESSING: { label: "Mengirim", color: "blue", description: "Pesan sedang dikirim dan belum dikonfirmasi terkirim oleh server WhatsApp." },
-  SENT: { label: "Terkirim ke server WA", color: "green", description: "Server WhatsApp telah menerima pesan. Penerimaan oleh tujuan belum dikonfirmasi." },
+  PROCESSING: { label: "Mengirim", color: "blue", description: "Pesan sedang dikirim dan belum dikonfirmasi oleh server pengiriman." },
+  SENT: { label: "Diterima server", color: "green", description: "Server pengiriman telah mengonfirmasi pesan. Penerimaan oleh tujuan belum dikonfirmasi." },
   DELIVERED: { label: "Diterima tujuan", color: "cyan", description: "WhatsApp telah mengonfirmasi bahwa pesan diterima oleh tujuan." },
   READ: { label: "Dibaca", color: "purple", description: "WhatsApp telah mengonfirmasi bahwa pesan dibaca oleh penerima." },
   FAILED: { label: "Gagal", color: "red", description: "Pengiriman pesan gagal. Lihat kolom Keterangan pada tabel untuk mengetahui penyebabnya." },
@@ -10,7 +10,7 @@ export const dispatchStatusInfo: Record<string, { label: string; color: string; 
 };
 
 type QueueJob = { status: string; lastError: string | null; nextAttemptAt: Date; campaign?: { status: string; scheduledAt: Date } | null };
-export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; status: string | null } | null, now = new Date()) {
+export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; status: string | null; channel?: string } | null, now = new Date()) {
   if (job.status !== "QUEUED") return null;
   if (job.campaign) {
     if (job.campaign.status === "PAUSED") return "Menunggu campaign dilanjutkan.";
@@ -22,7 +22,8 @@ export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; s
   if (job.lastError === "SENDER_REJECTED_RETRY") return dispatchErrorLabels.SENDER_REJECTED_RETRY;
   if (!phone) return "Perangkat pengirim tidak ditemukan; menunggu pemeriksaan sistem.";
   if (phone.active !== 1) return "Menunggu perangkat pengirim diaktifkan.";
-  if (phone.status !== "OPEN" || job.lastError === "DEVICE_OFFLINE") return "Menunggu perangkat pengirim terhubung ke WhatsApp.";
+  if (phone.channel === "telegram" && job.lastError?.startsWith("TELEGRAM_")) return dispatchErrorLabels[job.lastError] || "Menunggu pemeriksaan provider Telegram.";
+  if (phone.channel !== "telegram" && (phone.status !== "OPEN" || job.lastError === "DEVICE_OFFLINE")) return "Menunggu perangkat pengirim terhubung ke WhatsApp.";
   if (job.lastError?.startsWith("DEVICE_") && dispatchErrorLabels[job.lastError]) return dispatchErrorLabels[job.lastError];
   if (job.lastError === "MEDIA_PREPARATION_FAILED") return "Menunggu percobaan ulang persiapan lampiran.";
   if (job.lastError === "ACK_TIMEOUT_RETRY") return "Konfirmasi WhatsApp melewati 40 detik; menunggu pengiriman ulang otomatis.";
@@ -31,6 +32,21 @@ export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; s
 }
 
 export const dispatchErrorLabels: Record<string, string> = {
+  TELEGRAM_DISABLED: "Telegram dinonaktifkan atau API key belum dikonfigurasi.",
+  TELEGRAM_FLOOD_RETRY: "Menunggu durasi flood dari provider Telegram; maksimal tiga percobaan.",
+  TELEGRAM_FLOOD_EXHAUSTED: "Batas tiga percobaan Telegram tercapai; retry dihentikan.",
+  TELEGRAM_FLOOD_NO_DELAY: "Provider meminta jeda tanpa durasi yang dikenali; periksa sebelum mengulang.",
+  TELEGRAM_INVALID_CREDENTIALS: "Provider Telegram menolak API key; retry dihentikan.",
+  TELEGRAM_RECIPIENT_NOT_FOUND: "Penerima Telegram tidak ditemukan; retry dihentikan.",
+  TELEGRAM_PROVIDER_REJECTED: "Provider Telegram menyatakan pengiriman gagal.",
+  TELEGRAM_HTTP_ERROR: "Provider Telegram mengembalikan HTTP error.",
+  TELEGRAM_UNRECOGNIZED_RESPONSE: "Respons Telegram belum dapat dikonfirmasi. Periksa penerima dan aturan validasi respons.",
+  TELEGRAM_REQUEST_TIMEOUT: "Request Telegram melewati 60 detik; hasil tidak diketahui. Tidak diulang otomatis.",
+  TELEGRAM_CONNECTION_TIMEOUT: "Koneksi Telegram melewati 10 detik; hasil tidak diketahui. Tidak diulang otomatis.",
+  TELEGRAM_NETWORK_ERROR: "Koneksi Telegram gagal; periksa penerima sebelum mengulang.",
+  TELEGRAM_RESPONSE_INTERRUPTED: "Respons Telegram terputus; hasil belum diketahui.",
+  TELEGRAM_TRANSPORT_UNKNOWN: "Proses Telegram terputus; periksa penerima sebelum mengulang.",
+  TELEGRAM_CONTENT_OR_CONFIGURATION_INVALID: "Konten atau konfigurasi Telegram tidak valid. Provider saat ini mendukung teks dan gambar.",
   OUTSIDE_OPERATING_HOURS: "Menunggu jam operasional pengiriman nomor (WIB).",
   SENDER_GROUP_UNAVAILABLE: "Menunggu nomor dalam grup yang online, aktif, tidak dijeda, dan memiliki kuota pengiriman.",
   SENDER_REJECTED_RETRY: "Pengiriman ditolak oleh WhatsApp; nomor tersebut dijeda. Menunggu nomor cadangan dalam grup.",

@@ -1,5 +1,6 @@
 'use strict';
 // Synthetic clock, in-memory DB and mock transport; never sends real messages.
+process.env.WHATSAPP_ENABLED = 'true';
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');

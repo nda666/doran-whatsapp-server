@@ -10,6 +10,8 @@ import { getQuotaReset } from "./settings";
 import { DEFAULT_QUOTA_RESET, effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { hasEnabledSenderGroup } from "./senderGroups";
 import { conflictingSender, senderMembershipSelect } from "./senderNumberMembership";
+import { isTelegramDevice } from "../../lib/messagingChannel";
+import { telegramEnabled } from "../telegram/availability";
 
 // A message ID can have late receipts, even after a timeout. Never change its sender.
 export function pinnedSender(job: Pick<WaDispatch, "phoneId" | "senderPhoneId" | "messageId">) {
@@ -22,6 +24,7 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
   const assigned = manual && !job.messageId ? job.senderPhoneId : null;
   const grouped = !manual && job.source === "API" && !job.campaignId && await hasEnabledSenderGroup(origin);
   const pinned = pinnedSender(job);
+  const telegram = isTelegramDevice(origin);
   // A pinned sender remains usable after membership changes, but only within the owner.
   const phones = pinned || assigned
     ? await prisma.phone.findMany({ where: { id: (pinned || assigned)!, userId: origin.userId } })
@@ -36,10 +39,12 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
   const members = grouped ? await prisma.phone.findMany({ where: { senderGroupId: { not: null } }, select: senderMembershipSelect }) : [];
   let outsideHours = false;
   for (const phone of phones) {
+    // Never deliver a WhatsApp request via Telegram (or the reverse) on fallback.
+    if (isTelegramDevice(phone) !== telegram) continue;
     // Existing conflicts stay visible for admin review, but cannot route new work.
     if (grouped && !pinned && conflictingSender(phone, members)) continue;
     const socket = session.get(phone.id);
-    if (phone.active !== 1 || phoneMaintenance.has(phone.id) || !socket?.ws.isOpen || !socket.user) continue;
+    if (phone.active !== 1 || phoneMaintenance.has(phone.id) || (telegram ? !telegramEnabled() : process.env.WHATSAPP_ENABLED === "false" || !socket?.ws.isOpen || !socket.user)) continue;
     const savedPolicy = await prisma.deviceSendPolicy.findUnique({ where: { phoneId: phone.id } });
     if (!operatingHoursState(effectiveOperatingHours(globalHours, savedPolicy?.operatingHours)).open) {
       outsideHours = true;

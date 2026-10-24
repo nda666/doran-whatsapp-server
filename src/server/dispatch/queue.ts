@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 import { prisma } from "../../lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { telegramRecipient } from "../telegram/dispatch";
 
 export class DispatchError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -77,6 +78,10 @@ export async function enqueueDispatch(phoneId: string, userId: string, body: any
   const previous = await existingRequestJob(phoneId, body);
   if (previous) return previous;
   const prepared = prepareDispatch(phoneId, userId, body);
+  const phone = await prisma.phone.findFirst({ where: { id: phoneId, userId } });
+  if (!phone) throw new DispatchError(404, "Perangkat tidak ditemukan.");
+  try { prepared.jobs = prepared.jobs.map(job => telegramRecipient(job, phone)); }
+  catch { throw new DispatchError(400, "Periksa konfigurasi nomor uji Telegram."); }
   const keys = prepared.jobs.map(job => job.dedupeKey);
   const result = await prisma.$transaction(async tx => {
     const previous = await existingRequestJob(phoneId, body, tx);

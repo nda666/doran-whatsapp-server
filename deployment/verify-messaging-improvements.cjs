@@ -231,6 +231,9 @@ async function futureScheduleTests() {
   console.log('PASS future campaigns survive queue recovery while expired API/campaign ages remain enforced');
 }
 async function sharedCooldownTests() {
+  // This fixture supplies a connected mock WhatsApp socket, independent of CI's
+  // offline server defaults. No real transport is loaded by the fixture loader.
+  process.env.WHATSAPP_ENABLED = 'true';
   let finalLease, cooldown = new Date(Date.now() + 20000);
   const job = { id: 'synthetic-job', userId: 'a', phoneId: 'p', recipient: '6280000000000', campaignId: null, payload: null, media: null, image: null, message: 'fixture', attempts: 0, messageId: null };
   const db = {

@@ -4,7 +4,7 @@ import { conflictingSender, lockSenderMembership, senderMembershipSelect } from 
 
 export function deviceSnapshot(phone: Phone) {
   return {
-    id: phone.id, user_id: phone.userId, name: phone.name, number: phone.number,
+    id: phone.id, channel: phone.channel || "whatsapp", user_id: phone.userId, name: phone.name, number: phone.number,
     account_name: phone.account_name, active: phone.active, token: phone.token,
     is_save_group: phone.is_save_group, webhook_url: phone.webhookUrl,
     read_receipt: phone.readReceipt, reject_call: phone.rejectCall,

@@ -9,6 +9,7 @@ import { SendMessageValidation } from "@/validations/sendMessage";
 import { DispatchError, enqueueDispatch, prepareDispatch, existingRequestJob, requestJobId } from "@/server/dispatch/queue";
 import { DispatchAuthError, resolveDispatchDevice } from "@/server/dispatchAuth";
 import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
+import { isTelegramDevice } from "@/lib/messagingChannel";
 
 let retry = 0;
 interface SendMessageRequest extends AuthNextApiRequest {
@@ -71,6 +72,8 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
       result: true,
       dry_run: true,
       whatsapp_enabled: process.env.WHATSAPP_ENABLED !== "false",
+      channel: phone.channel || "whatsapp",
+      telegram_enabled: process.env.TELEGRAM_ENABLED === "true",
       active: phone.active === 1,
       online: phone.isOnline,
       recipient_count: tos.length,
@@ -81,6 +84,7 @@ const sendMessage = async (req: SendMessageRequest, res: NextApiResponse) => {
   }
 
   const url = process.env.NEXT_PUBLIC_APP_URL?.toString();
+  if (isTelegramDevice(phone) && process.env.DISPATCH_QUEUE_ENABLED !== "true") return res.status(503).json({ result: false, message: "Telegram membutuhkan antrean pengiriman aktif agar aturan kirim tetap berlaku." });
   if (process.env.DISPATCH_QUEUE_ENABLED === "true") {
     try {
       const previous = await existingRequestJob(phone.id, req.body);

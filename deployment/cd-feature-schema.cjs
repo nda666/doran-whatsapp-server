@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261024070000_device_channel': '017656197c5f06f58930d06f739585364bda52ec2a746c35b45b2995c3ec71eb',
   '20261021100000_device_quota_reset_override': '631199dee16c982ffd78a032ff59fc2d34130e0fe0b8e0be0a616806cd29bb0a',
   '20261021090000_device_quota_reset': '0c7abc9ac2f9f201fc6029233fcf4769a979f622fbb4749dd0ee43ebac381e02',
   '20261020030000_sender_groups': '4f9613fe539447a90cbf22c39005fa1ae10aadd66bd0fb9dc18679cdf6adfcf3',

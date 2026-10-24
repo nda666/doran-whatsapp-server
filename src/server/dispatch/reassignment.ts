@@ -6,6 +6,8 @@ import { healthAssessment, usageDay, warmupLimit } from "../messaging/safety";
 import { deviceDailyQuota, DEFAULT_DEVICE_DAILY_QUOTA } from "../../lib/deviceQuota";
 import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { getDispatchAgeCutoff, getGlobalDeviceQuota, getQuotaReset, getWarmupDailyLimits } from "./settings";
+import { isTelegramDevice } from "../../lib/messagingChannel";
+import { telegramEnabled } from "../telegram/availability";
 
 // A sender assignment never changes the origin used for authentication/deduplication.
 export const assignedSenderWhere = (phoneId: string): Prisma.WaDispatchWhereInput => ({
@@ -25,7 +27,7 @@ export async function reassignmentWhere(phone: Phone): Promise<Prisma.WaDispatch
     AND: [assignedSenderWhere(phone.id),
       { OR: [{ createdAt: { gt: cutoff } }, { campaign: { scheduledAt: { gt: cutoff } } }] },
       { OR: [{ campaignId: null }, { expiresAt: { gt: now }, campaign: { status: { in: ["WAITING", "PROCESSING"] }, scheduledAt: { lte: now } } }] },
-      phone.active !== 1 ? { id: { in: [] } } : phone.status === "OPEN" && !restricted && !quotaFull
+      phone.active !== 1 ? { id: { in: [] } } : (isTelegramDevice(phone) ? telegramEnabled() : phone.status === "OPEN") && !restricted && !quotaFull
         ? { lastError: "DEVICE_OFFLINE" }
         : { OR: [{ lastError: null }, { lastError: { notIn: ["SENDER_GROUP_UNAVAILABLE", "OUTSIDE_OPERATING_HOURS", "SENDER_REJECTED_RETRY"] } }] },
     ],
@@ -49,7 +51,7 @@ async function senderQuota(phone: Phone) {
 // quota atomically and rechecks hours, pauses, health, warmup and intervals.
 export async function replacementQuota(phone: Phone) {
   const socket = session.get(phone.id);
-  if (process.env.WHATSAPP_ENABLED === "false" || phone.active !== 1 || phoneMaintenance.has(phone.id) || !socket?.ws.isOpen || !socket.user) return null;
+  if (phone.active !== 1 || phoneMaintenance.has(phone.id) || (isTelegramDevice(phone) ? !telegramEnabled() : process.env.WHATSAPP_ENABLED === "false" || !socket?.ws.isOpen || !socket.user)) return null;
   const { saved, usage, used, limit } = await senderQuota(phone);
   if (saved?.paused || healthAssessment(usage?.attempts || 0, usage?.failures || 0).stop) return null;
   return used < limit ? { remaining: limit - used, limit } : null;

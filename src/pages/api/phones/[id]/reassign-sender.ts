@@ -6,6 +6,7 @@ import { ownerScope } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { reassignmentWhere, replacementQuota } from "@/server/dispatch/reassignment";
 import { senderNumber } from "@/server/dispatch/senderNumberMembership";
+import { isTelegramDevice } from "@/lib/messagingChannel";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -20,6 +21,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     const phones = await prisma.phone.findMany({ where: { userId: source.userId, id: { not: source.id }, active: 1 }, orderBy: [{ name: "asc" }, { id: "asc" }] });
     const options = [];
     for (const phone of phones) {
+      if (isTelegramDevice(source) !== isTelegramDevice(phone)) continue;
       if (senderNumber(phone.number) && senderNumber(phone.number) === senderNumber(source.number)) continue;
       const quota = await replacementQuota(phone);
       if (quota) options.push({ id: phone.id, name: phone.name, number: phone.number, ...quota });
@@ -30,7 +32,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   const input = z.object({ targetPhoneId: z.string().uuid() }).strict().safeParse(req.body);
   if (!input.success) return res.status(400).json({ message: "Pilih nomor pengganti yang valid." });
   const target = await prisma.phone.findFirst({ where: { id: input.data.targetPhoneId, userId: source.userId } });
-  if (!target || target.id === source.id || (senderNumber(target.number) && senderNumber(target.number) === senderNumber(source.number))) {
+  if (!target || isTelegramDevice(source) !== isTelegramDevice(target) || target.id === source.id || (senderNumber(target.number) && senderNumber(target.number) === senderNumber(source.number))) {
     return res.status(400).json({ message: "Nomor pengganti harus berbeda dan berasal dari pemilik yang sama." });
   }
   if (!await replacementQuota(target)) return res.status(409).json({ message: "Nomor pengganti sudah tidak tersedia, tidak sehat, atau kuotanya habis. Muat ulang daftar nomor." });

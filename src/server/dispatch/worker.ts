@@ -20,6 +20,9 @@ import { recordDispatchReceipt } from "./receipts";
 import { waitForDispatchAcknowledgement, AckObservation } from "./acknowledgement";
 import { recoverQuotaDispatches } from "./quotaRecovery";
 import { selectDispatchSender } from "./senderRouting";
+import { isTelegramDevice } from "../../lib/messagingChannel";
+import { prepareTelegramDispatch, sendTelegramDispatch, telegramDispatchOutcome } from "../telegram/dispatch";
+import { telegramEnabled } from "../telegram/availability";
 
 const runnable = () => ({ OR: [{ campaignId: null }, { campaign: { status: { in: ["WAITING", "PROCESSING"] as ("WAITING" | "PROCESSING")[] }, scheduledAt: { lte: new Date() } } }] });
 // A future campaign must not expire merely because its queue rows were created early.
@@ -29,7 +32,7 @@ const concurrency = Math.min(32, Math.max(1, Number(process.env.DISPATCH_CONCURR
 const leaseMs = 120_000;
 const progress = { running: false, startedAt: 0, worker_last_poll_success: 0,
   worker_last_claim: 0, worker_last_server_ack: 0, queueSampleAt: 0, recovery_last_success: 0 };
-type QueueSample = { phoneId: string; jobs: bigint | number; oldest: Date; nextDue: Date };
+type QueueSample = { phoneId: string; channel?: string; jobs: bigint | number; oldest: Date; nextDue: Date };
 let queueSample: QueueSample[] = [];
 const claims = new Map<string, number>();
 const eligibleSince = new Map<string, number>();
@@ -42,7 +45,7 @@ export function getDispatchHealth(now = Date.now()) {
   if (now - (progress.worker_last_poll_success || progress.startedAt) > 60_000) alerts.push("POLL_STALE");
   if (progress.running && now - (progress.queueSampleAt || progress.startedAt) > 60_000) alerts.push("QUEUE_SAMPLE_STALE");
   const senders = queueSample.map(row => {
-    const jobs = Number(row.jobs), online = connected.has(row.phoneId);
+    const jobs = Number(row.jobs), online = row.channel === "telegram" ? telegramEnabled() : connected.has(row.phoneId);
     const due = online && row.nextDue.getTime() <= now;
     if (!due) eligibleSince.delete(row.phoneId);
     else if (!eligibleSince.has(row.phoneId)) eligibleSince.set(row.phoneId, now);
@@ -119,8 +122,9 @@ export async function processPhone(phoneId: string) {
     const selection = await selectDispatchSender(origin, job, token, leaseMs);
     grouped = selection.grouped;
     const { phone, socket } = selection;
-    if (!phone || !socket || !socket.user) {
-      const offlineError = selection.outsideHours ? "OUTSIDE_OPERATING_HOURS" : grouped ? "SENDER_GROUP_UNAVAILABLE" : origin.active !== 1 ? "DEVICE_INACTIVE" : "DEVICE_OFFLINE";
+    const telegram = isTelegramDevice(origin);
+    if (!phone || (!telegram && (!socket || !socket.user))) {
+      const offlineError = selection.outsideHours ? "OUTSIDE_OPERATING_HOURS" : telegram && !telegramEnabled() ? "TELEGRAM_DISABLED" : grouped ? "SENDER_GROUP_UNAVAILABLE" : origin.active !== 1 ? "DEVICE_INACTIVE" : "DEVICE_OFFLINE";
       // Defer this job without blocking newer, unsent jobs that can use a backup.
       sendGap = grouped ? 1000 : 30_000;
       await updateDispatches({ where: { id: job.id, status: "QUEUED", senderPhoneId: job.senderPhoneId, messageId: job.messageId }, data: {
@@ -145,9 +149,11 @@ export async function processPhone(phoneId: string) {
     }
     let image: Buffer | undefined;
     let content: AnyMessageContent | undefined;
+    let telegramPrepared: Awaited<ReturnType<typeof prepareTelegramDispatch>> | undefined;
     try {
       const payload = job.payload as { kind?: string } | null;
-      if (payload?.kind === "sticker") {
+      if (telegram) telegramPrepared = await prepareTelegramDispatch(job);
+      else if (payload?.kind === "sticker") {
         if (!job.media || job.media.userId !== job.userId || job.media.mime !== "image/webp") throw new Error("INVALID_STICKER");
         content = { sticker: await fs.readFile(assetPath(job.media.filename)) };
       } else if (payload) content = payloadContent(payload);
@@ -155,15 +161,20 @@ export async function processPhone(phoneId: string) {
       else if (job.image) image = await loadDispatchImage(job.image);
     }
     catch (error) {
+      if (telegram) {
+        await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: { status: "FAILED", lastError: "TELEGRAM_CONTENT_OR_CONFIGURATION_INVALID" } });
+        return;
+      }
       logFailure("DISPATCH_MEDIA_FAILED", error, startedAt, phoneId, job.id);
       const attempts = job.attempts + 1;
       await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: { attempts,
         status: attempts >= 5 ? "FAILED" : "QUEUED", lastError: "MEDIA_PREPARATION_FAILED",
         nextAttemptAt: new Date(Date.now() + Math.min(900_000, 30_000 * 2 ** attempts)) } }); return;
     }
-    if (phoneMaintenance.has(senderId) || !socket.ws.isOpen) return;
+    if (phoneMaintenance.has(senderId) || (!telegram && !socket?.ws.isOpen)) return;
     const claimCutoff = await getDispatchAgeCutoff();
-    const messageId = job.messageId || generateMessageIDV2(socket.user.id);
+    // tg_ identifies an application attempt; it is NOT a provider message ID.
+    const messageId = job.messageId || (telegram ? `tg_${randomUUID()}` : generateMessageIDV2(socket!.user!.id));
     const claimed = await prisma.$transaction(async tx => {
       if (grouped && !job.messageId) {
         await tx.$queryRaw`SELECT id FROM sender_groups WHERE id = ${selection.groupId} FOR UPDATE`;
@@ -199,6 +210,18 @@ export async function processPhone(phoneId: string) {
     let timeout: NodeJS.Timeout | undefined;
     let ackObservation: AckObservation = { tag: null, code: null };
     try {
+      if (telegram) {
+        const current = await prisma.waDispatch.findUnique({ where: { id: job.id }, select: { status: true } });
+        if (current?.status !== "PROCESSING") return;
+        const result = await sendTelegramDispatch(job, senderId, telegramPrepared!);
+        const outcome = telegramDispatchOutcome(result, job.attempts + 1);
+        if (outcome.status === "QUEUED") sendGap = Math.max(1000, outcome.nextAttemptAt!.getTime() - Date.now());
+        if (outcome.status === "SENT") progress.worker_last_server_ack = Date.now();
+        await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token },
+          data: { ...outcome, leaseToken: null, leaseUntil: null } });
+        return;
+      }
+      if (!socket?.user) throw new Error("DEVICE_OFFLINE");
       const sendAndConfirm = async () => {
         // sendMessage resolves after writing to the socket. Register first so a fast ACK is not missed.
         const acknowledgement = waitForDispatchAcknowledgement(
@@ -238,6 +261,12 @@ export async function processPhone(phoneId: string) {
           nextAttemptAt: error.code === "OUTSIDE_OPERATING_HOURS" ? new Date(Date.now() + 30000) : grouped && !job.messageId ? new Date(Date.now() + 1000) : error.retryAt || new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null,
         } });
         sendGap = error.code === "OUTSIDE_OPERATING_HOURS" ? grouped ? 1000 : 30000 : grouped && !job.messageId ? 1000 : Math.max(1000, (error.retryAt?.getTime() || Date.now() + 60000) - Date.now());
+        return;
+      }
+      if (telegram) {
+        await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {
+          status: "UNCERTAIN", lastError: "TELEGRAM_TRANSPORT_UNKNOWN", leaseToken: null, leaseUntil: null,
+        } });
         return;
       }
       if (error instanceof Error && ["SEND_TIMEOUT", "ACK_TIMEOUT", "WA_ACK_463"].includes(error.message)) {
@@ -320,7 +349,7 @@ export function startDispatchWorker() {
         SELECT d.phoneId FROM wa_dispatches d
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
-        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS')) AND d.sentAt IS NULL
+        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE')) AND d.sentAt IS NULL
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
@@ -342,13 +371,13 @@ export function startDispatchWorker() {
     if (stopping || sampling) return;
     const startedAt = Date.now();
     sampling = getDispatchAgeCutoff().then(cutoff => prisma.$queryRaw<QueueSample[]>`
-      SELECT COALESCE(d.senderPhoneId, d.phoneId) AS phoneId, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
-      FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId
-      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS')) AND d.sentAt IS NULL
+      SELECT COALESCE(d.senderPhoneId, d.phoneId) AS phoneId, p.channel AS channel, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
+      FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId LEFT JOIN phones p ON p.id = COALESCE(d.senderPhoneId, d.phoneId)
+      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE')) AND d.sentAt IS NULL
       AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
       AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
       AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))
-      GROUP BY COALESCE(d.senderPhoneId, d.phoneId)`).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
+      GROUP BY COALESCE(d.senderPhoneId, d.phoneId), p.channel`).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
       .catch(error => logFailure("DISPATCH_HEALTH_SAMPLE_FAILED", error, startedAt))
       .finally(() => { sampling = undefined; });
   };

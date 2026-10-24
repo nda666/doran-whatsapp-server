@@ -24,7 +24,7 @@ export async function evaluateDailyWarmup(now = new Date()) {
     by: ["phoneId"], where: { sentAt }, _count: { _all: true },
   })));
   const counts = dailyCounts.map(rows => new Map(rows.map(row => [row.phoneId, row._count._all])));
-  const phones = await prisma.phone.findMany({ select: { id: true } });
+  const phones = await prisma.phone.findMany({ where: { channel: "whatsapp" }, select: { id: true } });
   const results = [];
   for (const { id } of phones) {
     const sends = [counts[0].get(id) || 0, counts[1].get(id) || 0];

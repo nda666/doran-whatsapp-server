@@ -21,6 +21,7 @@ import PhoneConnectionStatus from "./PhoneConnectionStatus";
 import { useLocalizedTranslation as useTranslation } from "@/lib/uiTranslation";
 import { MenuInfo } from "rc-menu/lib/interface";
 import { useRouter } from "next/router";
+import { isTelegramDevice } from "@/lib/messagingChannel";
 
 export interface PhoneTableButtonProps {
   phone: PhoneRow;
@@ -60,6 +61,7 @@ export default function PhoneTableButton({
   const { t } = useTranslation("common");
   const router = useRouter();
   const [modal, contextHolder] = Modal.useModal();
+  const telegram = isTelegramDevice(phone);
   const items: MenuProps["items"] = [
     { label: uiText("Ubah nomor pengiriman"), key: `${phone.id}-reassign`, icon: <SendOutlined />, onClick: () => onReassignSender?.() },
     {
@@ -69,17 +71,18 @@ export default function PhoneTableButton({
       disabled: phone.connection?.action !== "scan_qr",
       onClick: (e) => onGetQrCodeClick && onGetQrCodeClick(phone, e),
     },
-    { label: uiText("Lihat Percakapan"), icon: <WechatFilled />, key: `${phone.id}-conversations`, onClick: () => { void router.push({ pathname: "/dashboard/conversations", query: { phone_id: phone.id } }); } },
+    { label: uiText("Lihat Percakapan"), disabled: telegram, icon: <WechatFilled />, key: `${phone.id}-conversations`, onClick: () => { void router.push({ pathname: "/dashboard/conversations", query: { phone_id: phone.id } }); } },
     { label: uiText("Lihat laporan"), icon: <BarChartOutlined />, key: `${phone.id}-reports`, onClick: () => { void router.push({ pathname: "/dashboard/reports", query: { view: "phones", phoneId: phone.id } }); } },
     {
       label: uiText("Test Kirim"),
       key: `${phone.id}-test-send`,
       icon: <SendOutlined />,
-      disabled: phone.active !== 1 || phone.connection?.state !== "online",
+      disabled: phone.active !== 1 || (telegram ? phone.connection?.state !== "configured" : phone.connection?.state !== "online"),
       onClick: e => onTestSendClick?.(phone, e),
     },
     {
       label: t("list_replies"),
+      disabled: telegram,
       key: `${phone.id}-4`,
       icon: <WechatFilled />,
       onClick: (e) => onListReply && onListReply(phone, e),
@@ -106,7 +109,7 @@ export default function PhoneTableButton({
       onClick: () => onGenerateTokenClick?.(),
     },
     { type: "divider" },
-    { label: uiText("Informasi koneksi"), icon: <InfoCircleOutlined />, key: `${phone.id}-session`, onClick: () => modal.info({ title: uiText("Informasi koneksi WhatsApp"), okText: uiText("Tutup"), content: <div><p>{uiText("Label:")} {phone.name}</p><p>{uiText("Nomor:")} {phone.number || uiText("Belum tertaut")}</p><p>{uiText("Nama Akun WA:")} {phone.account_name || "—"}</p><PhoneConnectionStatus connection={phone.connection} /><p>{phone.connection ? uiText("Diperiksa: {{v0}} WIB", { v0: new Date(phone.connection.checkedAt).toLocaleString(uiText.locale, { timeZone: "Asia/Jakarta" }) }) : uiText("Status belum tersedia.")}</p></div> }) },
+    { label: uiText("Informasi koneksi"), icon: <InfoCircleOutlined />, key: `${phone.id}-session`, onClick: () => modal.info({ title: uiText("Informasi koneksi pengiriman"), okText: uiText("Tutup"), content: <div><p>{uiText("Label:")} {phone.name}</p><p>{uiText("Nomor:")} {phone.number || uiText("Belum tertaut")}</p><p>{uiText("Nama akun/provider:")} {phone.account_name || "—"}</p><PhoneConnectionStatus connection={phone.connection} /><p>{phone.connection ? uiText("Diperiksa: {{v0}} WIB", { v0: new Date(phone.connection.checkedAt).toLocaleString(uiText.locale, { timeZone: "Asia/Jakarta" }) }) : uiText("Status belum tersedia.")}</p></div> }) },
     {
       label: uiText("Lihat Device ID"),
       icon: <InfoCircleOutlined />,

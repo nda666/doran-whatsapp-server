@@ -7,6 +7,7 @@ assert.deepEqual(ops.filter(op => op.kind === 'table').map(op => op.table), ['de
 assert(ops.some(op => op.kind === 'column' && op.name === 'operatingHours'));
 assert(ops.some(op => op.kind === 'constraint' && op.name === 'wa_dispatch_attempts_dispatchId_fkey'));
 assert(ops.some(op => op.kind === 'column' && op.name === 'quotaReset'));
+assert(ops.some(op => op.kind === 'column' && op.table === 'phones' && op.name === 'channel'));
 assert(ops.find(op => op.table === 'device_quota_windows').seedSql.startsWith('INSERT INTO `device_quota_windows`'));
 helper.validateDiff(ops.map(op => op.sql).join(';\n') + ';');
 helper.validateDiff('-- No difference\n');

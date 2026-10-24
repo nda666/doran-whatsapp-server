@@ -1,0 +1,1 @@
+ALTER TABLE `phones` ADD COLUMN `channel` VARCHAR(16) NOT NULL DEFAULT 'whatsapp';

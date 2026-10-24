@@ -23,7 +23,7 @@ export async function recoverWaConnections() {
   if (running || process.env.WHATSAPP_ENABLED === "false" || process.env.DORAN_SHUTTING_DOWN === "true") return;
   running = true;
   try {
-    const phones = await prisma.phone.findMany({ where: { active: 1 }, select: { id: true, userId: true } });
+    const phones = await prisma.phone.findMany({ where: { active: 1, channel: "whatsapp" }, select: { id: true, userId: true } });
     for (const phone of phones) {
       if (process.env.DORAN_SHUTTING_DOWN === "true" || process.env.WHATSAPP_ENABLED === "false") break;
       if (phoneMaintenance.has(phone.id) || waRecovery.blocked.has(phone.id) || waRecovery.timers.has(phone.id)) continue;

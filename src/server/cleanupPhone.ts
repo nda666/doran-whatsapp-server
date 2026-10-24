@@ -110,7 +110,7 @@ export async function cleanupPhone(id: string, scope: { userId?: string }, optio
           ...(options.clearAuth ? { number: null, account_name: null, qrCode: null } : {}),
           ...(options.resetToken ? { token: randomUUID() } : {}),
           ...(options.resetSettings ? { is_save_group: false, webhookUrl: null,
-            readReceipt: false, rejectCall: false, showOnline: true, showTyping: false, autoReplyEnabled: false, saveIncomingMessages: false, saveIncomingSince: null,
+            readReceipt: false, rejectCall: false, showOnline: current.channel !== "telegram", showTyping: false, autoReplyEnabled: false, saveIncomingMessages: false, saveIncomingSince: null,
           } : {}),
         } });
         await enqueueDeviceEvent(tx, "device.updated", updated);

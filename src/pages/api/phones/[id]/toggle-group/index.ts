@@ -10,6 +10,9 @@ const handler = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   if (typeof req.body?.is_save_group !== "boolean") return res.status(400).json({ message: "Status simpan grup tidak valid." });
 
   const phoneId = req.query.id;
+  const phone = await prisma.phone.findFirst({ where: { id: String(phoneId), ...ownerScope(req.user!) } });
+  if (!phone) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
+  if (phone.channel === "telegram") return res.status(422).json({ message: "Provider Telegram belum mendukung pengaturan grup." });
   const is_save_group = req.body.is_save_group;
   // return res.status(200).json({ok: 'ok', phoneId: phoneId});
   //
