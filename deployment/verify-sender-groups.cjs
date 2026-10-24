@@ -440,6 +440,44 @@ async function main() {
   await due(id); await worker.processPhone(primary.id);
   assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id } })).status, 'SENT');
   console.log('PASS final transport guard blocks hours changes after claim without consuming attempts or quota and resumes same dispatch');
+  // Regression: an exhausted origin may own both its quota-blocked work and
+  // ready work reassigned to a different sender. Recovery may keep its lease
+  // asleep; polling must still discover the independent assignment.
+  await prisma.waDispatch.updateMany({ where: { status: 'QUEUED' }, data: { status: 'FAILED' } });
+  await prisma.deviceSendPolicy.updateMany({ data: { paused: false, operatingHours: { enabled: false, start: '08:00', end: '20:00' }, adaptiveEnabled: false, warmupStartedAt: null, nextAllowedAt: new Date(0), dailyLimit: 10000, useGlobalQuota: false } });
+  const assignedId = await fresh('ORIGIN-SLEEP-ASSIGNED');
+  await prisma.waDispatch.update({ where: { id: assignedId }, data: { senderPhoneId: backup.id, senderGroupId: null } });
+  const originOwnId = await fresh('ORIGIN-SLEEP-OWN');
+  const sleepUntil = new Date(Date.now() + 3600000);
+  await prisma.waDispatch.update({ where: { id: originOwnId }, data: { nextAttemptAt: sleepUntil, lastError: 'DEVICE_DAILY_LIMIT' } });
+  await prisma.deviceSendPolicy.update({ where: { phoneId: primary.id }, data: { dailyLimit: 1 } });
+  await prisma.waSenderLease.update({ where: { phoneId: primary.id }, data: { nextSendAt: sleepUntil } });
+  // Delayed actual sender must remain protected even when origin cooldown is bypassed.
+  await prisma.waSenderLease.update({ where: { phoneId: backup.id }, data: { nextSendAt: sleepUntil } });
+  const beforeAssigned = sends.length;
+  await worker.processPhone(primary.id, true);
+  assert.equal(sends.length, beforeAssigned, 'Actual sender cooldown is still enforced');
+  assert.equal((await prisma.waSenderLease.findUniqueOrThrow({ where: { phoneId: primary.id } })).nextSendAt.getTime(), sleepUntil.getTime(), 'Origin cooldown is not erased');
+  await prisma.waDispatch.update({ where: { id: assignedId }, data: { nextAttemptAt: new Date(0) } });
+  await prisma.waSenderLease.update({ where: { phoneId: backup.id }, data: { nextSendAt: new Date(0) } });
+  // A replacement device that has never sent may not have a sender lease yet.
+  // Sender selection must be allowed to initialize it after poll discovery.
+  await prisma.waSenderLease.delete({ where: { phoneId: backup.id } });
+  const { encryptSetting } = load('src/lib/globalSettings.ts');
+  await prisma.globalSetting.upsert({ where: { key: 'dispatch-random-delay' },
+    create: { key: 'dispatch-random-delay', label: 'Test interval', value: encryptSetting(JSON.stringify({ minSeconds: 1, maxSeconds: 1 })) },
+    update: { value: encryptSetting(JSON.stringify({ minSeconds: 1, maxSeconds: 1 })) } });
+  const stopWorker = worker.startDispatchWorker();
+  try {
+    await waitUntil(async () => (await prisma.waDispatch.findUniqueOrThrow({ where: { id: assignedId } })).status === 'SENT');
+  } finally { await stopWorker(); }
+  const assignedSent = await prisma.waDispatch.findUniqueOrThrow({ where: { id: assignedId } });
+  assert.equal(assignedSent.phoneId, primary.id); assert.equal(assignedSent.senderPhoneId, backup.id);
+  assert.equal(assignedSent.attempts, 1); assert.equal(sends.length, beforeAssigned + 1);
+  assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id: originOwnId } })).attempts, 0, 'Origin own quota-blocked job is never admitted through assignment bypass');
+  assert((await prisma.waSenderLease.findUniqueOrThrow({ where: { phoneId: primary.id } })).nextSendAt >= sleepUntil, 'Quota recovery may extend the origin reset, but must not block the reassigned sender');
+  assert((await prisma.deviceSendPolicy.findUniqueOrThrow({ where: { phoneId: backup.id } })).nextAllowedAt > new Date(0));
+  console.log('PASS live polling routes reassigned jobs despite sleeping origin, preserves actual sender interval and origin cooldown, no duplicate sends');
   console.log('SENDER_GROUP_TESTS_PASSED (real MySQL, no real WhatsApp messages)');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

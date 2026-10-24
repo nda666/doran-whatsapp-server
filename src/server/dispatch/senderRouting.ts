@@ -61,7 +61,7 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
       if (quotaWindowState(window, usage?.attempts || 0, limit, effectiveQuotaReset(quotaReset, savedPolicy?.quotaReset)).used >= limit) continue;
     }
     if (phone.id !== origin.id) {
-      await prisma.waSenderLease.createMany({ data: [{ phoneId: phone.id }], skipDuplicates: true });
+      await prisma.waSenderLease.createMany({ data: [{ phoneId: phone.id, nextSendAt: new Date(0) }], skipDuplicates: true });
       const held = await prisma.waSenderLease.updateMany({ where: { phoneId: phone.id, nextSendAt: { lte: new Date() },
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] },
         data: { leaseToken: token, leaseUntil: new Date(Date.now() + leaseMs) } });

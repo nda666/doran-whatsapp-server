@@ -85,11 +85,13 @@ export async function recoverDispatches() {
   await recoverQuotaDispatches();
 }
 
-export async function processPhone(phoneId: string) {
+export async function processPhone(phoneId: string, assignedOnly = false) {
   if (phoneMaintenance.has(phoneId)) return;
   const startedAt = Date.now();
   const token = randomUUID(); const now = new Date();
-  const acquired = await prisma.waSenderLease.updateMany({ where: { phoneId, nextSendAt: { lte: now },
+  // The origin remains the identity/mutex, but its quota sleep must not block
+  // work explicitly assigned to another sender. That sender is leased separately.
+  const acquired = await prisma.waSenderLease.updateMany({ where: { phoneId, ...(!assignedOnly ? { nextSendAt: { lte: now } } : {}),
     OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] }, data: { leaseToken: token, leaseUntil: new Date(Date.now() + leaseMs) } });
   if (!acquired.count) return;
   let jobId: string | undefined;
@@ -116,7 +118,9 @@ export async function processPhone(phoneId: string) {
     if (!origin) { await updateDispatches({ where: { phoneId, status: "QUEUED" }, data: { status: "FAILED", lastError: "SENDER_DELETED" } }); return; }
     const [cutoff, order, range] = await Promise.all([getDispatchAgeCutoff(), getDispatchQueueOrder(), getDispatchDelayRange()]);
     sendRange = range;
-    const job = await prisma.waDispatch.findFirst({ where: { phoneId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable()] }, include: { campaign: true, media: true }, orderBy: dispatchQueueOrderBy(order) });
+    const job = await prisma.waDispatch.findFirst({ where: { phoneId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable(),
+      ...(assignedOnly ? [{ senderPhoneId: { not: null } }, { senderPhoneId: { not: phoneId } }] : []),
+    ] }, include: { campaign: true, media: true }, orderBy: dispatchQueueOrderBy(order) });
     if (!job) return;
     independentSender = !!job.senderPhoneId && job.senderPhoneId !== phoneId;
     const selection = await selectDispatchSender(origin, job, token, leaseMs);
@@ -313,7 +317,9 @@ export async function processPhone(phoneId: string) {
     const nextSendAt = new Date(Math.max(policy?.nextAllowedAt.getTime() || 0,
       Date.now() + (sendGap ?? (jobId ? 0 : randomDispatchDelay(sendRange)))));
     await prisma.waSenderLease.updateMany({ where: { phoneId, leaseToken: token },
-      data: { leaseToken: null, leaseUntil: null, nextSendAt: grouped ? new Date(Date.now() + (sendGap ?? 0)) : independentSender ? new Date(Date.now() + 1000) : nextSendAt } });
+      data: { leaseToken: null, leaseUntil: null,
+        ...(!assignedOnly ? { nextSendAt: grouped ? new Date(Date.now() + (sendGap ?? 0)) : independentSender ? new Date(Date.now() + 1000) : nextSendAt } : {}),
+      } });
     if (alternateLease) await prisma.waSenderLease.updateMany({ where: { phoneId: senderId, leaseToken: token },
       data: { leaseToken: null, leaseUntil: null, nextSendAt } });
   }
@@ -345,22 +351,27 @@ export function startDispatchWorker() {
       pollRange = range;
       const senderOrder = order === "newest" ? Prisma.sql`MAX(d.createdAt) DESC` : Prisma.sql`MIN(d.createdAt) ASC`;
       // Group/limit in MySQL rather than loading every pending row for client-side distinct.
-      const candidates = await prisma.$queryRaw<Array<{ phoneId: string }>>`
-        SELECT d.phoneId FROM wa_dispatches d
+      const candidates = await prisma.$queryRaw<Array<{ phoneId: string; assignedOnly: number | bigint }>>`
+        SELECT d.phoneId, (l.nextSendAt > ${new Date()}) AS assignedOnly FROM wa_dispatches d
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
+        LEFT JOIN wa_sender_leases actual ON actual.phoneId = d.senderPhoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
         WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE')) AND d.sentAt IS NULL
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
-        AND l.nextSendAt <= ${new Date()} AND (l.leaseUntil IS NULL OR l.leaseUntil < ${new Date()})
+        AND (l.nextSendAt <= ${new Date()} OR (
+          d.senderPhoneId IS NOT NULL AND d.senderPhoneId <> d.phoneId
+          AND (actual.phoneId IS NULL OR (actual.nextSendAt <= ${new Date()}
+            AND (actual.leaseUntil IS NULL OR actual.leaseUntil < ${new Date()})))
+        )) AND (l.leaseUntil IS NULL OR l.leaseUntil < ${new Date()})
         AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))
-        GROUP BY d.phoneId ORDER BY ${senderOrder}, d.phoneId ASC LIMIT 100`;
+        GROUP BY d.phoneId, l.nextSendAt ORDER BY ${senderOrder}, d.phoneId ASC LIMIT 100`;
       progress.worker_last_poll_success = Date.now();
-      for (const { phoneId } of candidates) {
+      for (const { phoneId, assignedOnly } of candidates) {
         if (active.size >= concurrency || stopping) break;
         if (active.has(phoneId)) continue;
-        const running = processPhone(phoneId).catch(() => {}).finally(() => active.delete(phoneId));
+        const running = processPhone(phoneId, !!assignedOnly).catch(() => {}).finally(() => active.delete(phoneId));
         active.set(phoneId, running);
       }
     } catch (error) { logFailure("DISPATCH_POLL_FAILED", error, startedAt); } finally { polling = false; schedulePoll(); }
