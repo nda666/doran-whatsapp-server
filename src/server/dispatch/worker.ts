@@ -85,7 +85,7 @@ export async function recoverDispatches() {
   await recoverQuotaDispatches();
 }
 
-export async function processPhone(phoneId: string, assignedOnly = false) {
+export async function processPhone(phoneId: string, assignedOnly = false, assignedSenderId?: string | null) {
   if (phoneMaintenance.has(phoneId)) return;
   const startedAt = Date.now();
   const token = randomUUID(); const now = new Date();
@@ -120,6 +120,7 @@ export async function processPhone(phoneId: string, assignedOnly = false) {
     sendRange = range;
     const job = await prisma.waDispatch.findFirst({ where: { phoneId, status: "QUEUED", sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: { lte: new Date() }, AND: [ageEligible(cutoff), retryEligible(), dispatchDeadline(), runnable(),
       ...(assignedOnly ? [{ senderPhoneId: { not: null } }, { senderPhoneId: { not: phoneId } }] : []),
+      ...(assignedSenderId !== undefined ? [{ senderPhoneId: assignedSenderId }] : []),
     ] }, include: { campaign: true, media: true }, orderBy: dispatchQueueOrderBy(order) });
     if (!job) return;
     independentSender = !!job.senderPhoneId && job.senderPhoneId !== phoneId;
@@ -351,8 +352,8 @@ export function startDispatchWorker() {
       pollRange = range;
       const senderOrder = order === "newest" ? Prisma.sql`MAX(d.createdAt) DESC` : Prisma.sql`MIN(d.createdAt) ASC`;
       // Group/limit in MySQL rather than loading every pending row for client-side distinct.
-      const candidates = await prisma.$queryRaw<Array<{ phoneId: string; assignedOnly: number | bigint }>>`
-        SELECT d.phoneId, (l.nextSendAt > ${new Date()}) AS assignedOnly FROM wa_dispatches d
+      const candidates = await prisma.$queryRaw<Array<{ phoneId: string; senderPhoneId: string | null; assignedOnly: number | bigint }>>`
+        SELECT d.phoneId, d.senderPhoneId, (l.nextSendAt > ${new Date()}) AS assignedOnly FROM wa_dispatches d
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
         LEFT JOIN wa_sender_leases actual ON actual.phoneId = d.senderPhoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
@@ -360,18 +361,20 @@ export function startDispatchWorker() {
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
+        AND (d.senderPhoneId IS NULL OR d.senderPhoneId = d.phoneId OR actual.phoneId IS NULL
+          OR (actual.nextSendAt <= ${new Date()} AND (actual.leaseUntil IS NULL OR actual.leaseUntil < ${new Date()})))
         AND (l.nextSendAt <= ${new Date()} OR (
           d.senderPhoneId IS NOT NULL AND d.senderPhoneId <> d.phoneId
           AND (actual.phoneId IS NULL OR (actual.nextSendAt <= ${new Date()}
             AND (actual.leaseUntil IS NULL OR actual.leaseUntil < ${new Date()})))
         )) AND (l.leaseUntil IS NULL OR l.leaseUntil < ${new Date()})
         AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))
-        GROUP BY d.phoneId, l.nextSendAt ORDER BY ${senderOrder}, d.phoneId ASC LIMIT 100`;
+        GROUP BY d.phoneId, d.senderPhoneId, l.nextSendAt ORDER BY ${senderOrder}, d.phoneId ASC, d.senderPhoneId ASC LIMIT 100`;
       progress.worker_last_poll_success = Date.now();
-      for (const { phoneId, assignedOnly } of candidates) {
+      for (const { phoneId, senderPhoneId, assignedOnly } of candidates) {
         if (active.size >= concurrency || stopping) break;
         if (active.has(phoneId)) continue;
-        const running = processPhone(phoneId, !!assignedOnly).catch(() => {}).finally(() => active.delete(phoneId));
+        const running = processPhone(phoneId, !!assignedOnly, senderPhoneId).catch(() => {}).finally(() => active.delete(phoneId));
         active.set(phoneId, running);
       }
     } catch (error) { logFailure("DISPATCH_POLL_FAILED", error, startedAt); } finally { polling = false; schedulePoll(); }

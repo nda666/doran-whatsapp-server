@@ -448,12 +448,15 @@ async function main() {
   const assignedId = await fresh('ORIGIN-SLEEP-ASSIGNED');
   await prisma.waDispatch.update({ where: { id: assignedId }, data: { senderPhoneId: backup.id, senderGroupId: null } });
   const originOwnId = await fresh('ORIGIN-SLEEP-OWN');
+  const otherAssignedId = await fresh('ORIGIN-SLEEP-OTHER-SENDER');
+  await prisma.waDispatch.update({ where: { id: otherAssignedId }, data: { senderPhoneId: third.id, senderGroupId: null, createdAt: new Date(Date.now() + 1000) } });
   const sleepUntil = new Date(Date.now() + 3600000);
   await prisma.waDispatch.update({ where: { id: originOwnId }, data: { nextAttemptAt: sleepUntil, lastError: 'DEVICE_DAILY_LIMIT' } });
   await prisma.deviceSendPolicy.update({ where: { phoneId: primary.id }, data: { dailyLimit: 1 } });
   await prisma.waSenderLease.update({ where: { phoneId: primary.id }, data: { nextSendAt: sleepUntil } });
   // Delayed actual sender must remain protected even when origin cooldown is bypassed.
   await prisma.waSenderLease.update({ where: { phoneId: backup.id }, data: { nextSendAt: sleepUntil } });
+  await prisma.waSenderLease.update({ where: { phoneId: third.id }, data: { nextSendAt: sleepUntil } });
   const beforeAssigned = sends.length;
   await worker.processPhone(primary.id, true);
   assert.equal(sends.length, beforeAssigned, 'Actual sender cooldown is still enforced');
@@ -475,6 +478,7 @@ async function main() {
   assert.equal(assignedSent.phoneId, primary.id); assert.equal(assignedSent.senderPhoneId, backup.id);
   assert.equal(assignedSent.attempts, 1); assert.equal(sends.length, beforeAssigned + 1);
   assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id: originOwnId } })).attempts, 0, 'Origin own quota-blocked job is never admitted through assignment bypass');
+  assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id: otherAssignedId } })).attempts, 0, 'Waiting assignments for another sender must not run or block the ready replacement');
   assert((await prisma.waSenderLease.findUniqueOrThrow({ where: { phoneId: primary.id } })).nextSendAt >= sleepUntil, 'Quota recovery may extend the origin reset, but must not block the reassigned sender');
   assert((await prisma.deviceSendPolicy.findUniqueOrThrow({ where: { phoneId: backup.id } })).nextAllowedAt > new Date(0));
   console.log('PASS live polling routes reassigned jobs despite sleeping origin, preserves actual sender interval and origin cooldown, no duplicate sends');
