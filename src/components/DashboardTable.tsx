@@ -27,7 +27,7 @@ export default function DashboardTable<T extends object>({ table, total, columns
     ...column,
     sortIcon: ({ sortOrder }: { sortOrder: SortOrder }) => <TableSortIndicator sortOrder={sortOrder} />,
   });
-  return <Table<T> {...props} columns={sortable}
+  return <Table<T> {...props} columns={sortable} showSorterTooltip={false}
     title={() => <div className="dashboard-table-toolbar"><Space wrap><Typography.Text id={labelId}>{uiText("Tampilkan")}</Typography.Text><Select aria-labelledby={labelId} value={size} options={[5, 10, 20, 50, 100].map(value => ({ value, label: value }))} style={{ width: 80 }} onChange={value => { if (table) table.resize(value); else { setLocalSize(value); setLocalPage(1); } }} /><Typography.Text>{uiText("data per halaman")}</Typography.Text></Space></div>}
     pagination={{ ...(typeof pagination === "object" ? pagination : {}), current: table?.page || localPage, pageSize: size, ...(table ? { total: total || 0 } : {}), showSizeChanger: false, showTotal: count => uiText("Jumlah data: {{v0}}", { v0: count.toLocaleString(uiText.locale) }) }}
     onChange={(page, filters, sorter, extra) => { if (table) table.change(page, sorter); else setLocalPage(page.current || 1); onChange?.(page, filters, sorter, extra); }} />;
