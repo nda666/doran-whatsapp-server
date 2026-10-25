@@ -21,7 +21,14 @@ const stubs = {
   'src/lib/prisma.ts': { prisma },
   'src/server/libs/makeWASocket.ts': { session: sockets },
   'src/server/libs/sendMessageFromIo.ts': { __esModule: true, default: () => { throw new Error('Real transport prohibited'); } },
-  'src/middleware/apiAuthMiddleware.ts': { __esModule: true, default: fn => fn },
+  'src/middleware/apiAuthMiddleware.ts': { __esModule: true, default: fn => async (req, res) => {
+    // Authentication is synthetic, but number access must match the real middleware.
+    if (req.user) {
+      const phones = await prisma.phone.findMany({ where: { OR: [{ assignedUserId: req.user.id }, { assignedUserId: null, userId: req.user.id }] }, select: { id: true } });
+      req.user = { ...req.user, accessiblePhoneIds: phones.map(phone => phone.id) };
+    }
+    return fn(req, res);
+  } },
 };
 function load(name) {
   if (stubs[name]) return stubs[name];
