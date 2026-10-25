@@ -1,4 +1,4 @@
-import { isApproved, ownerScope } from "@/lib/access";
+import { isApproved, inboxScope as ownerScope, phoneScope } from "@/lib/access";
 import { readFile, realpath, stat } from "fs/promises";
 import type { NextApiResponse } from "next";
 import path from "path";
@@ -24,7 +24,7 @@ async function handler(req: AuthNextApiRequest & { signedMedia?: boolean }, res:
       if (!record) return res.status(404).end();
     } else if (segments[0] === "uploads") {
       const phoneId = segments[1].match(/^\d+_([0-9a-f-]{36})\./i)?.[1];
-      if (!phoneId || !await prisma.phone.findFirst({ where: { id: phoneId, ...ownerScope(req.user!) }, select: { id: true } })) return res.status(404).end();
+      if (!phoneId || !await prisma.phone.findFirst({ where: { id: phoneId, ...phoneScope(req.user!) }, select: { id: true } })) return res.status(404).end();
     }
     const info = await stat(resolved);
     if (!info.isFile() || info.size > 25 * 1024 * 1024) return res.status(413).end();

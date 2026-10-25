@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
-import { ownerScope } from "@/lib/access";
+import { conversationScope as ownerScope } from "@/lib/access";
 import { z } from "zod";
 import { updateChatTyping } from "@/server/chat/typing";
 

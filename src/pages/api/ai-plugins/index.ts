@@ -1,5 +1,5 @@
 import type { NextApiResponse } from "next";
-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+import apiAuthMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import type { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
 import { aiPluginInput } from "@/lib/aiPlugins";

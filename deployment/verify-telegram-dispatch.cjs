@@ -94,7 +94,7 @@ function reset() {
   process.env.TELEGRAM_API_KEY = 'offline-key'; process.env.TELEGRAM_TEST_MODE = 'false';
   process.env.TELEGRAM_SUCCESS_FIELD = 'accepted'; process.env.TELEGRAM_SUCCESS_VALUE_JSON = 'true';
   process.env.SETTINGS_ENCRYPTION_KEY = 'offline-media-signing-key'; process.env.APP_URL = 'https://app.example.invalid';
-  phone = { id: 'phone', token: 'device-token', userId: 'owner', channel: 'telegram', active: 1, showTyping: false, senderGroupId: null };
+  phone = { id: 'phone', token: 'device-token', userId: 'owner', assignedUserId: null, channel: 'telegram', active: 1, showTyping: false, senderGroupId: null };
   row = { id: 'job', phoneId: 'phone', userId: 'owner', senderPhoneId: null, senderGroupId: null, source: 'API', payload: null, media: null, image: null,
     payloadHash: 'hash', status: 'QUEUED', attempts: 0, messageId: null, lastError: null, campaignId: null,
     sentAt: null, deliveredAt: null, readAt: null, nextAttemptAt: new Clock(0), createdAt: new Clock(now - 1000), recipient: '6281234567890', message: 'test' };

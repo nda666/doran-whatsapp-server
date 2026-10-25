@@ -142,7 +142,7 @@ async function exportTests() {
   const load = loader({
     'src/lib/prisma.ts': { prisma: { campaign: { findFirst: async ({ where }) => where.userId === 'a' ? { id, userId: 'a', name: '=Synthetic report' } : null }, phone: { findMany: async () => [{ id: 'p', name: 'Synthetic device' }] }, waDispatch: { findMany: async () => [{ recipient: '6281234567890', phoneId: 'p', status: 'DELIVERED', attempts: 1, createdAt: new Date() }] } } },
     'src/server/messaging/analytics.ts': { summarize: async () => summary },
-    'src/lib/access.ts': { ownerScope: user => ({ userId: user.id }) },
+    'src/lib/access.ts': { campaignScope: user => ({ userId: user.id }), phoneScope: user => ({ userId: user.id }) },
     'src/middleware/apiAuthMiddleware.ts': { __esModule: true, default: fn => fn },
   });
   const handler = load('src/pages/api/campaign-report.ts').default;
@@ -170,7 +170,7 @@ async function scheduleTests() {
   };
   const load = loader({
     'src/lib/prisma.ts': { prisma: { $transaction: fn => fn(tx) } },
-    'src/lib/access.ts': { ownerScope: user => ({ userId: user.id }) },
+    'src/lib/access.ts': { campaignScope: user => ({ userId: user.id }) },
     'src/middleware/apiAuthMiddleware.ts': { __esModule: true, default: fn => fn },
   });
   const handler = load('src/pages/api/campaign-schedules.ts').default;

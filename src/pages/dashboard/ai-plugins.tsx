@@ -2,7 +2,6 @@ import { useUiTranslation } from "@/lib/uiTranslation";
 import { ReactElement, useEffect, useState } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Space, Table, Tag, Typography, message } from "antd";
 import axios from "axios";
-import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import Layout from "@/components/Layout";
 import AiProviderGuide from "@/components/AiProviderGuide";
 import { useDashboardApi } from "@/lib/useDashboardApi";
@@ -70,4 +69,4 @@ export default function AiPlugins() {
   </Space>;
 }
 AiPlugins.getLayout = (page: ReactElement) => <Layout title="PLUGIN AI">{page}</Layout>;
-export const getStaticProps = async ({ locale }: { locale: string }) => ({ props: { ...(await serverSideTranslations(locale, ["common", "upgrade", "interface"])) } });
+export { superAdminPageProps as getServerSideProps } from "@/lib/superAdminPageProps";

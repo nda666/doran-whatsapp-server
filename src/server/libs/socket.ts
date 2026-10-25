@@ -33,3 +33,12 @@ function createSocketServer() {
   return io;
 }
 export const getSocketIO = shared.doranSocketIO || (shared.doranSocketIO = createSocketServer());
+
+// Resolve the current assignee for every event; existing sockets must not retain
+// access after an admin changes an assignment during the same login session.
+export async function emitDeviceEvent(phoneId: string, event: string, payload: unknown) {
+  try {
+    const phone = await prisma.phone.findUnique({ where: { id: phoneId }, select: { userId: true, assignedUserId: true } });
+    if (phone) getSocketIO.to(phone.assignedUserId || phone.userId).to(SUPER_ADMIN_ROOM).emit(event, payload);
+  } catch { console.error("DEVICE_EVENT_ACCESS_LOOKUP_FAILED", phoneId); }
+}

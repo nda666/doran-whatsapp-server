@@ -1,6 +1,6 @@
 import { tableQuery } from "@/lib/tableQuery";
 import { mediaSearchWhere } from "@/lib/mediaFilters";
-import { isSuperAdmin, ownerScope } from "@/lib/access";
+import { isSuperAdmin, ownerScope, phoneScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import formidable from "formidable";
 import fs from "node:fs/promises";
@@ -27,9 +27,9 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   // Test Kirim uploads belong to the sender's owner, matching its media/send checks.
   if (req.query.phoneId !== undefined) {
     if (typeof req.query.phoneId !== "string") return res.status(400).json({ message: "Perangkat tidak valid." });
-    const phone = await prisma.phone.findFirst({ where: { id: req.query.phoneId, ...ownerScope(req.user!) }, select: { userId: true } });
+    const phone = await prisma.phone.findFirst({ where: { id: req.query.phoneId, ...phoneScope(req.user!) }, select: { userId: true } });
     if (!phone) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
-    userId = phone.userId;
+    userId = isSuperAdmin(req.user!) ? phone.userId : req.user!.id;
   }
   if (!isSuperAdmin(req.user!) && await prisma.mediaAsset.count({ where: { userId } }) >= 1000) return res.status(400).json({ message: "Maksimal 1.000 file per pengguna." });
   const uploadDir = mediaDirectory(); await fs.mkdir(uploadDir, { recursive: true });

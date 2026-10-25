@@ -47,7 +47,7 @@ export async function resolveDispatchDevice(req: Pick<NextApiRequest, "headers" 
   }
   if (!identity.deviceId) throw new DispatchAuthError(400, "device_id wajib untuk token user.");
   // No super-admin bypass: a user token can only select that user's own device.
-  const phone = await prisma.phone.findFirst({ where: { id: identity.deviceId, userId: identity.user.id } });
+  const phone = await prisma.phone.findFirst({ where: { id: identity.deviceId, OR: [{ assignedUserId: identity.user.id }, { assignedUserId: null, userId: identity.user.id }] } });
   if (!phone) throw new DispatchAuthError(403, "Device tidak tersedia untuk akun ini.");
   checkChannel(phone);
   return { phone, token: identity.token, mode: "user" as const };

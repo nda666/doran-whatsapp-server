@@ -1,6 +1,6 @@
 import { createDispatches, updateDispatches } from "@/server/dispatchWebhook/events";
 import { tableQuery } from "@/lib/tableQuery";
-import { ownerScope } from "@/lib/access";
+import { ownerScope, campaignScope, phoneScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
@@ -9,7 +9,7 @@ import { campaignInput, campaignJobs, validCampaignMedia } from "@/server/campai
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
   const id = String(req.query.id), userId = req.user!.id;
-  const campaign = await prisma.campaign.findFirst({ where: { id, ...ownerScope(req.user!) } });
+  const campaign = await prisma.campaign.findFirst({ where: { id, ...campaignScope(req.user!) } });
   if (!campaign) return res.status(404).end();
   if (req.method === "GET") {
     const { page, limit, skip, orderBy } = tableQuery(req.query, ["recipient", "phoneId", "status", "lastError", "sentAt"], "createdAt", "asc");
@@ -24,7 +24,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(issue => issue.message).join(", ") });
     const input = parsed.data;
     const [phones, contacts, selectedContacts, groups, media] = await Promise.all([
-      prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true } }),
+      prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true } }),
       prisma.contact.findMany({ where: { ...ownerScope(req.user!), ...(input.allContacts ? {} : { OR: [{ groupId: { in: input.groupIds } }, { id: { in: input.contactIds } }] }) }, take: 10001 }),
       prisma.contact.count({ where: { ...ownerScope(req.user!), id: { in: input.contactIds } } }),
       prisma.contactGroup.count({ where: { ...ownerScope(req.user!), id: { in: input.groupIds } } }),

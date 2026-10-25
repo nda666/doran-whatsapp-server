@@ -1,4 +1,4 @@
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope } from "@/lib/access";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope } from "@/lib/access";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import type { NextApiResponse } from "next";

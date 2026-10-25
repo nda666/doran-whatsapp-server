@@ -1,6 +1,6 @@
 import { getDispatchDisplayWindow } from "@/server/dispatch/settings";
 import { tableQuery } from "@/lib/tableQuery";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import { WaDispatchStatus } from "@prisma/client";
 import { z } from "zod";

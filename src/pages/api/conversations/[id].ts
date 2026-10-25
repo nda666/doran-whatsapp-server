@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { conversationScope as ownerScope, phoneScope } from "@/lib/access";
 import { z } from "zod";
 import { publicChatMessage } from "@/server/chat/public";
 import fs from "node:fs/promises";
@@ -13,13 +13,13 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
   const id = z.string().uuid().safeParse(req.query.id);
   if (!id.success) return res.status(400).json({ message: "Percakapan tidak valid." });
   if (!["GET", "PATCH", "DELETE"].includes(req.method || "")) return res.status(405).end();
-  const conversation = await prisma.chatConversation.findFirst({ where: { id: id.data, ...ownerScope(req.user!), phone: ownerScope(req.user!) } });
+  const conversation = await prisma.chatConversation.findFirst({ where: { id: id.data, ...ownerScope(req.user!), phone: phoneScope(req.user!) } });
   if (!conversation) return res.status(404).json({ message: "Percakapan tidak ditemukan." });
   if (req.method === "DELETE") {
     const result = await prisma.$transaction(async tx => {
       // Serialize with capture/send so messages and their files are deleted together.
       await tx.$queryRaw`SELECT id FROM phones WHERE id = ${conversation.phoneId} FOR UPDATE`;
-      const current = await tx.chatConversation.findFirst({ where: { id: conversation.id, ...ownerScope(req.user!), phone: ownerScope(req.user!) } });
+      const current = await tx.chatConversation.findFirst({ where: { id: conversation.id, ...ownerScope(req.user!), phone: phoneScope(req.user!) } });
       if (!current) return { status: 404 as const, files: [] };
       if (await tx.chatMessage.count({ where: { conversationId: current.id, status: "SENDING" } })) return { status: 409 as const, files: [] };
       const media = await tx.chatMessage.findMany({ where: { conversationId: current.id, mediaPath: { not: null } }, select: { mediaPath: true } });

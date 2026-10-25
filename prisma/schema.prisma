@@ -315,6 +315,7 @@ model Phone {
   token                String             @unique @default(uuid())
   user                 User               @relation(fields: [userId], references: [id], onDelete: NoAction)
   userId               String
+  assignedUserId       String?            @db.VarChar(191)
   senderGroupId        String?            @db.VarChar(36)
   senderGroup          SenderGroup?       @relation(fields: [senderGroupId], references: [id], onDelete: SetNull)
   senderPriority       Int                @default(0)
@@ -334,6 +335,7 @@ model Phone {
   updatedAt            DateTime           @updatedAt @map(name: "updated_at")
 
   @@index([senderGroupId, senderPriority])
+  @@index([assignedUserId])
   @@map(name: "phones")
 }
 

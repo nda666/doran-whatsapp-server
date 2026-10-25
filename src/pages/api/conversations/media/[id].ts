@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { phoneScope } from "@/lib/access";
 import { chatMediaPath } from "@/server/chat/media";
 import { z } from "zod";
 
@@ -13,7 +13,7 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
   if (req.method !== "GET") return res.status(405).end();
   const id = z.string().uuid().safeParse(req.query.id);
   if (!id.success) return res.status(400).end();
-  const message = await prisma.chatMessage.findFirst({ where: { id: id.data, conversation: { ...ownerScope(req.user!), phone: ownerScope(req.user!) } } });
+  const message = await prisma.chatMessage.findFirst({ where: { id: id.data, conversation: { phone: phoneScope(req.user!) } } });
   if (!message?.mediaPath) return res.status(404).end();
   let buffer: Buffer;
   try { buffer = await fs.readFile(chatMediaPath(message.mediaPath)); } catch { return res.status(404).end(); }

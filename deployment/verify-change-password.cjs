@@ -10,7 +10,7 @@ function load(relative, stubs = {}) {
 const access = load('src/lib/access.ts');
 const initial = { id: 'own-user', email: 'fixture@example.invalid', token: 'fixture-token', password: 'hash:old123', sessionVersion: 0, approvalStatus: 'APPROVED', isActive: true };
 let user = { ...initial }, session = { id: user.id, sessionVersion: 0 }, allowed = true, writes = 0, deletedSessions = 0, deletedResets = 0;
-const db = { user: {
+const db = { phone: { findMany: async () => [] }, user: {
   findFirst: async ({ where }) => where.id === user.id || where.token === user.token ? { ...user } : null,
   findUnique: async () => ({ ...user }),
   update: async ({ where, data }) => { assert.equal(where.id, initial.id); assert.deepEqual(Object.keys(data).sort(), ['password', 'sessionVersion']); writes++; user = { ...user, password: data.password, sessionVersion: user.sessionVersion + 1 }; },

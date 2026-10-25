@@ -1,4 +1,4 @@
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope } from "@/lib/access";
 import formidable from "formidable";
 import fs from "fs/promises";
 import type { NextApiResponse } from "next";

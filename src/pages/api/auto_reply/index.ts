@@ -1,4 +1,4 @@
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope, phoneScope } from "@/lib/access";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getToken } from "next-auth/jwt";
 
@@ -65,9 +65,10 @@ const POST = async (req: AuthNextApiRequest, res: NextApiResponse) => {
   if (req.body.id) {
     const existing = await prisma.autoReply.findFirst({ where: { id: Number(req.body.id), ...ownerScope(req.user!) } });
     if (!existing) return res.status(404).json({ message: "Reply not found" });
+    if (req.body.phoneId !== existing.phoneId) return res.status(400).json({ message: "Perangkat pada balasan otomatis tidak dapat dipindahkan." });
     replyOwnerId = existing.userId;
   } else {
-    const phone = await prisma.phone.findFirst({ where: { id: String(req.body.phoneId), ...ownerScope(req.user!) } });
+    const phone = await prisma.phone.findFirst({ where: { id: String(req.body.phoneId), ...phoneScope(req.user!) } });
     if (!phone) return res.status(404).json({ message: "Device not found" });
     replyOwnerId = phone.userId;
   }

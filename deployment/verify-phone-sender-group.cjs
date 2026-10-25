@@ -19,7 +19,7 @@ const matches = (row, where) => Object.entries(where).every(([key, value]) => ke
   : value && typeof value === 'object' ? String(row[key] || '').includes(value.contains) : row[key] === value);
 const plain = value => JSON.parse(JSON.stringify(value));
 let lastQuery, countQueries = [];
-const access = { isSuperAdmin: user => user.id === 'admin', ownerScope: user => user.id === 'admin' ? {} : { userId: user.id } };
+const access = { isSuperAdmin: user => user.id === 'admin', phoneScope: user => user.id === 'admin' ? {} : { userId: user.id }, phoneRecordScope: user => user.id === 'admin' ? {} : { userId: user.id } };
 const handler = load('src/pages/api/phones/index.ts', {
   '@/lib/messagingChannel': load('src/lib/messagingChannel.ts', {}),
   '@/server/messaging/safety': { usageDay: () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) },
@@ -29,7 +29,8 @@ const handler = load('src/pages/api/phones/index.ts', {
   '@/lib/prisma': { prisma: {
     phone: { findMany: async query => { lastQuery = query; return phones.filter(row => matches(row, query.where)).map(row => ({ ...row, senderGroup: groups.find(group => group.id === row.senderGroupId) || null })); },
       count: async ({ where }) => { countQueries.push(where); return phones.filter(row => matches(row, where)).length; } },
-    senderGroup: { findMany: async ({ where, select }) => groups.filter(row => matches(row, where)).map(row => Object.fromEntries(Object.keys(select).map(key => [key, row[key]]))) },
+    senderGroup: { findMany: async ({ where = {}, select }) => groups.filter(row => matches(row, where)).map(row => Object.fromEntries(Object.keys(select).map(key => [key, row[key]]))) },
+    user: { findMany: async () => [] },
     waDispatch: { groupBy: async () => [] },
   } },
   '@/middleware/apiAuthMiddleware': { __esModule: true, default: handler => handler },
@@ -75,7 +76,7 @@ async function request(query, id = 'owner') {
   assert.equal((await request({ sender_group: '' })).total, 2);
   assert.equal((await request({ sender_group: 'group-b' }, 'admin')).total, 1);
   const options = await request({ sender_group_options: '1' });
-  assert.deepEqual(plain(options), [{ id: 'group-a', name: 'Store A', enabled: false }]);
+  assert.deepEqual(plain(options), [], 'Sender group management options are admin-only');
   assert.equal((await request({ sender_group_options: '1' }, 'admin')).length, 2);
   for (const order of ['asc', 'desc']) {
     await request({ sort: 'senderGroup.name', order });

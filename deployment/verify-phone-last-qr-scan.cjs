@@ -19,7 +19,7 @@ function load(name, mocks) {
     '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async args => { if (fail) throw new Error('DB unavailable'); updates.push(args); if (args.data.lastQrScanAt) persisted = args.data.lastQrScanAt; } } } },
     '../constant': { WaSockQrTimeout: 60000 },
     '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {} },
-    '../libs/socket': { getSocketIO: io }, '../libs/pairingState': { recordPairingProgress: () => undefined },
+    '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
   }).default;

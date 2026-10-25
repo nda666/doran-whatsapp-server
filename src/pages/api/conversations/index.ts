@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope } from "@/lib/access";
 import { z } from "zod";
 
 export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiResponse) => {

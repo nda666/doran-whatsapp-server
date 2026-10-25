@@ -27,6 +27,7 @@ import Layout from "@/components/Layout";
 import ModalQrCode from "@/components/phone/ModalQrCode";
 import TestSendModal from "@/components/phone/TestSendModal";
 import ReassignSenderModal from "@/components/phone/ReassignSenderModal";
+import AssignUserModal from "@/components/phone/AssignUserModal";
 import PhoneCleanupModal from "@/components/phone/PhoneCleanupModal";
 import PhoneFormModal, {
   PhoneFormData,
@@ -57,6 +58,7 @@ const PhonePage = () => {
   const table = useTableState({ value: searchState.table, onChange: next => replaceSearch({ ...searchState, table: next }) });
   const [testPhone, setTestPhone] = useState<Phone>();
   const [reassignPhone, setReassignPhone] = useState<Phone>();
+  const [assignPhone, setAssignPhone] = useState<PhoneRow>();
   const [cleanupPhone, setCleanupPhone] = useState<Phone>();
   const [state, setState] = useState<{
     openForm: boolean;
@@ -301,6 +303,8 @@ const PhonePage = () => {
       render: (_: unknown, phone: PhoneRow) => <div style={{ minWidth: 160, maxWidth: 240, overflowWrap: "anywhere" }}>
         <div>{phone.user?.name || phone.user?.email || phone.userId}</div>
         {phone.user?.name && phone.user?.email && <div style={{ color: "var(--ui-muted)", fontSize: 12 }}>{phone.user.email}</div>}
+        <div style={{ marginTop: 8 }}>{uiText("Akses user")}: {phone.assignee?.name || phone.assignee?.email || (phone.assignedUserId ? uiText("User tidak tersedia") : uiText("Pemilik perangkat"))}</div>
+        <Button size="small" onClick={() => setAssignPhone(phone)}>{uiText("Assign user")}</Button>
       </div>,
     }] : []),
     {
@@ -323,7 +327,7 @@ const PhonePage = () => {
         return (
           <PhoneTableButton
             phone={phone}
-            onReassignSender={() => setReassignPhone(phone)}
+            onReassignSender={admin ? () => setReassignPhone(phone) : undefined}
             generatingToken={generatingTokens}
             policyAvailable={policies.hasPolicy(phone.id)}
             onPolicyClick={() => policies.open(phone.id)}
@@ -457,13 +461,13 @@ const PhonePage = () => {
         {phoneData.connectionStatusError && <Alert type="warning" showIcon message={uiText("Status koneksi belum dapat diperbarui")} description={uiText("Sambungan ke server bermasalah. Tunggu pembaruan berikutnya atau muat ulang. Jangan scan QR sebelum status sesi berhasil diperiksa.")} />}
         {/* Tombol sejajar dengan gap 12px; aksi netral memakai ghost berborder. */}
         <Flex className="phone-actions" gap={12} wrap="wrap">
-          <Button
+          {admin && <Button
             className="phone-action-primary"
             type="primary"
             onClick={() => setState({ ...state, openForm: true })}
           >
             {t("add_devices")}
-          </Button>
+          </Button>}
           <Button className="phone-action-ghost" onClick={() => replaceSearch({ ...searchState, showSearch: !showSearch })}>
             {showSearch ? t("hide_search") : t("show_search")}
           </Button>
@@ -474,6 +478,7 @@ const PhonePage = () => {
             {uiText("Buat token untuk semua perangkat")}</Button>
           {!!selectedPhoneIds.length && <Button className="phone-action-ghost" disabled={generatingTokens} onClick={() => setSelectedPhoneIds([])}>{uiText("Hapus Pilihan")}</Button>}
         </Flex>
+        {admin && <AssignUserModal phone={assignPhone} onCancel={() => setAssignPhone(undefined)} onSaved={() => { setAssignPhone(undefined); phoneData.refetchPhone(); summary.reload(); }} />}
         <PhoneFormModal
           ref={form}
           loading={state.formLoading}

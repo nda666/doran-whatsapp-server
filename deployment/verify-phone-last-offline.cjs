@@ -26,7 +26,7 @@ function load(file, mocks) {
     '../../lib/prisma': { prisma: { ...tx, $transaction: async fn => { if (fail) throw new Error('DB_DOWN'); return fn(tx); } } },
     '../constant': { WaSockQrTimeout: 60000 },
     '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {} },
-    '../libs/socket': { getSocketIO: io }, '../libs/pairingState': { recordPairingProgress: () => undefined },
+    '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
   }).default;

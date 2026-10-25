@@ -18,7 +18,7 @@ const records = [
   { id: 'user-b', name: 'User B', email: 'b@example.invalid', role: 'USER', approvalStatus: 'PENDING', token: 'user-b-fixture-token', password: 'private-password-hash' },
 ];
 let actor = admin, reads = 0;
-const db = { user: {
+const db = { phone: { findMany: async () => [] }, user: {
   findFirst: async ({ where }) => actor && where.token === actor.token ? actor : null,
   findMany: async ({ select }) => {
     reads++; assert.equal(select.token, true); assert(!select.password);

@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
-import { ownerScope } from "@/lib/access";
+import { campaignScope as ownerScope, phoneScope } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { summarize } from "@/server/messaging/analytics";
 import { statusLabel } from "@/lib/messagingLabels";
@@ -17,7 +17,7 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
   if (!campaign) return res.status(404).json({ message: "Campaign tidak ditemukan." });
   const where = { campaignId: campaign.id, userId: campaign.userId };
   const summary = await summarize(where);
-  const devices = await prisma.phone.findMany({ where: { userId: campaign.userId }, select: { id: true, name: true, number: true } });
+  const devices = await prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: Array.isArray(campaign.phoneIds) ? campaign.phoneIds.filter((id): id is string => typeof id === "string") : [] } }, select: { id: true, name: true, number: true } });
   const metricRows = [["Total penerima", summary.total], ["Pernah dicoba", summary.attempted], ["Terkirim", summary.sent], ["Diterima", summary.delivered], ["Dibaca", summary.read], ["Gagal terminal setelah percobaan", summary.failed], ["Diblokir", summary.suppressed], ["Menunggu / diproses", summary.pending], ["Perlu diperiksa", summary.uncertain], ["Tingkat diterima (%)", summary.deliveryRate], ["Tingkat dibaca (%)", summary.readRate], ["Tingkat gagal (%)", summary.failureRate]];
   const note = "Terkirim = diakui server WhatsApp; diterima/dibaca berdasarkan receipt yang teramati. Tidak ada receipt bukan berarti gagal. Diterima / pernah dicoba; dibaca / diterima; gagal terminal / pernah dicoba. Retry dihitung sebagai satu pesan logis.";
   if (req.query.export === "xlsx") {

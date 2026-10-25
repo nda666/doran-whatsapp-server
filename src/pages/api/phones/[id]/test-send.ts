@@ -1,4 +1,4 @@
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope, isSuperAdmin } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { prisma } from "@/lib/prisma";
@@ -22,8 +22,9 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   }
   const phone = await prisma.phone.findFirst({ where: { id: String(req.query.id), ...ownerScope(req.user!) } });
   if (!phone) return res.status(404).json({ message: "Perangkat tidak ditemukan." });
+  const mediaUserId = isSuperAdmin(req.user!) ? phone.userId : req.user!.id;
   if (req.method === "GET") {
-    const data = await prisma.mediaAsset.findMany({ where: { userId: phone.userId }, orderBy: { createdAt: "desc" }, take: 1000, select: { id: true, name: true, mime: true } });
+    const data = await prisma.mediaAsset.findMany({ where: { userId: mediaUserId }, orderBy: { createdAt: "desc" }, take: 1000, select: { id: true, name: true, mime: true } });
     return res.json({ data });
   }
   const telegram = isTelegramDevice(phone);
@@ -42,9 +43,9 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (!validation.result) return res.status(400).json({ message: "Nomor tujuan tidak valid. Gunakan 0812…, 62812…, atau +62812…" });
   try {
     if (input.type !== "text") {
-      const content = await prepareTestContent(input, phone.userId);
+      const content = await prepareTestContent(input, mediaUserId);
       if (process.env.DISPATCH_QUEUE_ENABLED !== "true") return res.status(503).json({ result: false, message: "Aktifkan antrean pengiriman untuk test tipe pesan ini." });
-      const result = await enqueueTestContent(phone.id, phone.userId, recipient, input, content);
+      const result = await enqueueTestContent(phone.id, mediaUserId, recipient, input, content);
       return res.status(200).json({ ...result, message: "Pesan test tersimpan di antrean. Pantau hasilnya di menu Antrean Pengiriman." });
     }
     if (!message.trim()) return res.status(400).json({ message: "Isi pesan test." });

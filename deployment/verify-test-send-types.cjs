@@ -64,7 +64,7 @@ const response = () => ({ code: 200, status(code) { this.code = code; return thi
   await assert.rejects(helper.prepareTestContent(config.testSendRequest.parse({ number: '081217357535', type: 'sticker', mediaId: 'media' }), 'owner'));
   let phone = { id: 'phone', userId: 'owner', active: 1, isOnline: true }, sends = 0, queues = 0;
   const handler = load('src/pages/api/phones/[id]/test-send.ts', {
-    '@/middleware/apiAuthMiddleware': defaultExport(fn => fn), '@/lib/access': { ownerScope: user => ({ userId: user.id }) },
+    '@/middleware/apiAuthMiddleware': defaultExport(fn => fn), '@/lib/access': { phoneScope: user => ({ userId: user.id }), isSuperAdmin: () => false },
     '@/lib/prisma': { prisma: { phone: { findFirst: async ({ where }) => { assert.equal(where.userId, 'owner'); return phone; } }, mediaAsset: { findMany: async ({ where }) => { assert.equal(where.userId, 'owner'); return []; } } } },
     '@/validations/sendMessage': { SendMessageValidation: async () => ({ result: true }) },
     '@/server/libs/sendMessageFromIo': defaultExport(async () => { sends++; return [{ key: { id: 'test-id' } }]; }),

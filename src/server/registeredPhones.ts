@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneRecipient } from "@/utils/normalizePhoneRecipient";
-import { isApproved, isSuperAdmin, ownerScope } from "@/lib/access";
+import { isApproved, isSuperAdmin } from "@/lib/access";
 
 // Tokens are selected only for the designated admin; QR credentials stay private.
 const detailSelect = {
@@ -30,7 +30,7 @@ export async function registeredPhones(
   }
   const admin = isSuperAdmin(owner);
   const access = { role: owner.role, scope: admin ? "all" : "own" };
-  const where = ownerScope(owner);
+  const where = admin ? {} : { OR: [{ assignedUserId: owner.id }, { assignedUserId: null, userId: owner.id }] };
   const select = admin ? { ...detailSelect, token: true, userId: true, user: { select: { id: true, name: true, email: true } } } : detailSelect;
   if (action === "list-phones") {
     const data = await prisma.phone.findMany({

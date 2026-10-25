@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin, ownerScope } from "@/lib/access";
+import { isSuperAdmin, phoneRecordScope, phoneScope, campaignScope } from "@/lib/access";
 import { Prisma } from "@prisma/client";
 import { dashboardWindowDates } from "@/lib/dashboardStats";
 import { getDispatchDisplayWindow } from "@/server/dispatch/settings";
@@ -13,19 +13,21 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   const window = await getDispatchDisplayWindow();
   const { days, start, end } = window;
   const dates = dashboardWindowDates(start, end);
-  const scope = ownerScope(req.user!);
+  const scope = phoneRecordScope(req.user!);
+  const phoneIds = req.user!.accessiblePhoneIds || [];
+  const sqlScope = isSuperAdmin(req.user!) ? Prisma.empty : phoneIds.length ? Prisma.sql`AND phoneId IN (${Prisma.join(phoneIds)})` : Prisma.sql`AND 1 = 0`;
   const dispatchScope = { ...scope, createdAt: window.createdAt };
   const [devices, online, counts, activeCampaigns, series, periodCounts, deviceStates, hourly, topDevices] = await Promise.all([
-    prisma.phone.count({ where: ownerScope(req.user!) }), prisma.phone.count({ where: { ...ownerScope(req.user!), isOnline: true } }),
+    prisma.phone.count({ where: phoneScope(req.user!) }), prisma.phone.count({ where: { ...phoneScope(req.user!), isOnline: true } }),
     prisma.waDispatch.groupBy({ by: ["status"], where: dispatchScope, _count: { _all: true } }),
-    prisma.campaign.count({ where: { ...ownerScope(req.user!), status: { in: ["WAITING", "PROCESSING", "PAUSED"] }, dispatches: { some: { createdAt: window.createdAt } } } }),
-    prisma.$queryRaw<Array<{ day: string; count: bigint }>>`SELECT DATE_FORMAT(DATE_ADD(sentAt, INTERVAL 7 HOUR), '%Y-%m-%d') AS day, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${isSuperAdmin(req.user!) ? Prisma.empty : Prisma.sql`AND userId = ${userId}`} GROUP BY day ORDER BY day`,
+    prisma.campaign.count({ where: { ...campaignScope(req.user!), status: { in: ["WAITING", "PROCESSING", "PAUSED"] }, dispatches: { some: { createdAt: window.createdAt } } } }),
+    prisma.$queryRaw<Array<{ day: string; count: bigint }>>`SELECT DATE_FORMAT(DATE_ADD(sentAt, INTERVAL 7 HOUR), '%Y-%m-%d') AS day, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY day ORDER BY day`,
     prisma.waDispatch.groupBy({ by: ["status"], where: dispatchScope, _count: { _all: true } }),
-    prisma.phone.groupBy({ by: ["active", "isOnline"], where: scope, _count: { _all: true } }),
-    prisma.$queryRaw<Array<{ hour: number; count: bigint }>>`SELECT HOUR(DATE_ADD(sentAt, INTERVAL 7 HOUR)) AS hour, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${isSuperAdmin(req.user!) ? Prisma.empty : Prisma.sql`AND userId = ${userId}`} GROUP BY hour ORDER BY hour`,
+    prisma.phone.groupBy({ by: ["active", "isOnline"], where: phoneScope(req.user!), _count: { _all: true } }),
+    prisma.$queryRaw<Array<{ hour: number; count: bigint }>>`SELECT HOUR(DATE_ADD(sentAt, INTERVAL 7 HOUR)) AS hour, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY hour ORDER BY hour`,
     prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...dispatchScope, sentAt: { gte: start, lt: end } }, _count: { _all: true }, orderBy: { _count: { phoneId: "desc" } }, take: 5 }),
   ]);
-  const phones = topDevices.length ? await prisma.phone.findMany({ where: { ...scope, id: { in: topDevices.map(r => r.phoneId) } }, select: { id: true, name: true, number: true } }) : [];
+  const phones = topDevices.length ? await prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: topDevices.map(r => r.phoneId) } }, select: { id: true, name: true, number: true } }) : [];
   return res.json({ devices, online, unrestricted: isSuperAdmin(req.user!), deviceLimit: req.user!.deviceLimit, plan: req.user!.plan, subscriptionExpiresAt: req.user!.subscriptionExpiresAt,
     counts: Object.fromEntries(counts.map(c => [c.status, c._count._all])), activeCampaigns,
     display_window: { days, start, end },

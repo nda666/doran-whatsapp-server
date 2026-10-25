@@ -1,4 +1,4 @@
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { NextApiRequest, NextApiResponse } from "next";

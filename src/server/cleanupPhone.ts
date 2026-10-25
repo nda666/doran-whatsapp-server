@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "../lib/prisma";
 import type { PhoneCleanupOptions } from "../lib/phoneCleanup";
+import type { Prisma } from "@prisma/client";
 import { session, waitForAuthSave, waitForPendingSocket } from "./libs/makeWASocket";
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { clearPhoneReconnect } from "./events/connectionUpdate";
@@ -28,7 +29,7 @@ export async function authFolderTarget(userId: string, phoneId: string) {
   return target;
 }
 
-export async function cleanupPhone(id: string, scope: { userId?: string }, options: PhoneCleanupOptions) {
+export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, options: PhoneCleanupOptions) {
   const phone = await prisma.phone.findFirst({ where: { id, ...scope } });
   if (!phone) throw new PhoneCleanupError("Data tidak ditemukan.", 404);
   if (phoneMaintenance.has(id)) throw new PhoneCleanupError("Perangkat sedang dibersihkan. Tunggu hingga selesai.");

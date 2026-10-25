@@ -53,8 +53,8 @@ const handler = load('src/pages/api/phones/index.ts', {
   '@/server/messaging/safety': safety,
   '@/lib/dispatchDateFilter': load('src/lib/dispatchDateFilter.ts'),
   '@/server/dispatch/settings': { getDispatchDisplayWindow: async () => ({ days: 1, createdAt: {} }) },
-  '@/lib/tableQuery': load('src/lib/tableQuery.ts'), '@/lib/access': { isSuperAdmin: user => user.id === 'admin', ownerScope: user => user.id === 'admin' ? {} : { userId: user.id } },
-  '@/lib/prisma': { prisma: db }, '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },
+  '@/lib/tableQuery': load('src/lib/tableQuery.ts'), '@/lib/access': { isSuperAdmin: user => user.id === 'admin', phoneScope: user => user.id === 'admin' ? {} : { userId: user.id }, phoneRecordScope: () => ({}) },
+  '@/lib/prisma': { prisma: { ...db, user: { findMany: async () => [] } } }, '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },
   '@/server/deviceWebhook/events': {}, '@/server/phoneConnectionInfo': { getPhoneConnectionInfo: async () => ({}) },
   '@/lib/phonePolicySort': sort, '@/server/messaging/phonePolicySort': service,
 }).default;

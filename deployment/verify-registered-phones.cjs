@@ -33,9 +33,9 @@ function response() {
       findUnique: async ({ where }) => where.token === 'valid-token' ? fixtures[0] : null,
       findMany: async ({ where, select, take }) => {
         queries++;
-        assert.equal(where.userId, role === 'ADMIN' && email === 'admin@gmail.com' ? undefined : 'owner'); assert.equal(take, undefined);
+        assert.deepEqual(where.OR, role === 'ADMIN' && email === 'admin@gmail.com' ? undefined : [{ assignedUserId: 'owner' }, { assignedUserId: null, userId: 'owner' }]); assert.equal(take, undefined);
         assert.equal(select.token, role === 'ADMIN' && email === 'admin@gmail.com' ? true : undefined); assert.equal(select.qrCode, undefined);
-        return fixtures.filter(p => (where.userId === undefined || p.userId === where.userId) && (where.number === undefined || p.number === where.number))
+        return fixtures.filter(p => (!where.OR || p.assignedUserId === 'owner' || (p.assignedUserId == null && p.userId === 'owner')) && (where.number === undefined || p.number === where.number))
           .map(p => Object.fromEntries(Object.keys(select).map(key => [key, p[key] ?? null])));
       },
     },

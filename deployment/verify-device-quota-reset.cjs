@@ -24,7 +24,7 @@ const handler = load('src/pages/api/device-policies.ts', {
   '@/lib/quotaReset': reset, '@/server/dispatch/settings': {},
   '@/lib/operatingHours': { operatingHoursInput: require('zod').z.any() },
   '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },
-  '@/lib/prisma': { prisma: db }, '@/lib/access': { ownerScope: user => ({ userId: user.id }) },
+  '@/lib/prisma': { prisma: db }, '@/lib/access': { phoneScope: user => ({ userId: user.id }) },
   '@/server/messaging/safety': {}, '@/lib/deviceQuota': {},
 }).default;
 async function request(extra) {

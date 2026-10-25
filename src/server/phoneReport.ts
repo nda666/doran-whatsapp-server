@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { NextApiResponse } from "next";
 import type { AuthNextApiRequest } from "@/types/global";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope, phoneScope } from "@/lib/access";
 import { defaultDispatchDates, dispatchDateFilter } from "@/lib/dispatchDateFilter";
 import { emptyReportCounts, PhoneReportRow, reportMetric, reportMetrics, successfulStatuses } from "@/lib/phoneReport";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +26,7 @@ export async function phoneReport(req: AuthNextApiRequest, res: NextApiResponse)
   // Aggregate in the database: exports and totals never depend on message pagination.
   const [groups, phones] = await Promise.all([
     prisma.waDispatch.groupBy({ by: ["phoneId", "status"], where, _count: { _all: true } }),
-    prisma.phone.findMany({ where: { ...scope, ...(req.query.phoneId ? { id: req.query.phoneId as string } : {}) }, select: { id: true, number: true, name: true } }),
+    prisma.phone.findMany({ where: { ...phoneScope(req.user!), ...(req.query.phoneId ? { id: req.query.phoneId as string } : {}) }, select: { id: true, number: true, name: true } }),
   ]);
   const rows = new Map<string, PhoneReportRow>(phones.map(phone => [phone.id, { phoneId: phone.id, number: phone.number || "", name: phone.name, ...emptyReportCounts() }]));
   for (const group of groups) {

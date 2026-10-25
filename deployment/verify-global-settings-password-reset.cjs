@@ -20,6 +20,7 @@ const admin = { id: 'main-admin', email: access.SUPER_ADMIN_EMAIL, role: 'ADMIN'
 let user = { id: 'user-a', name: '<img src=x onerror=alert(1)>', email: 'user@example.invalid', role: 'USER', approvalStatus: 'APPROVED', isActive: true, password: 'original-hash', sessionVersion: 0 };
 let actor = admin, rows = [], resetRows = new Map(), rateRows = new Map(), attempts = 0n, writes = 0, sessionDeletes = 0, disconnects = 0, sends = [], providerFails = false;
 const db = {
+  phone: { findMany: async () => [] },
   globalSetting: {
     createMany: async ({ data }) => { for (const item of data) if (!rows.some(row => row.key === item.key)) rows.push({ id: require('node:crypto').randomUUID(), ...item }); return { count: data.length }; },
     findMany: async () => rows,

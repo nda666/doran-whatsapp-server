@@ -30,7 +30,7 @@ export async function prepareTestContent(input: ReturnType<typeof testSendReques
 
 export async function enqueueTestContent(phoneId: string, userId: string, recipient: string, input: ReturnType<typeof testSendRequest.parse>, content: Awaited<ReturnType<typeof prepareTestContent>>) {
   const prepared = prepareDispatch(phoneId, userId, { number: recipient, message: input.message.trim() || `[Test ${input.type}]`, transaction_id: randomUUID(), store_id: "dashboard-test" });
-  const phone = await prisma.phone.findFirst({ where: { id: phoneId, userId } });
+  const phone = await prisma.phone.findFirst({ where: { id: phoneId, OR: [{ userId }, { assignedUserId: userId }] } });
   if (!phone) throw new DispatchError(404, "Perangkat tidak ditemukan.");
   prepared.jobs = prepared.jobs.map(job => telegramRecipient(job, phone));
   const jobs = prepared.jobs.map(job => ({ ...job, ...content, payloadHash: createHash("sha256").update(JSON.stringify([job.message, content.mediaId, content.payload || null])).digest("hex") }));

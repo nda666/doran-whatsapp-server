@@ -17,6 +17,7 @@ let jobs = [], policy = null, sourcePolicy = null, sourceUsage = { attempts: 0, 
 const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {
   if (key === 'AND') return value.every(v => matches(row, v));
   if (key === 'OR') return value.some(v => matches(row, v));
+  if (key === 'NOT') return !matches(row, value);
   if (key === 'sendAttempts') return !(row.sendAttempts || []).some(attempt => matches(attempt, value.none));
   const actual = row[key];
   if (value && typeof value === 'object' && !(value instanceof Date)) {
@@ -57,6 +58,7 @@ db.$transaction = async callback => callback(db);
 const stubs = {
   'src/lib/prisma.ts': { prisma: db },
   'src/middleware/apiAuthMiddleware.ts': { default: handler => handler, __esModule: true },
+  'src/middleware/apiSuperAdminMiddleware.ts': { default: handler => handler, __esModule: true },
   'src/server/libs/makeWASocket.ts': { session: sessions },
   'src/server/libs/phoneMaintenance.ts': { phoneMaintenance: new Set() },
   'src/server/deviceWebhook/events.ts': {}, 'src/server/dispatchWebhook/events.ts': {},
@@ -91,7 +93,7 @@ const base = { id: 'today', userId: 'owner', phoneId: sourceId, senderPhoneId: n
   createdAt: now, nextAttemptAt: now, campaignId: null, attempts: 0, source: 'API' };
 async function request(method, body, id = sourceId, userId = 'owner', fn = handler, query = {}) {
   const response = { code: 200, setHeader() {}, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; }, end() { return this; } };
-  await fn({ method, body, query: { id, ...query }, user: { id: userId, role: 'USER', approvalStatus: 'APPROVED' } }, response);
+  await fn({ method, body, query: { id, ...query }, user: { id: userId, role: 'USER', approvalStatus: 'APPROVED', accessiblePhoneIds: phones.filter(p => p.userId === userId).map(p => p.id) } }, response);
   return response;
 }
 (async () => {
@@ -225,7 +227,7 @@ async function request(method, body, id = sourceId, userId = 'owner', fn = handl
     { ...base, senderPhoneId: targetId, createdAt: new Date(`${today}T23:59:59+07:00`) },
     { ...base, createdAt: new Date(new Date(`${today}T00:00:00+07:00`).getTime() - 1) },
     { ...base, createdAt: new Date(new Date(`${today}T00:00:00+07:00`).getTime() + day) },
-    { ...base, status: 'SENT', createdAt: now }, { ...base, userId: 'other' },
+    { ...base, status: 'SENT', createdAt: now }, { ...base, userId: 'other', phoneId: foreignId },
   ];
   response = await request('GET', null, undefined, 'owner', list, { page: '1' });
   assert.equal(response.data.data.find(p => p.id === sourceId).pendingToday, 1);

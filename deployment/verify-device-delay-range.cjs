@@ -27,7 +27,7 @@ async function main() {
   const api = loader({
     'src/middleware/apiAuthMiddleware.ts': { default: fn => fn, __esModule: true },
     'src/lib/prisma.ts': { prisma: { phone: { findFirst: async () => { scoped++; return { id: base.id }; } }, deviceSendPolicy: { upsert: async args => { stored = args; return args.update; } } } },
-    'src/lib/access.ts': { ownerScope: () => ({ userId: 'owner' }) },
+    'src/lib/access.ts': { phoneScope: () => ({ userId: 'owner' }) },
     'src/server/messaging/safety.ts': {}, 'src/server/dispatch/settings.ts': {},
   })('src/pages/api/device-policies.ts').default;
   async function save(values) {

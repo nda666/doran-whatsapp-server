@@ -27,9 +27,9 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
   const telegram = isTelegramDevice(origin);
   // A pinned sender remains usable after membership changes, but only within the owner.
   const phones = pinned || assigned
-    ? await prisma.phone.findMany({ where: { id: (pinned || assigned)!, userId: origin.userId } })
+    ? await prisma.phone.findMany({ where: { id: (pinned || assigned)!, userId: origin.userId, assignedUserId: origin.assignedUserId } })
     : grouped
-      ? await prisma.phone.findMany({ where: { senderGroupId: origin.senderGroupId, userId: origin.userId }, orderBy: [{ senderPriority: "asc" }, { id: "asc" }] })
+      ? await prisma.phone.findMany({ where: { senderGroupId: origin.senderGroupId, userId: origin.userId, assignedUserId: origin.assignedUserId }, orderBy: [{ senderPriority: "asc" }, { id: "asc" }] })
       : [origin];
   // Preserve the caller's primary number; priority orders the fallback numbers.
   if (!pinned && !assigned) phones.sort((a, b) => Number(b.id === origin.id) - Number(a.id === origin.id));

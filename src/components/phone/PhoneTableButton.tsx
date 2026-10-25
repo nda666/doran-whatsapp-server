@@ -63,7 +63,7 @@ export default function PhoneTableButton({
   const [modal, contextHolder] = Modal.useModal();
   const telegram = isTelegramDevice(phone);
   const items: MenuProps["items"] = [
-    { label: uiText("Ubah nomor pengiriman"), key: `${phone.id}-reassign`, icon: <SendOutlined />, onClick: () => onReassignSender?.() },
+    ...(onReassignSender ? [{ label: uiText("Ubah nomor pengiriman"), key: `${phone.id}-reassign`, icon: <SendOutlined />, onClick: () => onReassignSender() }] : []),
     {
       label: t("scan_qrcode"),
       key: `${phone.id}-2`,

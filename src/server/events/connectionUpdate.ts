@@ -1,4 +1,3 @@
-import { SUPER_ADMIN_ROOM } from "../../lib/access";
 import * as fs from "fs";
 import { join } from "path";
 
@@ -11,7 +10,7 @@ import {
 import { prisma } from "../../lib/prisma";
 import { WaSockQrTimeout } from "../constant";
 import makeWASocket, { deleteSession, getAllSession, waitForAuthSave } from "../libs/makeWASocket";
-import { getSocketIO } from "../libs/socket";
+import { emitDeviceEvent } from "../libs/socket";
 import { recordPairingProgress } from "../libs/pairingState";
 import { updateDevice } from "../deviceWebhook/events";
 import { phoneMaintenance, retiredSockets } from "../libs/phoneMaintenance";
@@ -36,30 +35,29 @@ export default async function connectionUpdate(
   if (process.env.DORAN_SHUTTING_DOWN === "true") return;
   const current = getAllSession().get(phoneId);
   if (current && current !== waSock) return;
-  const io = getSocketIO;
   // Baileys emits isNewLogin after successful QR pairing, before the required
   // socket restart. Ordinary reconnects and QR generation must not change it.
   if (update.isNewLogin) {
     const lastQrScanAt = new Date();
     try {
       await prisma.phone.update({ where: { id: phoneId }, data: { lastQrScanAt } });
-      io?.to(userId).to(SUPER_ADMIN_ROOM).emit("qrScanned", { phoneId, lastQrScanAt: lastQrScanAt.toISOString() });
+      await emitDeviceEvent(phoneId, "qrScanned", { phoneId, lastQrScanAt: lastQrScanAt.toISOString() });
     } catch (error) {
       console.error("WA_QR_SCAN_PERSIST_FAILED", phoneId, error instanceof Error ? error.message : "Unknown error");
     }
   }
   const phase = recordPairingProgress(phoneId, update);
-  if (phase && phase !== "qr") io?.to(userId).to(SUPER_ADMIN_ROOM).emit("connectionState", {
+  if (phase && phase !== "qr") await emitDeviceEvent(phoneId, "connectionState", {
     phoneId,
     connection: phase === "connected" ? "open" : phase === "error" ? "close" : "pairing",
     status: (update.lastDisconnect?.error as any)?.output?.statusCode,
   });
   if (waSock.user) {
-    io?.to(userId).to(SUPER_ADMIN_ROOM).emit("waUser", { phoneId, waUser: waSock.user });
+    await emitDeviceEvent(phoneId, "waUser", { phoneId, waUser: waSock.user });
   }
 
   if (update.qr) {
-    io?.to(userId).to(SUPER_ADMIN_ROOM).emit(`qr`, {
+    await emitDeviceEvent(phoneId, "qr", {
       phoneId,
       qr: update.qr,
       timeout: WaSockQrTimeout,
@@ -97,7 +95,7 @@ export default async function connectionUpdate(
       console.error("WA_CONNECTION_PERSIST_FAILED", phoneId, error instanceof Error ? error.message : "Unknown error");
     }
     if (getAllSession().get(phoneId) && getAllSession().get(phoneId) !== waSock) return;
-    if (persisted) io?.to(userId).to(SUPER_ADMIN_ROOM).emit("isOnline", { phoneId, isOnline });
+    if (persisted) await emitDeviceEvent(phoneId, "isOnline", { phoneId, isOnline });
   }
   if (connection === "open") {
     waRecovery.disconnects?.delete(phoneId);

@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261025000000_phone_assignment': '48321c65079283d60b499b34f1a33448d2affce51021421701be93323fa161a4',
   '20261024070000_device_channel': '017656197c5f06f58930d06f739585364bda52ec2a746c35b45b2995c3ec71eb',
   '20261021100000_device_quota_reset_override': '631199dee16c982ffd78a032ff59fc2d34130e0fe0b8e0be0a616806cd29bb0a',
   '20261021090000_device_quota_reset': '0c7abc9ac2f9f201fc6029233fcf4769a979f622fbb4749dd0ee43ebac381e02',
@@ -43,6 +44,12 @@ function operations(root = path.resolve(__dirname, '..')) {
         const table = result.find(op => op.kind === 'table' && op.table === 'device_quota_windows');
         if (!table) throw Error('Quota seed requires its new table');
         table.seedSql = sql;
+        continue;
+      }
+      const index = /^CREATE INDEX `([a-zA-Z0-9_]+)` ON `([a-zA-Z0-9_]+)`\s*(\([\s\S]+\))$/.exec(sql);
+      if (index) {
+        const action = `ADD INDEX \`${index[1]}\` ${index[3]}`;
+        result.push({ kind: 'index', table: index[2], name: index[1], action, sql: `ALTER TABLE \`${index[2]}\` ${action}` });
         continue;
       }
       const alter = /^ALTER TABLE `([a-zA-Z0-9_]+)`\s+([\s\S]+)$/.exec(sql);

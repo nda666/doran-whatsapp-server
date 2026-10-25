@@ -16,6 +16,7 @@ export const insertToInboxMessage = async (data: InsertToInboxMessageProps) => {
   return await prisma.inboxMessage.create({
     data: {
       message: data.message,
+      userId: data.userId,
       sender: data.sender,
       recipient: data.recipient,
       image_in: data.image_in,

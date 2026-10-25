@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope } from "@/lib/access";
 import { summarize } from "@/server/messaging/analytics";
 export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiResponse) => {
   if (req.method !== "GET") return res.status(405).end();

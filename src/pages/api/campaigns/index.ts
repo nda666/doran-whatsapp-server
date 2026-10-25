@@ -1,7 +1,7 @@
 import { getDispatchDisplayWindow } from "@/server/dispatch/settings";
 import { createDispatches } from "@/server/dispatchWebhook/events";
 import { tableQuery } from "@/lib/tableQuery";
-import { ownerScope } from "@/lib/access";
+import { ownerScope, campaignScope, phoneScope, phoneRecordScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import { CampaignStatus } from "@prisma/client";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
@@ -18,9 +18,9 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     const window = await getDispatchDisplayWindow();
     const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "status", "scheduledAt"], "createdAt", "desc");
     const status = Object.values(CampaignStatus).includes(req.query.status as CampaignStatus) ? req.query.status as CampaignStatus : undefined;
-    const where = { ...ownerScope(req.user!), OR: [{ scheduledAt: { gte: window.start } }, { dispatches: { some: { createdAt: window.createdAt } } }], ...(typeof req.query.phoneId === "string" && req.query.phoneId ? { dispatches: { some: { phoneId: req.query.phoneId } } } : {}), ...(status ? { status } : {}) };
+    const where = { ...campaignScope(req.user!), OR: [{ scheduledAt: { gte: window.start } }, { dispatches: { some: { createdAt: window.createdAt } } }], ...(typeof req.query.phoneId === "string" && req.query.phoneId ? { dispatches: { some: { phoneId: req.query.phoneId } } } : {}), ...(status ? { status } : {}) };
     const [data, total] = await Promise.all([prisma.campaign.findMany({ where, orderBy, skip, take: limit }), prisma.campaign.count({ where })]);
-    const counts = await prisma.waDispatch.groupBy({ by: ["campaignId", "status"], where: { ...ownerScope(req.user!), campaignId: { in: data.map(c => c.id) } }, _count: { _all: true } });
+    const counts = await prisma.waDispatch.groupBy({ by: ["campaignId", "status"], where: { ...phoneRecordScope(req.user!), campaignId: { in: data.map(c => c.id) } }, _count: { _all: true } });
     return res.json({ display_window: { days: window.days, start: window.start, end: window.end }, total, data: data.map(c => ({ ...c, counts: Object.fromEntries(counts.filter(n => n.campaignId === c.id).map(n => [n.status, n._count._all])) })) });
   }
   if (req.method !== "POST") return res.status(405).end();
@@ -29,7 +29,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
   const input = parsed.data;
   const [phones, contacts, selectedContacts, groups, media] = await Promise.all([
-    prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true, channel: true } }),
+    prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: input.phoneIds }, active: 1 }, select: { id: true, channel: true } }),
     prisma.contact.findMany({ where: { ...ownerScope(req.user!), ...(input.allContacts ? {} : { OR: [{ groupId: { in: input.groupIds } }, { id: { in: input.contactIds } }] }) }, take: 10001 }),
     prisma.contact.count({ where: { ...ownerScope(req.user!), id: { in: input.contactIds } } }),
     prisma.contactGroup.count({ where: { ...ownerScope(req.user!), id: { in: input.groupIds } } }),

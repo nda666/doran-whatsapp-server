@@ -1,6 +1,6 @@
 import { getDispatchDisplayWindow } from "@/server/dispatch/settings";
 import { tableQuery } from "@/lib/tableQuery";
-import { isSuperAdmin, ownerScope } from "@/lib/access";
+import { isSuperAdmin, phoneScope as ownerScope, phoneRecordScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -33,8 +33,8 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       return res.json({ total, online, offline: total - online, active, inactive: total - active });
     }
     if (req.query.options === "1") return res.json(await prisma.phone.findMany({ where: { ...ownerScope(req.user!) }, take: 1000, select: { id: true, channel: true, name: true, number: true, active: true, isOnline: true, autoReplyEnabled: true, saveIncomingMessages: true } }));
-    if (req.query.sender_group_options === "1") return res.json(await prisma.senderGroup.findMany({
-      where: ownerScope(req.user!), select: { id: true, name: true, enabled: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
+    if (req.query.sender_group_options === "1") return res.json(!admin ? [] : await prisma.senderGroup.findMany({
+      select: { id: true, name: true, enabled: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
     }));
     const { number, name, is_online, active, sender_group, quota_status } = req.query;
     let where: import("@prisma/client").Prisma.PhoneWhereInput = { ...ownerScope(req.user!),
@@ -62,22 +62,24 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       data.sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
     }
     const window = await getDispatchDisplayWindow();
-    const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...ownerScope(req.user!), createdAt: window.createdAt, phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
+    const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...phoneRecordScope(req.user!), createdAt: window.createdAt, phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
     const today = usageDay();
     const ids = data.map(p => p.id);
     const pending = await prisma.waDispatch.groupBy({ by: ["phoneId", "senderPhoneId"],
-      where: { ...ownerScope(req.user!), status: "QUEUED", createdAt: dispatchDateFilter(today, today),
+      where: { ...phoneRecordScope(req.user!), status: "QUEUED", createdAt: dispatchDateFilter(today, today),
         OR: [{ senderPhoneId: { in: ids } }, { senderPhoneId: null, phoneId: { in: ids } }] }, _count: { _all: true } });
     const pendingBySender = new Map<string, number>();
     for (const row of pending) {
       const id = row.senderPhoneId || row.phoneId;
       pendingBySender.set(id, (pendingBySender.get(id) || 0) + row._count._all);
     }
-    const rows = await Promise.all(data.map(async p => ({ ...p, pendingToday: pendingBySender.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
+    const assignees = admin ? await prisma.user.findMany({ where: { id: { in: data.flatMap(p => p.assignedUserId ? [p.assignedUserId] : []) } }, select: { id: true, name: true, email: true } }) : [];
+    const rows = await Promise.all(data.map(async p => ({ ...p, ...(admin ? { assignee: assignees.find(user => user.id === p.assignedUserId) || null } : {}), pendingToday: pendingBySender.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
     // Preserve array shape for integrations that don't request pagination.
     return res.json(req.query.page ? { data: rows, total, page, pageSize: limit, online, offline: total - online } : rows);
   }
   if (req.method !== "POST") return res.status(405).end();
+  if (!req.body?.id && !isSuperAdmin(req.user!)) return res.status(403).json({ message: "Hanya admin yang dapat menambahkan dan meng-assign perangkat." });
   const parsed = input.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues.map(i => i.message).join(", ") });
   const { id, warmupEnabled, channel, ...data } = parsed.data;

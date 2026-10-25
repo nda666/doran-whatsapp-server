@@ -1,5 +1,5 @@
 import { tableQuery } from "@/lib/tableQuery";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope, phoneScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +36,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     if (error instanceof DispatchError) return res.status(error.status).json({ message: error.message });
     throw error;
   }
-  const jobPhones = jobId ? await prisma.phone.findMany({ where: { ...ownerScope(req.user!),
+  const jobPhones = jobId ? await prisma.phone.findMany({ where: { ...phoneScope(req.user!),
     ...(typeof req.query.phone_id === "string" && req.query.phone_id ? { id: req.query.phone_id } : {}) }, select: { id: true } }) : [];
   const state = typeof req.query.status === "string" && statuses.includes(req.query.status as WaDispatchStatus) ? req.query.status as WaDispatchStatus : undefined;
   const { page, limit, skip, orderBy } = tableQuery(req.query, {"job_id": "clientJobId", "store_id": "storeId", "transaction_id": "transactionId", "message_key": "messageKey", "sender": "phoneId", "recipient": "recipient", "source": "source", "status": "status", "attempts": "attempts", "error": "lastError", "created_at": "createdAt", "updated_at": "updatedAt"}, "createdAt", "desc");
@@ -55,7 +55,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     prisma.waDispatch.findMany({ where, take: limit, skip, orderBy, include: { campaign: { select: { status: true, scheduledAt: true } } } }),
     prisma.waDispatch.groupBy({ by: ["status"], where: req.query.summary_filtered === "1" ? where : displayScope, _count: { _all: true } }),
   ]);
-  const phones = await prisma.phone.findMany({ where: { ...ownerScope(req.user!), id: { in: Array.from(new Set(jobs.flatMap(job => [job.phoneId, job.senderPhoneId || job.phoneId]))) } }, select: { id: true, channel: true, name: true, number: true, active: true, status: true } });
+  const phones = await prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: Array.from(new Set(jobs.flatMap(job => [job.phoneId, job.senderPhoneId || job.phoneId]))) } }, select: { id: true, channel: true, name: true, number: true, active: true, status: true } });
   return res.status(200).json({ result: true, total, page, max_age_days: maxAgeDays, display_cutoff: cutoff, counts: Object.fromEntries(counts.map(item => [item.status, item._count._all])),
     data: jobs.map(job => ({ ...dispatchSummary(job), updated_at: job.updatedAt, job_id: job.clientJobId, transaction_id: job.transactionId, store_id: job.storeId,
       message_key: job.messageKey, source: job.source, waiting_reason: dispatchWaitingReason(job, phones.find(phone => phone.id === (job.senderPhoneId || job.phoneId))),

@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { phoneRecordScope as ownerScope } from "@/lib/access";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import type { AuthNextApiRequest } from "@/types/global";
 import { DispatchError } from "@/server/dispatch/queue";

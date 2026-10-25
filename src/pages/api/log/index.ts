@@ -1,5 +1,5 @@
 import { tableQuery } from "@/lib/tableQuery";
-import { ownerScope } from "@/lib/access";
+import { inboxScope as ownerScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";

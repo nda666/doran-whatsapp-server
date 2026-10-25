@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import { z } from "zod";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
-import { ownerScope } from "@/lib/access";
+import { campaignScope as ownerScope } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { CampaignStatus } from "@prisma/client";
 const query = z.object({ from: z.string().datetime({ offset: true }), to: z.string().datetime({ offset: true }), phoneId: z.string().uuid().optional(), status: z.nativeEnum(CampaignStatus).optional() });

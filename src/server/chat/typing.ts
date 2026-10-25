@@ -1,4 +1,5 @@
 import type { WASocket } from "@whiskeysockets/baileys";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { session } from "../libs/makeWASocket";
 import { phoneMaintenance } from "../libs/phoneMaintenance";
@@ -11,8 +12,8 @@ async function presence(socket: WASocket | undefined, jid: string, typing: boole
   if (socket?.ws.isOpen) await socket.sendPresenceUpdate(typing ? "composing" : "paused", jid).catch(() => {});
 }
 
-export async function updateChatTyping(conversationId: string, scope: { userId?: string }, clientId: string, typing: boolean) {
-  const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, ...scope, phone: scope }, include: { phone: true } });
+export async function updateChatTyping(conversationId: string, scope: Prisma.ChatConversationWhereInput, clientId: string, typing: boolean) {
+  const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, ...scope }, include: { phone: true } });
   if (!conversation) return null;
   const { phone, jid } = conversation;
   const socket = session.get(phone.id);

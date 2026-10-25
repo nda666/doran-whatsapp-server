@@ -1,4 +1,5 @@
 import { SendGuardError } from "../messaging/safety";
+import type { Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
@@ -14,8 +15,8 @@ export class ChatSendError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-export async function sendChatReply(conversationId: string, scope: { userId?: string }, input: { requestId: string; text: string; mediaId?: string; replyToId?: string }) {
-  const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, ...scope, phone: scope }, include: { phone: true } });
+export async function sendChatReply(conversationId: string, scope: Prisma.ChatConversationWhereInput, input: { requestId: string; text: string; mediaId?: string; replyToId?: string }, assetScope: { userId?: string }) {
+  const conversation = await prisma.chatConversation.findFirst({ where: { id: conversationId, ...scope }, include: { phone: true } });
   if (!conversation) throw new ChatSendError(404, "Percakapan tidak ditemukan.");
   const { phone } = conversation;
   const requestHash = createHash("sha256").update(JSON.stringify([input.text, input.mediaId || null, input.replyToId || null])).digest("hex");
@@ -36,7 +37,7 @@ export async function sendChatReply(conversationId: string, scope: { userId?: st
   let mediaPath: string | null = null, mediaMime: string | null = null, mediaName: string | null = null, type = "text";
   let buffer: Buffer | undefined;
   if (input.mediaId) {
-    const asset = await prisma.mediaAsset.findFirst({ where: { id: input.mediaId, ...scope } });
+    const asset = await prisma.mediaAsset.findFirst({ where: { id: input.mediaId, ...assetScope } });
     if (!asset) throw new ChatSendError(404, "File tidak ditemukan.");
     buffer = await fs.readFile(assetPath(asset.filename));
     if (buffer.length > CHAT_MEDIA_LIMIT) throw new ChatSendError(400, "Lampiran maksimal 25 MB.");
@@ -54,7 +55,7 @@ export async function sendChatReply(conversationId: string, scope: { userId?: st
       await tx.$queryRaw`SELECT id FROM phones WHERE id = ${phone.id} FOR UPDATE`;
       const current = await tx.phone.findUnique({ where: { id: phone.id } });
       if (phoneMaintenance.has(phone.id)) throw new ChatSendError(409, "Perangkat sedang dibersihkan.");
-      if (!current?.saveIncomingMessages || current.active !== 1 || current.userId !== phone.userId) throw new ChatSendError(409, "Perangkat tidak tersedia untuk membalas.");
+      if (!current?.saveIncomingMessages || current.active !== 1 || current.userId !== phone.userId || current.assignedUserId !== phone.assignedUserId) throw new ChatSendError(409, "Perangkat tidak tersedia untuk membalas.");
       const existing = await tx.chatMessage.findUnique({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: input.requestId } } });
       if (existing) {
         if (existing.requestHash !== requestHash) throw new ChatSendError(409, "ID kirim sudah digunakan untuk pesan lain.");
@@ -78,7 +79,7 @@ export async function sendChatReply(conversationId: string, scope: { userId?: st
     }
     if (phoneMaintenance.has(phone.id) || !socket.ws.isOpen) throw new Error("CONNECTION_CLOSED");
     const current = await prisma.phone.findUnique({ where: { id: phone.id } });
-    if (!current?.saveIncomingMessages || current.active !== 1) {
+    if (!current?.saveIncomingMessages || current.active !== 1 || current.assignedUserId !== phone.assignedUserId) {
       await prisma.chatMessage.updateMany({ where: { id: row.id, status: "SENDING" }, data: { status: "FAILED" } });
     } else {
       const sent = await Promise.race([

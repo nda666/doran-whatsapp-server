@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { z } from "zod";
-import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
+import apiAuthMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import type { AuthNextApiRequest } from "@/types/global";
 import { aiProviders } from "@/lib/aiPlugins";
 import { requestAiReply } from "@/server/ai/service";

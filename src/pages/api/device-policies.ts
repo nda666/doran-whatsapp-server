@@ -7,7 +7,7 @@ import { effectiveOperatingHours, operatingHoursInput, operatingHoursState } fro
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
-import { ownerScope } from "@/lib/access";
+import { phoneScope as ownerScope } from "@/lib/access";
 import { healthAssessment, usageDay, warmupLimit } from "@/server/messaging/safety";
 import { DEFAULT_DEVICE_DAILY_QUOTA, deviceDailyQuota } from "@/lib/deviceQuota";
 import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits, getGlobalOperatingHours } from "@/server/dispatch/settings";
