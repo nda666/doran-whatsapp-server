@@ -234,5 +234,46 @@ async function request(method, body, id = sourceId, userId = 'owner', fn = handl
   assert.equal(response.data.data.find(p => p.id === targetId).pendingToday, 1, 'Counts follow assigned sender and WIB boundaries');
   assert.deepEqual(load('src/lib/dispatchDateFilter.ts').dispatchDateFilter('2026-10-22', '2026-10-22'),
     { gte: new Date('2026-10-21T17:00:00Z'), lt: new Date('2026-10-22T17:00:00Z') });
+  const midnight = new Date(`${today}T00:00:00+07:00`);
+  jobs = [
+    { ...base, id: 'previous', createdAt: new Date(midnight.getTime() - 1) },
+    { ...base, id: 'midnight', createdAt: midnight },
+    { ...base, id: 'end-of-day', createdAt: new Date(midnight.getTime() + day - 1) },
+    { ...base, id: 'attempted-today', createdAt: midnight, sendAttempts: [{ status: 'UNCERTAIN' }] },
+  ];
+  response = await request('GET');
+  assert.equal(response.data.count, 3);
+  assert.equal(response.data.todayCount, 2, 'Today starts at midnight WIB and excludes attempted messages');
+  assert.equal(response.data.previousCount, 1, 'Previous days end immediately before midnight WIB');
+  const originalJobs = JSON.stringify(jobs);
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'invalid' })).code, 400);
+  assert.equal(JSON.stringify(jobs), originalJobs, 'Invalid scope does not mutate the queue');
+  response = await request('POST', { targetPhoneId: targetId, scope: 'today' });
+  assert.equal(response.data.count, 2);
+  assert.equal(jobs[0].senderPhoneId, null, 'Today-only save leaves previous backlog on original sender');
+  assert.equal(jobs[1].senderPhoneId, targetId);
+  assert.equal(jobs[2].senderPhoneId, targetId);
+  assert.equal(jobs[3].senderPhoneId, null, 'Today-only save preserves safety exclusions');
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'today' })).data.count, 0);
+  response = await request('GET');
+  assert.equal(response.data.todayCount, 0);
+  assert.equal(response.data.previousCount, 1);
+  assert.equal(response.data.count, 1);
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'all' })).data.count, 1);
+  assert.equal(jobs[0].senderPhoneId, targetId, 'All explicitly includes previous-day backlog');
+  jobs = [{ ...base, createdAt: new Date(midnight.getTime() + day) }];
+  assert.equal((await request('GET')).data.todayCount, 0, 'Next midnight is not part of today');
+  assert.equal((await request('GET')).data.previousCount, 0, 'Future dates are not previous days');
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'today' })).data.count, 0);
+  source.status = 'OPEN'; sourceUsage.attempts = 200;
+  jobs = [
+    { ...base, id: 'old-quota', createdAt: new Date(midnight.getTime() - 1), lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff },
+    { ...base, id: 'today-quota', createdAt: midnight, lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff },
+  ];
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'today' })).data.count, 1);
+  assert.equal(jobs[0].senderPhoneId, null);
+  assert.equal(jobs[0].nextAttemptAt, quotaBackoff, 'Today-only does not clear quota sleep on previous days');
+  assert.equal(jobs[1].senderPhoneId, targetId);
+  assert.ok(jobs[1].nextAttemptAt <= new Date(), 'Selected quota backlog wakes normally');
   console.log('MANUAL_REASSIGNMENT_OK: API scope, validation, healthy quota/warmup, all-date backlog, safe exclusions, idempotence, assignment routing, leases, ACK pinning, and per-sender WIB counts.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

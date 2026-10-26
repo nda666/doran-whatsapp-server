@@ -10,12 +10,24 @@ sisa kuota setelah batas pemanasan. Semua pilihan harus milik akun yang sama
 dengan perangkat asal, termasuk untuk super admin. Tidak perlu Grup Pengirim.
 Nomor fisik yang sama tidak bisa dipilih sebagai pengganti.
 
+Modal merinci antrean yang memenuhi syarat menjadi **Hari ini**, **Hari sebelumnya**,
+dan **Total**, berdasarkan waktu masuk antrean dalam WIB. Pilihan awal **Hari ini
+saja** hanya mengalihkan pesan dari pukul 00.00 sampai sebelum 00.00 hari berikutnya.
+Pilihan **Semua, termasuk hari sebelumnya** mencakup seluruh tanggal yang masih
+memenuhi syarat. Jumlah yang akan dialihkan mengikuti pilihan; tombol Simpan
+tidak aktif jika jumlahnya nol. Hitungan ini dapat lebih kecil daripada kolom tabel
+karena tabel menghitung seluruh QUEUED hari ini, sedangkan modal memeriksa syarat
+pengalihan tambahan. Kelayakan dan tanggal diperiksa kembali saat menyimpan.
+
 GET/POST `/api/phones/:id/reassign-sender` memakai autentikasi dashboard.
-POST menerima `{ "targetPhoneId": "UUID" }`; ketersediaan diperiksa lagi saat simpan.
+GET mengembalikan `{ "count": N, "todayCount": N, "previousCount": N, "options": [...] }`.
+POST menerima `{ "targetPhoneId": "UUID", "scope": "today" | "all" }`;
+`scope` yang tidak dikirim tetap berarti `all` untuk kompatibilitas pemanggil lama.
+Nilai cakupan lain ditolak. Ketersediaan diperiksa lagi saat simpan.
 Respons `{ "count": N }` menyatakan jumlah aktual yang berhasil dialihkan.
 Jika tidak ada pesan yang masih memenuhi syarat, hasilnya nol.
 
-Pengalihan mencakup semua tanggal yang masih memenuhi batas usia normal, khusus
+Pengalihan sesuai cakupan tanggal yang dipilih dan batas usia normal, khusus
 pesan QUEUED dengan keterangan menunggu perangkat terhubung atau antrean pada
 perangkat berstatus **Dihentikan: pembatasan WhatsApp** (`paused` dan `pauseReason`
 terisi), termasuk ketika perangkat masih terhubung. Perangkat **Siap mengirim**
