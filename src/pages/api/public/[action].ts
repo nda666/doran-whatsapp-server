@@ -8,6 +8,7 @@ import { normalizePhoneRecipient } from "@/utils/normalizePhoneRecipient";
 import makeWASocket, { session } from "@/server/libs/makeWASocket";
 import { waitForQr } from "@/server/libs/qrState";
 import { isPairingInProgress } from "@/server/libs/pairingState";
+import { pairingSessionIdentity, registeredPairingNumber } from "@/server/libs/pairingIdentity";
 import { registeredPhones } from "@/server/registeredPhones";
 import { updateDevice } from "@/server/deviceWebhook/events";
 import { deviceToken } from "@/server/deviceToken";
@@ -37,7 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!device) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
       phone = device;
     }
-    if (action === "session") return res.json({ channel: phone.channel || "whatsapp", active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number });
+    if (action === "session") return res.json({ channel: phone.channel || "whatsapp", active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number,
+      ...(!isTelegramDevice(phone) ? pairingSessionIdentity(phone, session.get(phone.id)) : {}),
+    });
     if (isTelegramDevice(phone) && !["send-message", "send-media", "session", "disconnect"].includes(action)) return res.status(422).json({ result: false, message: "Endpoint ini belum didukung provider Telegram. Gunakan send-message atau send-media untuk gambar." });
     if (action === "disconnect") {
       // Inactivate first so periodic reconnect cannot undo explicit disconnection.
@@ -52,6 +55,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (phone.active !== 1 && !(sending && process.env.DISPATCH_QUEUE_ENABLED === "true" && await hasEnabledSenderGroup(phone))) return res.status(409).json({ result: false, curl_error: null, message: "Device nonaktif." });
     if (["generate-qr", "check-number"].includes(action) && process.env.WHATSAPP_ENABLED === "false") return res.status(503).json({ result: false, curl_error: null, message: "Koneksi WhatsApp dinonaktifkan." });
     if (action === "generate-qr") {
+      if (body.expected_number !== undefined && (typeof body.expected_number !== "string" || !registeredPairingNumber(phone.number) || body.expected_number !== registeredPairingNumber(phone.number))) {
+        return res.status(422).json({ result: false, message: "Nomor WhatsApp tidak sesuai perangkat terdaftar." });
+      }
       if (isPairingInProgress(phone.id)) return res.json({ pairing: true });
       return res.json(await waitForQr(await makeWASocket(phone.userId, phone.id)));
     }

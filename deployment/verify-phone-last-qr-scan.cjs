@@ -22,6 +22,7 @@ function load(name, mocks) {
     '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
+    '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   }).default;
   let socket = { authState: { creds: {} } }; sessions.set('phone', socket);
   for (const update of [{ qr: 'private-qr' }, { connection: 'connecting' }]) await handler(socket, 'owner', 'phone', update);

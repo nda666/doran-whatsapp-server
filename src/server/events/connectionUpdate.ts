@@ -15,6 +15,7 @@ import { recordPairingProgress } from "../libs/pairingState";
 import { updateDevice } from "../deviceWebhook/events";
 import { phoneMaintenance, retiredSockets } from "../libs/phoneMaintenance";
 import { waRecovery } from "../libs/waRecoveryState";
+import { acceptsPairingIdentity, rejectedPairings } from "../libs/pairingIdentity";
 
 const reconnectAttempts = waRecovery.attempts;
 const reconnectTimers = waRecovery.timers;
@@ -35,6 +36,10 @@ export default async function connectionUpdate(
   if (process.env.DORAN_SHUTTING_DOWN === "true") return;
   const current = getAllSession().get(phoneId);
   if (current && current !== waSock) return;
+  if (waSock.user && !acceptsPairingIdentity(waSock)) {
+    await rejectPairingIdentity(waSock, userId, phoneId);
+    return;
+  }
   // Baileys emits isNewLogin after successful QR pairing, before the required
   // socket restart. Ordinary reconnects and QR generation must not change it.
   if (update.isNewLogin) {
@@ -159,6 +164,25 @@ export default async function connectionUpdate(
     timer.unref();
     reconnectTimers.set(phoneId, timer);
   }
+}
+
+export async function rejectPairingIdentity(socket: WASocket, userId: string, phoneId: string) {
+  if (retiredSockets.has(socket)) return;
+  rejectedPairings.add(phoneId);
+  retiredSockets.add(socket);
+  waRecovery.blocked.add(phoneId);
+  if (getAllSession().get(phoneId) === socket) deleteSession(phoneId);
+  clearPhoneReconnect(phoneId);
+  // Retire synchronously before any I/O; every outgoing send also checks identity.
+  socket.end(new Error("SENDER_NUMBER_MISMATCH"));
+  try {
+    await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
+      active: 0, isOnline: false, status: "CLOSE", lastOfflineAt: new Date(),
+    }, "device.active_changed"));
+  } catch {
+    console.error("WA_IDENTITY_REJECTION_PERSIST_FAILED", phoneId);
+  }
+  console.error("WA_PAIRING_NUMBER_MISMATCH", phoneId);
 }
 
 export function clearPhoneReconnect(phoneId: string) {

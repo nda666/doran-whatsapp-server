@@ -8,7 +8,7 @@ const tests = [
   'verify-local-device-channel.cjs',
   'test-cd-readiness.cjs',
   'verify-registered-phones.cjs', 'verify-device-webhook.cjs',
-  'verify-connection-status.cjs', 'verify-user-active.cjs',
+  'verify-connection-status.cjs', 'verify-pairing-identity.cjs', 'verify-user-active.cjs',
   'verify-admin-user-token.cjs', 'verify-change-password.cjs',
   'verify-global-settings-password-reset.cjs', 'verify-dispatch-webhook.cjs',
   'verify-webhook-worker-retry.cjs',

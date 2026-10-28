@@ -53,8 +53,9 @@ async function main() {
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
     '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
     '../constant': { WaSockQrTimeout: 60000 }, '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {}, default: async (_, id) => attempts.push(id) },
-    '../libs/socket': { getSocketIO: undefined }, '../libs/pairingState': { recordPairingProgress: () => undefined },
+    '../libs/socket': { emitDeviceEvent: async () => {} }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired }, '../libs/waRecoveryState': { waRecovery: state },
+    '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   }, { setTimeout: (callback, delay) => { const timer = { callback, delay, unref() {} }; timers.push(timer); return timer; }, clearTimeout() {} });
   const close = code => ({ connection: 'close', lastDisconnect: { error: { output: { statusCode: code } } } });
   await connection.default(connected, 'owner', 'db-failure', close(408));
@@ -79,6 +80,7 @@ async function main() {
     '../../services/phone': { getPhoneById: async () => ({ userId: 'owner', active: 1 }) },
     './phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     './waRecoveryState': { waRecovery: state },
+    './pairingIdentity': { bindPairingIdentity() {}, acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   }, { has: () => true, get: (obj, key) => obj[key] || {} });
   const factory = load('src/server/libs/makeWASocket.ts', factoryMocks, { globalThis: {} });
   const first = await factory.default('owner', 'factory');

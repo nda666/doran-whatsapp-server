@@ -12,7 +12,8 @@ import { prisma } from "../../lib/prisma";
 import { getWaMesage } from "../../server/utils/getWaMessage";
 import { getPhoneById } from "../../services/phone";
 import { WaSockQrTimeout } from "../constant";
-import connectionUpdate from "../events/connectionUpdate";
+import connectionUpdate, { rejectPairingIdentity } from "../events/connectionUpdate";
+import { acceptsPairingIdentity, bindPairingIdentity, rejectedPairings } from "./pairingIdentity";
 import { handleMessageInEvent } from "../events/handleMessageInEvent";
 import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
 import { safeLinkPreview } from "../utils/safeLinkPreview";
@@ -55,7 +56,14 @@ const createWASocket = async (
     throw new Error(`Device ${phoneId} is not active`);
   }
   const existing = session.get(phoneId);
-  if (existing && !replaceState && !existing.ws.isClosed && !existing.ws.isClosing) return existing;
+  if (existing && !replaceState && !existing.ws.isClosed && !existing.ws.isClosing) {
+    bindPairingIdentity(existing, phone.number);
+    if (existing.user && !acceptsPairingIdentity(existing)) {
+      await rejectPairingIdentity(existing, userId, phoneId);
+      throw new Error("SENDER_NUMBER_MISMATCH");
+    }
+    return existing;
+  }
   if (existing) {
     retiredSockets.add(existing);
     session.delete(phoneId);
@@ -82,6 +90,8 @@ const createWASocket = async (
       markOnlineOnConnect: phone.showOnline,
       qrTimeout: WaSockQrTimeout,
     });
+    bindPairingIdentity(_waSocket, phone.number);
+    rejectedPairings.delete(phoneId);
     waRecovery.blocked.delete(phoneId);
     waRecovery.sockets.set(_waSocket, { createdAt: Date.now(), connected: false });
     session.set(phoneId, _waSocket);
@@ -98,13 +108,18 @@ const createWASocket = async (
         for (const call of calls) if (call.status === "offer") await _waSocket.rejectCall(call.id, call.from);
       }).catch(() => console.error("CALL_REJECTION_FAILED"));
     });
+    const requireSenderIdentity = () => {
+      if (retiredSockets.has(_waSocket) || session.get(phoneId) !== _waSocket || !acceptsPairingIdentity(_waSocket)) throw new SendGuardError("SENDER_NUMBER_MISMATCH");
+    };
     _waSocket.sendMessage = async (jid, content, options) => {
+      requireSenderIdentity();
       const generationOptions = { ...options, getUrlInfo: safeLinkPreview };
       const guardJid = jid.endsWith("@lid") ? await _waSocket.signalRepository.lidMapping.getPNForLID(jid) : jid;
       if (!guardJid) throw new SendGuardError("RECIPIENT_ID_UNRESOLVED");
       const day = await reserveSend(userId, phoneId, guardJid);
       if (guardJid.endsWith("@s.whatsapp.net") && await recipientBlocked(userId, guardJid.split("@")[0].split(":")[0])) throw new SendGuardError("RECIPIENT_OPTED_OUT");
       let result;
+      requireSenderIdentity();
       try { result = await sendMessage(jid, content, generationOptions); }
       catch (error) {
         await prisma.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { failures: { increment: 1 } } }).catch(() => console.error("SEND_FAILURE_COUNT_FAILED"));
@@ -153,7 +168,7 @@ const createWASocket = async (
 
     // for reply
     _waSocket.ev.on("messages.upsert", async ({ messages: batch, type }) => {
-      if (phoneMaintenance.has(phoneId) || retiredSockets.has(_waSocket)) return;
+      if (phoneMaintenance.has(phoneId) || retiredSockets.has(_waSocket) || !acceptsPairingIdentity(_waSocket)) return;
       if (process.env.DORAN_SHUTTING_DOWN === "true") return;
       // Honor STOP before media storage, webhook calls or auto replies can delay the batch.
       const optedOutMessages = new Set<(typeof batch)[number]>();
@@ -218,6 +233,10 @@ const createWASocket = async (
   }
 
   if (_waSocket.user) {
+    if (!acceptsPairingIdentity(_waSocket)) {
+      await rejectPairingIdentity(_waSocket, userId, phoneId);
+      throw new Error("SENDER_NUMBER_MISMATCH");
+    }
     const waUser = _waSocket.user;
     await prisma.$transaction(tx => updateDevice(tx, { id: phoneId, userId }, {
         number: waUser.id.split(":")[0].split("@")[0],

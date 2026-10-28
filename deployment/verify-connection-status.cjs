@@ -30,6 +30,7 @@ async function main() {
     '../deviceWebhook/events': { updateDevice: async () => {} },
     '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
+    '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   };
   const exports = {};
   vm.runInNewContext(code, { exports, require: name => { assert.ok(name in mocks, name); return mocks[name]; },

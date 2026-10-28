@@ -29,6 +29,7 @@ function load(file, mocks) {
     '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
+    '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   }).default;
   const socket = () => { const s = { authState: { creds: { me: { id: 'linked' } } } }; sessions.set('phone', s); return s; };
   const close = s => handler(s, 'owner', 'phone', { connection: 'close', lastDisconnect: { error: { output: { statusCode: 515 } } } });
