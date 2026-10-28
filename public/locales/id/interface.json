@@ -1,4 +1,10 @@
 {
+  "Ulangi pemanasan": "Ulangi pemanasan",
+  "Pemanasan gagal diulang.": "Pemanasan gagal diulang.",
+  "Permintaan ulang pemanasan tidak valid.": "Permintaan ulang pemanasan tidak valid.",
+  "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat.": "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat.",
+  "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku.",
+  "Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.",
   "Semua kuota": "Semua kuota",
   "Kuota terpenuhi": "Kuota terpenuhi",
   "Kuota belum terpenuhi": "Kuota belum terpenuhi",

@@ -1,4 +1,10 @@
 {
+  "Ulangi pemanasan": "Reiniciar calentamiento",
+  "Pemanasan gagal diulang.": "No se pudo reiniciar el calentamiento.",
+  "Permintaan ulang pemanasan tidak valid.": "Solicitud de reinicio de calentamiento no válida.",
+  "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat.": "El calentamiento ya no está activo para este número. Recarga los datos del dispositivo.",
+  "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "El calentamiento se reinició desde la primera etapa. El uso de cuota de hoy y el estado de pausa siguen vigentes.",
+  "Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "Para volver a la primera etapa, usa Acciones → Reiniciar calentamiento en la lista de dispositivos. El uso de cuota de hoy y el estado de pausa siguen vigentes.",
   "Semua kuota": "Todas las cuotas",
   "Kuota terpenuhi": "Cuota alcanzada",
   "Kuota belum terpenuhi": "Cuota no alcanzada",

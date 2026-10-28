@@ -331,6 +331,8 @@ const PhonePage = () => {
             generatingToken={generatingTokens}
             policyAvailable={policies.hasPolicy(phone.id)}
             onPolicyClick={() => policies.open(phone.id)}
+            canRestartWarmup={policies.canRestartWarmup(phone.id)}
+            onRestartWarmup={() => { void policies.restartWarmup(phone.id); }}
             onGenerateTokenClick={() => confirmGenerateTokens([phone.id], phone)}
             // onAutoReply={
             //   (_phone: Phone | undefined) => {

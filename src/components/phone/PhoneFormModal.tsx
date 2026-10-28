@@ -181,6 +181,7 @@ const PhoneFormModal = forwardRef<PhoneFormModalRef, CollectionCreateFormProps>(
               description={<>
                 <div>{uiText("Batasi pengiriman bertahap: {{v0}} percobaan per hari, masing-masing selama dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum.", { v0: warmupLimits.join(" → ") })}</div>
                 {fieldsReady && warmupStartedAt && <p className="device-setting-note">{uiText("Pemanasan aktif sejak {{v0}}. Tetap aktif tidak mengulang tanggal mulai. Matikan lalu Simpan untuk mengakhiri pemanasan.", { v0: new Date(warmupStartedAt).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta" }) })}</p>}
+                {fieldsReady && warmupStartedAt && <p className="device-setting-note">{uiText("Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.")}</p>}
               </>} />
             <SettingToggle hidden={telegram || !fieldsReady || !visibleFields.includes("saveIncomingMessages")} name="saveIncomingMessages" label={uiText("Simpan Pesan Masuk")}
               description={uiText("Simpan pesan baru agar bisa dibaca dan dibalas melalui menu Percakapan. Pesan lama sebelum fitur aktif tidak ikut diambil.")} />

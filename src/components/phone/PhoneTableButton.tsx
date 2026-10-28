@@ -13,6 +13,7 @@ import {
   UserOutlined,
   SettingOutlined,
   BarChartOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { Phone } from "@prisma/client";
 import { MenuProps, Modal, Typography } from "antd";
@@ -30,6 +31,8 @@ export interface PhoneTableButtonProps {
   onReassignSender?: () => void;
   policyAvailable?: boolean;
   onPolicyClick?: () => void;
+  canRestartWarmup?: boolean;
+  onRestartWarmup?: () => void;
   onAutoReply?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onListReply?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
   onEditClick?: (phone: Phone | undefined, menuInfo: MenuInfo) => void;
@@ -49,6 +52,8 @@ export default function PhoneTableButton({
   onReassignSender,
   policyAvailable,
   onPolicyClick,
+  canRestartWarmup,
+  onRestartWarmup,
   onAutoReply,
   onListReply,
   onEditClick,
@@ -100,6 +105,13 @@ export default function PhoneTableButton({
       icon: <SettingOutlined />,
       disabled: !policyAvailable,
       onClick: () => onPolicyClick?.(),
+    },
+    {
+      label: uiText("Ulangi pemanasan"),
+      key: `${phone.id}-restart-warmup`,
+      icon: <ReloadOutlined />,
+      disabled: !canRestartWarmup,
+      onClick: () => onRestartWarmup?.(),
     },
     {
       label: uiText("Buat token"),

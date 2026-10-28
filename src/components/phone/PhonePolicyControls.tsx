@@ -107,6 +107,21 @@ export default function usePhonePolicies(sort?: Pick<TableState, "sort" | "order
   const [editing, setEditing] = useState<DevicePolicy>();
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
+  const restartWarmup = async (id: string) => {
+    if (saving.current || !policies.get(id)?.warmupStartedAt) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      const response = await axios.patch("/api/device-policies", { phoneId: id, action: "restart-warmup" }, { headers: api.headers });
+      message.success(uiText(response.data.message));
+    } catch (error: any) {
+      message.error(uiText(error.response?.data?.message || "Pemanasan gagal diulang."));
+    } finally {
+      api.reload();
+      saving.current = false;
+      setBusy(false);
+    }
+  };
   const update = async (row: DevicePolicy, values: Record<string, unknown>) => {
     if (saving.current) return;
     saving.current = true;
@@ -132,6 +147,8 @@ export default function usePhonePolicies(sort?: Pick<TableState, "sort" | "order
     error: api.error,
     reload: api.reload,
     hasPolicy: (id: string) => policies.has(id),
+    canRestartWarmup: (id: string) => !busy && !!policies.get(id)?.warmupStartedAt,
+    restartWarmup,
     open: (id: string) => {
       const policy = policies.get(id);
       if (policy) setEditing(policy);

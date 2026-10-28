@@ -21,6 +21,7 @@ const tests = [
   'verify-manual-sender-reassignment.cjs',
   'verify-phone-quota-filter.cjs',
   'verify-daily-warmup.cjs',
+  'verify-warmup-restart.cjs',
   'verify-quota-recovery.cjs', 'verify-device-quota-reset.cjs',
   'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
   'verify-feature-schema.cjs',

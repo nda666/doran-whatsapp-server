@@ -1,4 +1,10 @@
 {
+  "Ulangi pemanasan": "वार्मअप फिर से शुरू करें",
+  "Pemanasan gagal diulang.": "वार्मअप फिर से शुरू नहीं हो सका।",
+  "Permintaan ulang pemanasan tidak valid.": "वार्मअप फिर से शुरू करने का अनुरोध अमान्य है।",
+  "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat.": "इस नंबर का वार्मअप अब सक्रिय नहीं है। डिवाइस डेटा फिर से लोड करें।",
+  "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "वार्मअप पहले चरण से फिर शुरू हुआ। आज का कोटा उपयोग और विराम की स्थिति लागू रहेंगे।",
+  "Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "पहले चरण पर लौटने के लिए डिवाइस सूची में क्रियाएँ → वार्मअप फिर से शुरू करें चुनें। आज का कोटा उपयोग और विराम की स्थिति लागू रहेंगे।",
   "Semua kuota": "सभी कोटा",
   "Kuota terpenuhi": "कोटा पूरा हुआ",
   "Kuota belum terpenuhi": "कोटा पूरा नहीं हुआ",

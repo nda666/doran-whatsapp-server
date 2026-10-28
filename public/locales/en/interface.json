@@ -1,4 +1,10 @@
 {
+  "Ulangi pemanasan": "Restart warmup",
+  "Pemanasan gagal diulang.": "Could not restart warmup.",
+  "Permintaan ulang pemanasan tidak valid.": "Invalid warmup restart request.",
+  "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat.": "Warmup is no longer active for this number. Reload the device data.",
+  "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "Warmup restarted from the first stage. Today's quota usage and pause status still apply.",
+  "Untuk kembali ke tahap pertama, gunakan Aksi → Ulangi pemanasan pada daftar perangkat. Pemakaian kuota hari ini dan status jeda tetap berlaku.": "To return to the first stage, use Actions → Restart warmup in the device list. Today's quota usage and pause status still apply.",
   "Semua kuota": "All quotas",
   "Kuota terpenuhi": "Quota reached",
   "Kuota belum terpenuhi": "Quota not reached",

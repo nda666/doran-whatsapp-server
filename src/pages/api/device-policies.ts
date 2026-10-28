@@ -12,8 +12,28 @@ import { healthAssessment, usageDay, warmupLimit } from "@/server/messaging/safe
 import { DEFAULT_DEVICE_DAILY_QUOTA, deviceDailyQuota } from "@/lib/deviceQuota";
 import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits, getGlobalOperatingHours } from "@/server/dispatch/settings";
 const input = z.object({ phoneId: z.string().uuid(), useGlobalQuota: z.boolean(), dailyLimit: z.number().int().min(1).max(100000), minIntervalSeconds: z.number().int().min(1).max(3600).nullable().default(null), maxIntervalSeconds: z.number().int().min(1).max(30).nullable().default(null), adaptiveEnabled: z.boolean(), paused: z.boolean(), operatingHours: operatingHoursInput.nullable().optional(), quotaReset: quotaResetInput.nullable().optional(), warmupAction: z.enum(["start", "stop"]).optional() }).refine(value => value.maxIntervalSeconds === null || (value.minIntervalSeconds !== null && value.maxIntervalSeconds >= value.minIntervalSeconds), "Hingga harus sama atau lebih besar dari Mulai.");
+const restartInput = z.object({ phoneId: z.string().uuid(), action: z.literal("restart-warmup") }).strict();
 export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiResponse) => {
   res.setHeader("Cache-Control", "no-store");
+  if (req.method === "PATCH") {
+    const parsed = restartInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Permintaan ulang pemanasan tidak valid." });
+    const { phoneId } = parsed.data;
+    const result = await prisma.$transaction(async tx => {
+      // Match phone edits/daily activation, then serialize with send reservations.
+      await tx.$queryRaw`SELECT id FROM phones WHERE id = ${phoneId} FOR UPDATE`;
+      const phone = await tx.phone.findFirst({ where: { id: phoneId, ...ownerScope(req.user!) }, select: { id: true } });
+      if (!phone) return 404;
+      const changed = await tx.deviceSendPolicy.updateMany({
+        where: { phoneId, warmupStartedAt: { not: null } },
+        data: { warmupStartedAt: new Date() },
+      });
+      return changed.count ? 200 : 409;
+    });
+    if (result === 404) return res.status(404).end();
+    if (result === 409) return res.status(409).json({ message: "Pemanasan nomor sudah tidak aktif. Muat ulang data perangkat." });
+    return res.json({ message: "Pemanasan diulang dari tahap pertama. Pemakaian kuota hari ini dan status jeda tetap berlaku." });
+  }
   if (req.method === "GET") {
     const phones = await prisma.phone.findMany({ where: ownerScope(req.user!), select: { id: true, name: true, number: true, isOnline: true, lastSendProcessedAt: true } });
     const ids = phones.map(p => p.id);
