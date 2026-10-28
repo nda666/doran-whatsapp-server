@@ -74,6 +74,10 @@ async function main() {
   logs(path.join(home, '.pm2/logs'), true);
   logs(path.join(home, '.local/state/doran-maintenance/reports'));
   if (!installBusy) {
+    // User-approved seven-day retention; the deploy lock protects in-flight backups.
+    const snapshotRetention = cp.spawnSync('/usr/bin/python3', [path.join(app, 'deployment/private_snapshot.py'), '--prune'], { encoding: 'utf8', timeout: 1800000 });
+    if (snapshotRetention.status !== 0) report.skipped.push('Private snapshot retention failed; inspect server logs');
+    else report.privateSnapshotRetention = snapshotRetention.stdout.trim();
     // npm cache is disposable; no command runs npm cache clean against another installation.
     remove(path.join(home, '.npm/_cacache'), 'npm_cache', 0);
     for (const p of children(path.join(home, '.npm/_logs'))) if (p.endsWith('.log')) remove(p, 'npm_logs', 7);

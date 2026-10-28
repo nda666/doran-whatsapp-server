@@ -35,7 +35,7 @@ for (const test of tests) {
   });
   if (result.error || result.status !== 0) process.exit(1);
 }
-for (const test of ['verify-stage-cleanup.py', 'verify-backup-retention.py', 'test-cd-deploy.py']) {
+for (const test of ['verify-stage-cleanup.py', 'verify-backup-retention.py', 'test-cd-deploy.py', 'test-private-snapshot.py']) {
   const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', [`deployment/${test}`], { stdio: 'inherit', timeout: 30000 });
   if (result.error || result.status !== 0) process.exit(1);
 }

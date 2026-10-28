@@ -34,8 +34,29 @@ try {
   assert.throws(() => helper.requireBackups(temp));
   fs.writeFileSync(path.join(temp, 'storage-and-env.tar'), 'fixture');
   helper.requireBackups(temp);
+  fs.unlinkSync(path.join(temp, 'storage-and-env.tar'));
+  const snapshots = path.join(temp, 'snapshots');
+  const snapshot = path.join(snapshots, 'snapshot-123');
+  fs.mkdirSync(path.join(snapshot, 'files/storage/whatsapp-auth'), { recursive: true });
+  fs.writeFileSync(path.join(snapshot, 'files/.env'), 'fixture');
+  fs.writeFileSync(path.join(temp, 'commit.txt'), 'fixture-commit\n');
+  const manifest = path.join(temp, 'private-snapshot.json');
+  fs.writeFileSync(manifest, JSON.stringify({ path: snapshot }));
+  assert.throws(() => helper.requireBackups(temp, snapshots)); // Incomplete snapshot.
+  const complete = { label: 'fixture-commit', snapshot: 'snapshot-123', independent_restore: true };
+  fs.writeFileSync(path.join(snapshot, 'COMPLETE.json'), JSON.stringify(complete));
+  helper.requireBackups(temp, snapshots);
+  fs.writeFileSync(path.join(snapshot, 'COMPLETE.json'), JSON.stringify({ ...complete, label: 'older-commit' }));
+  assert.throws(() => helper.requireBackups(temp, snapshots));
+  fs.writeFileSync(path.join(snapshot, 'COMPLETE.json'), JSON.stringify(complete));
+  fs.writeFileSync(manifest, JSON.stringify({ path: path.join(temp, 'snapshot-123') }));
+  assert.throws(() => helper.requireBackups(temp, snapshots));
+  fs.writeFileSync(manifest, JSON.stringify({ path: snapshot }));
+  fs.unlinkSync(path.join(snapshot, 'files/.env'));
+  assert.throws(() => helper.requireBackups(temp, snapshots));
+  fs.rmSync(snapshots, { recursive: true });
 } finally {
-  for (const name of ['database.sql', 'storage-and-env.tar']) { const file = path.join(temp, name); if (fs.existsSync(file)) fs.unlinkSync(file); }
+  for (const name of ['database.sql', 'storage-and-env.tar', 'commit.txt', 'private-snapshot.json']) { const file = path.join(temp, name); if (fs.existsSync(file)) fs.unlinkSync(file); }
   fs.rmdirSync(temp);
 }
 console.log('APPROVED_FEATURE_SCHEMA_GUARDS_PASSED: hash-pinned additive allowlist, generated indexes, drift rejection and both backups required');

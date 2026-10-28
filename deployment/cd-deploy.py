@@ -12,6 +12,7 @@ import time
 import urllib.request
 
 from stage_cleanup import StageCleanup
+from private_snapshot import create_snapshot
 
 APP = Path('/home/jeblast/repos/doran-whatsapp-server')
 NODE_BIN = Path('/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/bin')
@@ -130,22 +131,31 @@ def file_digest(path):
 
 
 def private_hashes(app):
-    # Env + WhatsApp credentials must remain byte-identical until restart.
+    """Hash env/identity credentials and guard persistent directory identities.
+
+    Deployment never extracts, swaps or restores storage. The private snapshot
+    backs up all keys; this bounded guard checks the actual mutation boundary
+    without rereading a million immutable-to-deploy encryption files.
+    """
     result = {p.name: file_digest(p) for p in app.glob('.env*') if p.is_file()}
     auth = app / 'storage/whatsapp-auth'
-    if auth.exists():
-        # DirEntry reuses the directory listing's file type metadata. Avoid a
-        # separate Path/stat/relative_to call for every session key (~1M files).
-        folders = [(str(auth), os.path.join('storage', 'whatsapp-auth'))]
-        while folders:
-            folder, relative = folders.pop()
-            with os.scandir(folder) as entries:
-                for entry in entries:
-                    key = os.path.join(relative, entry.name)
-                    if entry.is_dir(follow_symlinks=False):
-                        folders.append((entry.path, key))
-                    elif entry.is_file():
-                        result[key] = file_digest(entry.path)
+    roots = [app / 'storage', auth] + [app / 'public' / name for name in PUBLIC_DATA]
+    if auth.is_dir():
+        roots += list(auth.iterdir())
+    for root in roots:
+        key = str(root.relative_to(app))
+        if root.is_symlink():
+            raise RuntimeError('Persistent data symlink requires operator review')
+        if not root.exists():
+            result[key] = None
+            continue
+        stat = root.stat()
+        result[key] = (stat.st_dev, stat.st_ino, stat.st_mode)
+        if root.parent == auth and root.is_dir():
+            credentials = root / 'creds.json'
+            if credentials.is_symlink():
+                raise RuntimeError('Credential symlink requires operator review')
+            result[str(credentials.relative_to(app))] = file_digest(credentials) if credentials.is_file() else None
     return result
 
 
@@ -205,6 +215,8 @@ def main():
         raise ValueError('Full commit SHA required')
     if APP.is_symlink() or not APP.is_dir() or not (APP / '.env').is_file():
         raise RuntimeError('Existing production checkout and .env required')
+    if not shutil.which('rsync'):
+        raise RuntimeError('rsync is required for incremental private backups')
     os.umask(0o077)
     os.environ['PATH'] = str(NODE_BIN) + ':' + os.environ['PATH']
     if subprocess.check_output(['node', '--version'], universal_newlines=True).strip() != 'v24.21.0':
@@ -298,15 +310,16 @@ def main():
         # Stop only this application to obtain stable counts and WhatsApp credentials.
         pm2('stop', 'doran-whatsapp')
         stopped = True
-        print('AUTH_ENV_INTEGRITY_SNAPSHOT_STARTED', flush=True)
+        print('AUTH_ENV_BOUNDARY_CHECK_STARTED', flush=True)
         frozen = private_hashes(APP)
-        print('AUTH_ENV_INTEGRITY_SNAPSHOT_DONE', len(frozen), flush=True)
+        print('AUTH_ENV_BOUNDARY_CHECK_DONE', len(frozen), flush=True)
         before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
         (backup / 'database-before.json').write_text(json.dumps(before))
         run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')])
-        print('DATABASE_BACKUP_DONE_STORAGE_BACKUP_STARTED', flush=True)
-        backup_private_files(APP, backup / 'storage-and-env.tar')
-        print('STORAGE_BACKUP_DONE', flush=True)
+        print('DATABASE_BACKUP_DONE_PRIVATE_SNAPSHOT_STARTED', flush=True)
+        snapshot = create_snapshot(APP, Path('/home/jeblast/backups/private-snapshots'), args.sha)
+        (backup / 'private-snapshot.json').write_text(json.dumps({
+            'path': str(snapshot), 'restore': 'Stop application; rsync files/ to application root; see deployment/deploy-backups.md'}))
         # Never replay/resolve historical migrations or mutate existing records.
         # Only hash-pinned nullable/defaulted additions run after both backups.
         run(['node', 'deployment/cd-feature-schema.cjs', 'apply', str(plan_path), str(backup)])

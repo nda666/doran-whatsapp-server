@@ -91,10 +91,31 @@ async function plan(db, diff) {
   for (const op of ops) if (!await exists(db, op)) pending.push(op);
   return pending;
 }
-function requireBackups(directory) {
-  for (const name of ['database.sql', 'storage-and-env.tar']) {
-    const stat = fs.lstatSync(path.join(directory, name));
+function requireBackups(directory, snapshotRoot = '/home/jeblast/backups/private-snapshots') {
+  const regular = file => {
+    const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) throw Error('Completed private database and storage backups required');
+  };
+  regular(path.join(directory, 'database.sql'));
+  if (fs.existsSync(path.join(directory, 'storage-and-env.tar'))) {
+    regular(path.join(directory, 'storage-and-env.tar'));
+    return; // Historical full-archive deploys remain supported.
+  }
+  regular(path.join(directory, 'private-snapshot.json'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'private-snapshot.json'), 'utf8'));
+  const snapshot = path.resolve(manifest.path);
+  if (path.dirname(snapshot) !== path.resolve(snapshotRoot) || !/^snapshot-[0-9]+$/.test(path.basename(snapshot))) throw Error('Invalid private snapshot location');
+  for (let current = snapshot; current !== path.dirname(current); current = path.dirname(current)) {
+    if (fs.lstatSync(current).isSymbolicLink()) throw Error('Private snapshot path contains symlink');
+  }
+  regular(path.join(snapshot, 'COMPLETE.json'));
+  const complete = JSON.parse(fs.readFileSync(path.join(snapshot, 'COMPLETE.json'), 'utf8'));
+  regular(path.join(directory, 'commit.txt'));
+  if (complete.label !== fs.readFileSync(path.join(directory, 'commit.txt'), 'utf8').trim() || complete.snapshot !== path.basename(snapshot) || complete.independent_restore !== true) throw Error('Snapshot does not match checked deployment');
+  regular(path.join(snapshot, 'files/.env'));
+  for (const name of ['files', 'files/storage', 'files/storage/whatsapp-auth']) {
+    const stat = fs.lstatSync(path.join(snapshot, name));
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('Snapshot storage missing');
   }
 }
 async function apply(db, diff, backup) {

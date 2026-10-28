@@ -148,7 +148,7 @@ jobs:
           SSH=(ssh -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=12)
           "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "umask 077; mkdir -p '$REMOTE'"
           scp -P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=12 source.tar.gz source.tar.gz.sha256 "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE/"
-          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$REMOTE' && sha256sum -c source.tar.gz.sha256 && tar -xzf source.tar.gz deployment/cd-deploy.py deployment/cd-database.cjs deployment/stage_cleanup.py && python3 deployment/cd-deploy.py --archive '$REMOTE/source.tar.gz' --sha '$DEPLOY_SHA'"
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$REMOTE' && sha256sum -c source.tar.gz.sha256 && tar -xzf source.tar.gz deployment/cd-deploy.py deployment/cd-database.cjs deployment/stage_cleanup.py deployment/private_snapshot.py && python3 deployment/cd-deploy.py --archive '$REMOTE/source.tar.gz' --sha '$DEPLOY_SHA'"
       - name: Check public HTTPS
         run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --max-time 20 https://dashboard.jeblast.com/signin -o /dev/null
       - name: Remove runner SSH credentials

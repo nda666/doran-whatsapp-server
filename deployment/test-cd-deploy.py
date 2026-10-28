@@ -75,27 +75,32 @@ class DeploymentGuards(unittest.TestCase):
             self.assertFalse((stage / '.next/cache/swc').exists())
             self.assertEqual((app / '.next/cache/swc/fixture').read_bytes(), b'cached-content')
 
-    def test_session_snapshot_detects_nested_changes_additions_and_deletions(self):
+    def test_private_boundary_guards_credentials_env_and_folder_inventory(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
             app = Path(temp)
             auth = app / 'storage/whatsapp-auth/device/nested'
             auth.mkdir(parents=True)
             (app / '.env').write_bytes(b'fixture-env')
-            key = auth / 'session.json'
+            key = auth.parent / 'creds.json'
             key.write_bytes(b'original')
             initial = deploy.private_hashes(app)
-            self.assertEqual(initial, {'.env': hashlib.sha256(b'fixture-env').hexdigest(),
-                str(key.relative_to(app)): hashlib.sha256(b'original').hexdigest()})
+            self.assertEqual(initial['.env'], hashlib.sha256(b'fixture-env').hexdigest())
+            self.assertEqual(initial[str(key.relative_to(app))], hashlib.sha256(b'original').hexdigest())
             key.write_bytes(b'changed!')  # Same size; compare contents, not metadata.
             self.assertNotEqual(deploy.private_hashes(app), initial)
             key.write_bytes(b'original')
-            extra = auth / 'new-key.json'
-            extra.write_bytes(b'new')
+            extra = auth.parent.parent / 'new-device'
+            extra.mkdir()
             self.assertNotEqual(deploy.private_hashes(app), initial)
-            extra.unlink()
+            extra.rmdir()
             self.assertEqual(deploy.private_hashes(app), initial)
             key.unlink()
             self.assertNotEqual(deploy.private_hashes(app), initial)
+            # Encryption keys belong to persistent storage, never deploy inputs.
+            # A corrupt/unreadable key must not trigger a million-file content scan.
+            with mock.patch.object(deploy, 'file_digest', wraps=deploy.file_digest) as digest:
+                deploy.private_hashes(app)
+                self.assertEqual(digest.call_count, 1)  # environment only
 
     def test_unrelated_process_guard_handles_only_recovered_sms_restart(self):
         def process(name, pid):
@@ -138,7 +143,7 @@ class DeploymentGuards(unittest.TestCase):
             (app / 'storage/whatsapp-auth/device/creds.json').write_bytes(b'{"fixture":true}')
             (app / 'public/uploads/photo.txt').write_bytes(b'user-upload-fixture')
             snapshot = deploy.private_hashes(app)
-            self.assertEqual(len(snapshot), 2)
+            self.assertIn('.env', snapshot)
             archive_path = root / 'private.tar'
             deploy.backup_private_files(app, archive_path)
             with tarfile.open(archive_path) as archive:
