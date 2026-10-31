@@ -7,6 +7,7 @@ import { isPairingInProgress } from "./libs/pairingState";
 import { waRecovery } from "./libs/waRecoveryState";
 import { isTelegramDevice } from "../lib/messagingChannel";
 import { telegramEnabled } from "./telegram/availability";
+import { readDatabaseCreds } from "./libs/waAuthState";
 
 export async function getPhoneConnectionInfo(phone: { id: string; userId: string; active: number; channel?: string }) {
   if (isTelegramDevice(phone)) return {
@@ -24,7 +25,8 @@ export async function getPhoneConnectionInfo(phone: { id: string; userId: string
   let linked: boolean | null = socket?.authState.creds.me?.id ? true : null;
   if (linked === null && phone.active === 1 && enabled && !maintenance && !online && !pairing) {
     try {
-      const creds = JSON.parse(await readFile(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${phone.userId}-${phone.id}`, "creds.json"), "utf8"));
+      const saved = await readDatabaseCreds(phone.id);
+      const creds = saved.migrated ? saved.creds || {} : JSON.parse(await readFile(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${phone.userId}-${phone.id}`, "creds.json"), "utf8"));
       // Valid JSON with an unexpected structure is an inspection failure.
       linked = creds && typeof creds === "object" && !Array.isArray(creds) ? !!creds.me?.id : null;
     } catch (error) {

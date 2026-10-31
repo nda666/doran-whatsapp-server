@@ -29,6 +29,8 @@ async function safetyTests() {
   const policy = { dailyLimit: 3, useGlobalQuota: false, minIntervalSeconds: 0, adaptiveEnabled: true, paused: false, warmupStartedAt: null, nextAllowedAt: new Date(0) };
   const usage = { attempts: 0, failures: 0 }; let chain = Promise.resolve();
   const db = {
+    recipientConsent: { updateMany: async () => ({ count: 0 }) },
+    recipientConsentEvent: { create: async () => ({}) },
     messagingPreference: { findUnique: async () => ({ optOutEnabled: enabled }) },
     recipientSuppression: { findUnique: async ({ where }) => blocked.get(JSON.stringify(where.userId_number)), upsert: async ({ create }) => blocked.set(JSON.stringify({ userId: create.userId, number: create.number }), create) },
     deviceSendPolicy: { createMany: async () => {}, upsert: async () => policy, findUniqueOrThrow: async () => policy, update: async ({ data }) => Object.assign(policy, data) },

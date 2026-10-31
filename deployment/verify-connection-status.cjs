@@ -12,6 +12,11 @@ async function main() {
   const recovery = { attempts: new Map(), timers: new Map(), blocked: new Set(), sockets: new WeakMap() };
   const writes = [], events = [], timers = [];
   let online = false, status = 'CLOSE';
+  let readyAt = new Date(0);
+  const policy = { createMany: async () => ({ count: 1 }), updateMany: async args => {
+    if (readyAt < args.where.nextAllowedAt.lt) readyAt = args.data.nextAllowedAt;
+    return { count: 1 };
+  } };
   const io = { to() { return this; }, emit(name, data) {
     if (name === 'isOnline') {
       assert.equal(online, data.isOnline, 'persist before notification');
@@ -21,10 +26,11 @@ async function main() {
   } };
   const socketModule = { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {}, default: async () => {} };
   const mocks = {
+    '../libs/waAuthState': { clearDatabaseAuth: async () => {} },
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admin' },
     fs: { rmSync() { throw new Error('Unexpected credential deletion'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
-    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async value => { writes.push(value); online = value.data.isOnline; status = value.data.status; } } } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ deviceSendPolicy: policy, phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async value => { writes.push(value); online = value.data.isOnline; status = value.data.status; } } } },
     '../constant': { WaSockQrTimeout: 60000 }, '../libs/makeWASocket': socketModule,
     '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': { updateDevice: async () => {} },
@@ -40,7 +46,9 @@ async function main() {
   const socket = { user: { id: '628123@s.whatsapp.net', name: 'Test' } };
   sessions.set('phone', socket);
   const update = data => exports.default(socket, 'user', 'phone', data);
+  const beforeOpen = Date.now();
   await update({ connection: 'open', isOnline: false });
+  assert(readyAt.getTime() >= beforeOpen + 30000 && readyAt.getTime() <= Date.now() + 30000, 'open adds a 30s send cooldown');
   assert.equal(online, true, 'connected with hidden presence remains online');
   assert.equal(events.filter(event => event.name === 'isOnline').length, 1);
   const count = writes.length;
@@ -52,7 +60,10 @@ async function main() {
   assert.equal(timers[0].delay, 500, 'QR restart still reconnects');
   const replacement = {};
   sessions.set('phone', replacement);
+  const existingDeadline = new Date(Date.now() + 120000);
+  readyAt = existingDeadline;
   await exports.default(replacement, 'user', 'phone', { connection: 'open' });
+  assert.equal(readyAt, existingDeadline, 'reconnect never shortens an existing longer delay');
   assert.equal(online, true, 'reconnection restores online without presence event');
   await update({ connection: 'close' });
   assert.equal(online, true, 'old socket cannot disconnect replacement');

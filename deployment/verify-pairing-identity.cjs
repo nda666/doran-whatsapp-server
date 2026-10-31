@@ -28,11 +28,11 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
   const maintenance = new Set(), retired = new WeakSet(), events = [], writes = [], handlers = new Map();
   const recovery = { attempts: new Map(), timers: new Map(), blocked: new Set(), sockets: new WeakMap(), disconnects: new Map() };
   const phone = { id: 'phone', userId: 'owner', number: initialNumber, active: 1, isOnline: false, channel: 'whatsapp' };
-  let transportSends = 0, reservations = 0, ended = 0, onReserve;
+  let transportSends = 0, reservations = 0, ended = 0, onReserve, onTransport;
   const socket = Object.assign(simpleSocket(null), {
     ev: { on(name, callback) { handlers.set(name, callback); } },
     authState: { creds: {} },
-    sendMessage: async () => { transportSends++; return { key: { id: 'fixture-message' } }; },
+    sendMessage: async (...args) => { transportSends++; if (onTransport) return onTransport(...args); return { key: { id: 'fixture-message' } }; },
     end() { ended++; this.ws.isOpen = false; this.ws.isClosed = true; },
   });
   class SendGuardError extends Error { constructor(code) { super(code); this.code = code; } }
@@ -43,7 +43,7 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
   };
   const db = { phone: phoneDb, $transaction: async fn => {
     if (dbFailure) throw new Error('DB_OFFLINE');
-    return fn({ phone: phoneDb });
+    return fn({ deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: phoneDb });
   } };
   const updateDevice = async (_, scope, data) => {
     assert.deepEqual(scope, { id: 'phone', userId: 'owner' });
@@ -51,6 +51,7 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
   };
   const socketModule = { __esModule: true };
   const connection = load('src/server/events/connectionUpdate.ts', {
+    '../libs/waAuthState': { clearDatabaseAuth: async () => {} },
     fs: { rmSync() { throw new Error('Must not delete credentials'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515 } },
     '../../lib/prisma': { prisma: db }, '../constant': { WaSockQrTimeout: 60000 },
@@ -61,6 +62,11 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     '../libs/waRecoveryState': { waRecovery: recovery }, '../libs/pairingIdentity': identity,
   });
   const factory = load('src/server/libs/makeWASocket.ts', {
+    './waAuthState': { closeDatabaseAuth: async () => {}, createDatabaseAuthState: async () => ({ state: {}, saveCreds: async () => {}, close: async () => {}, assertOwned: async () => {} }) },
+    './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }), getProtocolMessage: async () => undefined, storeProtocolMessage: async () => {} },
+    '../messaging/transportSafety': load('src/server/messaging/transportSafety.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError }, '@whiskeysockets/baileys': { generateMessageIDV2: () => 'legacy-id' } }),
+    '../messaging/sendFence': load('src/server/messaging/sendFence.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError } }),
+    '../messaging/restrictions': { recordRestriction: async () => {}, refreshRestrictions: async () => {}, requireUnrestricted: async () => {} },
     'pino-pretty': {}, pino: () => ({}),
     '../messaging/safety': { SendGuardError, reserveSend: async () => { reservations++; await onReserve?.(); return 'day'; }, recipientBlocked: async () => false },
     '@whiskeysockets/baileys': { __esModule: true, default: async () => socket, useMultiFileAuthState: async () => ({ state: {}, saveCreds: async () => {} }) },
@@ -80,7 +86,7 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     '@/server/libs/qrState': { waitForQr: async () => ({ qr: 'private-fixture-qr', timeout: 60000 }) },
     '@/server/libs/pairingState': { isPairingInProgress: () => false }, '@/server/libs/pairingIdentity': identity,
     '@/server/registeredPhones': {}, '@/server/deviceWebhook/events': { updateDevice },
-    '@/server/deviceToken': { deviceToken: () => 'private-fixture-token' },
+    '@/server/dispatchControlAuth': { resolveControlDevice: async () => phone },
     '@/server/dispatchAuth': { DispatchAuthError: class extends Error {} }, '@/server/dispatch/senderGroups': {},
     '@/lib/messagingChannel': { isTelegramDevice: p => p.channel === 'telegram' }, '@/server/telegram/dispatch': {},
   }).default;
@@ -90,7 +96,8 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     return res;
   }
   return { phone, socket, factory, connection, api, writes, events, recovery, retired, handlers,
-    count: () => ({ transportSends, reservations, ended }), setReserve: fn => { onReserve = fn; } };
+    fence: load('src/server/messaging/sendFence.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError } }),
+    count: () => ({ transportSends, reservations, ended }), setReserve: fn => { onReserve = fn; }, setTransport: fn => { onTransport = fn; } };
 }
 
 test('normalizes registered international numbers and rejects invalid identities', () => {
@@ -173,6 +180,35 @@ test('correct sender still sends normally and retired socket cannot send', async
   f.retired.add(f.socket);
   await assert.rejects(f.socket.sendMessage(B + '@s.whatsapp.net', { text: 'fixture' }), /SENDER_NUMBER_MISMATCH/);
   assert.equal(f.count().transportSends, 1);
+});
+
+test('real socket wrapper retains its transport lock after caller timeout', async () => {
+  const f = fixture(); await f.factory.default('owner', 'phone');
+  f.socket.user = { id: A + '@s.whatsapp.net' };
+  let release;
+  f.setTransport(() => new Promise(resolve => { release = () => resolve({ key: { id: 'first' } }); }));
+  const first = f.socket.sendMessage(B + '@s.whatsapp.net', { text: 'first' });
+  await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(Promise.race([first, Promise.reject(Error('caller timeout'))]));
+  const second = f.socket.sendMessage(B + '@s.whatsapp.net', { text: 'second' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.count().transportSends, 1);
+  f.setTransport(async () => ({ key: { id: 'second' } }));
+  release(); await first; await second;
+  assert.equal(f.count().transportSends, 2);
+});
+
+test('real socket wrapper rechecks a lost job fence after asynchronous preflight', async () => {
+  const f = fixture(); await f.factory.default('owner', 'phone');
+  f.socket.user = { id: A + '@s.whatsapp.net' };
+  let release, current = true;
+  f.setReserve(() => new Promise(resolve => { release = resolve; }));
+  const send = f.fence.withSendFence({ deadlineAt: Date.now() + 60000, isCurrent: async () => current },
+    () => f.socket.sendMessage(B + '@s.whatsapp.net', { text: 'late' }));
+  await new Promise(resolve => setImmediate(resolve));
+  current = false; release();
+  await assert.rejects(send, /DEVICE_THROTTLED/);
+  assert.equal(f.count().transportSends, 0);
 });
 
 test('wrong scan is retired before persistence and never changes the registered number or emits online', async () => {

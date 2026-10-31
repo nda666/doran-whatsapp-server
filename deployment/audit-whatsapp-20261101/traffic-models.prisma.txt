@@ -1,0 +1,19 @@
+// Append only when explicitly integrating the optional traffic guard.
+// Keep migration SQL and the existing hash-pinned CD allowlist in sync.
+model WaSendTraffic {
+  id          String   @id @db.VarChar(36)
+  phoneId     String   @db.VarChar(36)
+  logicalId   String   @db.VarChar(128)
+  contentHash String   @db.Char(64)
+  admittedAt  DateTime @db.DateTime(3)
+  @@index([phoneId, admittedAt], map: "wa_send_traffic_phone_time_idx")
+  @@index([phoneId, contentHash, admittedAt], map: "wa_send_traffic_phone_content_time_idx")
+  @@index([admittedAt], map: "wa_send_traffic_time_idx")
+  @@map("wa_send_traffic")
+}
+
+model WaSendRecovery {
+  phoneId     String   @id @db.VarChar(36)
+  connectedAt DateTime @db.DateTime(3)
+  @@map("wa_send_recovery")
+}

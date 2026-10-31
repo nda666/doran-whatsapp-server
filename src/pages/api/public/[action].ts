@@ -11,7 +11,7 @@ import { isPairingInProgress } from "@/server/libs/pairingState";
 import { pairingSessionIdentity, registeredPairingNumber } from "@/server/libs/pairingIdentity";
 import { registeredPhones } from "@/server/registeredPhones";
 import { updateDevice } from "@/server/deviceWebhook/events";
-import { deviceToken } from "@/server/deviceToken";
+import { resolveControlDevice } from "@/server/dispatchControlAuth";
 import type { Phone } from "@prisma/client";
 import { DispatchAuthError, resolveDispatchDevice, resolveIntegrationIdentity } from "@/server/dispatchAuth";
 import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
@@ -32,11 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     if (sending) phone = (await resolveDispatchDevice(req, body)).phone;
     else {
-      const token = deviceToken(req, body);
-      if (typeof token !== "string" || token.length > 256) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
-      const device = await prisma.phone.findUnique({ where: { token } });
-      if (!device) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
-      phone = device;
+      phone = await resolveControlDevice(req, body);
     }
     if (action === "session") return res.json({ channel: phone.channel || "whatsapp", active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number,
       ...(!isTelegramDevice(phone) ? pairingSessionIdentity(phone, session.get(phone.id)) : {}),

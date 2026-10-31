@@ -1,4 +1,5 @@
 import { SendGuardError } from "../messaging/safety";
+import { withSendFence } from "../messaging/sendFence";
 import type { Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -83,7 +84,9 @@ export async function sendChatReply(conversationId: string, scope: Prisma.ChatCo
       await prisma.chatMessage.updateMany({ where: { id: row.id, status: "SENDING" }, data: { status: "FAILED" } });
     } else {
       const sent = await Promise.race([
-        socket.sendMessage(conversation.jid, content, { messageId: row.waMessageId, ...(quoted ? { quoted } : {}) }),
+        withSendFence({ deadlineAt: Date.now() + 20000,
+          isCurrent: async () => !phoneMaintenance.has(phone.id) && !!await prisma.chatMessage.findFirst({ where: { id: row.id, status: "SENDING", waMessageId: row.waMessageId }, select: { id: true } }),
+        }, () => socket.sendMessage(conversation.jid, content, { messageId: row.waMessageId, ...(quoted ? { quoted } : {}) })),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("CHAT_SEND_TIMEOUT")), 20000); }),
       ]);
       if (!sent?.key.id) throw new Error("NO_MESSAGE_ID");

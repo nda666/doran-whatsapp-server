@@ -35,11 +35,17 @@ export async function recipientBlocked(userId: string, number: string) {
 export async function captureStop(userId: string, jid: string, text: string) {
   if (!/^\s*(STOP|BERHENTI|UNSUBSCRIBE)[.!\s]*$/i.test(text) || !jid.endsWith("@s.whatsapp.net")) return false;
   const preference = await prisma.messagingPreference.findUnique({ where: { userId } });
-  if (!preference?.optOutEnabled) return false;
+  if (preference?.optOutEnabled === false) return false;
   const number = normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`);
-  await prisma.recipientSuppression.upsert({ where: { userId_number: { userId, number } },
-    create: { userId, number, source: "STOP", reason: "Permintaan berhenti dari penerima" }, update: {} });
-  await updateDispatches({ where: { userId, recipient: number, status: "QUEUED" }, data: { status: "SUPPRESSED", lastError: "RECIPIENT_OPTED_OUT" } });
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+    const now = new Date();
+    await tx.recipientSuppression.upsert({ where: { userId_number: { userId, number } },
+      create: { userId, number, source: "STOP", reason: "Permintaan berhenti dari penerima" }, update: { createdAt: now } });
+    await tx.recipientConsent.updateMany({ where: { userId, number, revokedAt: null }, data: { revokedAt: now } });
+    await tx.recipientConsentEvent.create({ data: { userId, number, purpose: "ALL", action: "REVOKED", source: "STOP", evidence: "Permintaan berhenti dari penerima", occurredAt: now } });
+    await updateDispatches({ where: { userId, recipient: number, status: "QUEUED" }, data: { status: "SUPPRESSED", lastError: "RECIPIENT_OPTED_OUT" } }, tx);
+  });
   return true;
 }
 

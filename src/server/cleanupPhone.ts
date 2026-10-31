@@ -8,6 +8,7 @@ import { session, waitForAuthSave, waitForPendingSocket } from "./libs/makeWASoc
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { clearPhoneReconnect } from "./events/connectionUpdate";
 import { clearPairingProgress } from "./libs/pairingState";
+import { clearDatabaseAuth, closeDatabaseAuth } from "./libs/waAuthState";
 import { enqueueDeviceEvent } from "./deviceWebhook/events";
 import { chatMediaPath } from "./chat/media";
 
@@ -73,11 +74,13 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
           socket.end(new Error("DEVICE_CLEANUP"));
           session.delete(id);
           await waitForAuthSave(socket);
+          await closeDatabaseAuth(id);
           socket.ev.removeAllListeners("creds.update");
         }
       }
       clearPairingProgress(id);
     }
+    if (options.clearAuth || options.deleteRecord) await clearDatabaseAuth(id);
     if (authTarget) await fs.rm(authTarget, { recursive: true, force: true });
     await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM device_webhook_settings WHERE id = 1 FOR UPDATE`;
@@ -95,6 +98,7 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
       }
       if (options.clearAutoReplies) await tx.autoReply.deleteMany({ where: { phoneId: id, userId: phone.userId } });
       if (options.clearHistory || options.deleteRecord) {
+        await tx.waProtocolMessage.deleteMany({ where: { phoneId: id } });
         const media = await tx.chatMessage.findMany({ where: { conversation: { phoneId: id, userId: phone.userId }, mediaPath: { not: null } }, select: { mediaPath: true } });
         chatFiles.push(...media.flatMap(row => row.mediaPath ? [row.mediaPath] : []));
         await tx.chatConversation.deleteMany({ where: { phoneId: id, userId: phone.userId } });

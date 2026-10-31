@@ -4,12 +4,15 @@ import { prisma } from "../lib/prisma";
 import makeWASocket, { session, waitForAuthSave, waitForPendingSocket } from "./libs/makeWASocket";
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { waRecovery } from "./libs/waRecoveryState";
+import { readDatabaseCreds } from "./libs/waAuthState";
 
 export const WA_RECOVERY_INTERVAL_MS = 30_000;
 const CONNECT_DEADLINE_MS = 120_000;
 let running = false;
 
 async function hasLinkedAuth(userId: string, phoneId: string) {
+  const saved = await readDatabaseCreds(phoneId);
+  if (saved.migrated) return !!saved.creds?.me?.id;
   try {
     const creds = JSON.parse(await readFile(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${userId}-${phoneId}`, "creds.json"), "utf8"));
     return !!creds.me?.id;

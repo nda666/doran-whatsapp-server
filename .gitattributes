@@ -1,0 +1,2 @@
+# Unified diff context uses a single space for an empty source line.
+deployment/audit-whatsapp-20261101/*.patch whitespace=-blank-at-eol

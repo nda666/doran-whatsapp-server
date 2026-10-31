@@ -1,9 +1,11 @@
+import type { AnyMessageContent } from "@whiskeysockets/baileys";
+import { createLegacySendAttempt, withLegacySendAttempt, canRetryLegacySend, type LegacySendAttempt } from "../messaging/transportSafety";
 import { CountryCode } from "libphonenumber-js";
 import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 
 import { delay, WAMessage } from "@whiskeysockets/baileys";
 
-// import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
+// import makeWASocket from "@/lib/makeWASocket";
 import makeWASocket from "./makeWASocket";
 
 const sendMessageFromIo = async ({
@@ -59,13 +61,16 @@ const sendMessage = async (
   retry: number,
   phoneId: string,
   userId: string,
-  image?: any
+  image?: any,
+  attempt: LegacySendAttempt = createLegacySendAttempt()
 ): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
+  const sendAttempt = (jid: string, content: AnyMessageContent) => withLegacySendAttempt(attempt,
+    () => createdWaSock.sendMessage(jid, content, { messageId: attempt.messageId }));
   try {
     const recipient = normalizePhoneRecipient(_to, (phoneCountry || "ID") as CountryCode);
     if (!image) {
-      const res = await createdWaSock.sendMessage(
+      const res = await sendAttempt(
         `${recipient}@s.whatsapp.net`,
         {
           text: message!,
@@ -82,7 +87,7 @@ const sendMessage = async (
 
         // const file = new File([blob], fileName || 'image', {type: 'image/png' || 'image/png'});
         // return res.status(200).json({'binary': binaryString});
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             image: binaryString,
@@ -91,7 +96,7 @@ const sendMessage = async (
         );
       } else if (image !== null && !isBase64(image)) {
         // return res.status(200).json('ok');
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             image: {
@@ -103,7 +108,7 @@ const sendMessage = async (
       }
     }
   } catch (e: any) {
-    if (e?.output?.statusCode === 428) {
+    if (canRetryLegacySend(attempt, e, retry, 4)) {
       retry++;
       if (retry < 5) {
         await delay(2000);
@@ -114,7 +119,8 @@ const sendMessage = async (
           retry,
           phoneId,
           userId,
-          image
+          image,
+          attempt
         );
       } else {
         // rmSync(`./whatsapp-auth/${userId}-${phoneId}`, {

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const helper = require('./cd-feature-schema.cjs');
 const ops = helper.operations();
-assert.deepEqual(ops.filter(op => op.kind === 'table').map(op => op.table), ['device_quota_windows', 'sender_groups', 'wa_dispatch_attempts']);
+assert.deepEqual(ops.filter(op => op.kind === 'table').map(op => op.table), ['wa_auth_sessions', 'wa_auth_keys', 'wa_restrictions', 'wa_protocol_messages', 'recipient_consents', 'recipient_consent_events', 'device_quota_windows', 'sender_groups', 'wa_dispatch_attempts']);
 assert(ops.some(op => op.kind === 'column' && op.name === 'operatingHours'));
 assert(ops.some(op => op.kind === 'constraint' && op.name === 'wa_dispatch_attempts_dispatchId_fkey'));
 assert(ops.some(op => op.kind === 'column' && op.name === 'quotaReset'));

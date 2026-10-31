@@ -39,6 +39,7 @@ export type DevicePolicy = {
   pauseReason?: string | null;
   warmupStartedAt: string | null;
   health: { score: number | null; reason: string; stop: boolean; multiplier: number };
+  restriction?: { active: boolean; reason: string | null; endsAt: string | null; checkedAt: string | null; newChatCap: { total_quota?: number; used_quota?: number; capping_status?: string } | null } | null;
 };
 
 const detailStyle = { display: "block", fontSize: 12, lineHeight: 1.5 };
@@ -54,10 +55,15 @@ export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string)
         ? uiText("Minimal 20 percobaan hari ini") : uiText(reason);
       const stopped = policy.paused || (policy.adaptiveEnabled && policy.health.stop);
       return <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 200, maxWidth: 250 }}>
+        <Tag color={policy.restriction?.active ? "red" : policy.restriction?.checkedAt ? "blue" : "default"} style={{ whiteSpace: "normal" }}>
+          {policy.restriction?.active ? `Pembatasan WA: ${policy.restriction.reason || "Aktif"}` : policy.restriction?.checkedAt ? "Pembatasan WA: tidak aktif saat pemeriksaan" : "Pembatasan WA: belum diperiksa"}
+        </Tag>
+        {policy.restriction?.active && <Typography.Text type="secondary" style={detailStyle}>{policy.restriction.endsAt ? `Perkiraan berakhir: ${uiText.date(policy.restriction.endsAt)} WIB. Perlu pemeriksaan ulang.` : "Waktu berakhir belum diberikan WhatsApp."}</Typography.Text>}
+        {policy.restriction?.newChatCap?.total_quota != null && <Typography.Text type="secondary" style={detailStyle}>Percakapan baru WA: {policy.restriction.newChatCap.used_quota ?? "?"} / {policy.restriction.newChatCap.total_quota}</Typography.Text>}
         {policy.health.score === null ? <Typography.Text>{uiText("Data belum cukup")}</Typography.Text> : <Progress percent={policy.health.score} status={policy.health.stop ? "exception" : "normal"} style={{ margin: 0 }} />}
         <Typography.Text type="secondary" style={{ ...detailStyle, overflowWrap: "anywhere" }}>{description}</Typography.Text>
         <Tag color={stopped ? "red" : policy.operatingHoursState.open ? "green" : "gold"} style={{ alignSelf: "flex-start", whiteSpace: "normal" }}>
-          {policy.paused ? policy.pauseReason ? uiText("Dihentikan: pembatasan WhatsApp") : uiText("Dijeda admin") : stopped ? uiText("Dihentikan otomatis") : policy.operatingHoursState.open ? uiText("Siap mengirim") : uiText("Di luar jam operasional")}
+          {policy.restriction?.active ? "Dihentikan: pembatasan WhatsApp" : policy.paused ? policy.pauseReason ? uiText("Dihentikan: pembatasan WhatsApp") : uiText("Dijeda admin") : stopped ? uiText("Dihentikan otomatis") : policy.operatingHoursState.open ? uiText("Siap mengirim") : uiText("Di luar jam operasional")}
         </Tag>
       </div>;
     } },

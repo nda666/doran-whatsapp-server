@@ -13,7 +13,10 @@ import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import { payloadContent } from "../campaigns/content";
 import { assetPath } from "../campaigns/media";
 import fs from "node:fs/promises";
-import { dispatchDeadline, getDispatchAgeCutoff, getDispatchQueueOrder, getDispatchDelayRange } from "./settings";
+import { dispatchDeadline, getDispatchAgeCutoff, getDispatchQueueOrder, getDispatchDelayRange, getGlobalOperatingHours } from "./settings";
+import { DEFAULT_OPERATING_HOURS } from "../../lib/operatingHours";
+import { pollStaleAfter, senderClaimDue } from "./health";
+import { withSendFence } from "../messaging/sendFence";
 import { randomDispatchDelay } from "./timing";
 import { ACK_TIMEOUT_MS, acknowledgementFailure, retryEligible } from "./retry";
 import { recordDispatchReceipt } from "./receipts";
@@ -32,8 +35,10 @@ const concurrency = Math.min(32, Math.max(1, Number(process.env.DISPATCH_CONCURR
 const leaseMs = 120_000;
 const progress = { running: false, startedAt: 0, worker_last_poll_success: 0,
   worker_last_claim: 0, worker_last_server_ack: 0, queueSampleAt: 0, recovery_last_success: 0 };
-type QueueSample = { phoneId: string; channel?: string; jobs: bigint | number; oldest: Date; nextDue: Date };
+type QueueSample = { phoneId: string; channel?: string; jobs: bigint | number; oldest: Date; nextDue: Date; readyAt?: Date | null; paused?: number | boolean; operatingHours?: unknown };
 let queueSample: QueueSample[] = [];
+let healthPollMaximum = DEFAULT_DISPATCH_DELAY.maxSeconds;
+let healthHours = DEFAULT_OPERATING_HOURS;
 const claims = new Map<string, number>();
 const eligibleSince = new Map<string, number>();
 
@@ -42,18 +47,18 @@ export function getDispatchHealth(now = Date.now()) {
   const connected = new Set(sockets.filter(s => s.connected).map(s => s.phoneId));
   const alerts: string[] = [];
   if (!progress.running) alerts.push("WORKER_NOT_RUNNING");
-  if (now - (progress.worker_last_poll_success || progress.startedAt) > 60_000) alerts.push("POLL_STALE");
+  if (now - (progress.worker_last_poll_success || progress.startedAt) > pollStaleAfter(healthPollMaximum)) alerts.push("POLL_STALE");
   if (progress.running && now - (progress.queueSampleAt || progress.startedAt) > 60_000) alerts.push("QUEUE_SAMPLE_STALE");
   const senders = queueSample.map(row => {
     const jobs = Number(row.jobs), online = row.channel === "telegram" ? telegramEnabled() : connected.has(row.phoneId);
-    const due = online && row.nextDue.getTime() <= now;
+    const due = senderClaimDue(row, online, healthHours, now);
     if (!due) eligibleSince.delete(row.phoneId);
     else if (!eligibleSince.has(row.phoneId)) eligibleSince.set(row.phoneId, now);
     const oldestAgeSeconds = Math.max(0, (now - row.oldest.getTime()) / 1000);
-    if (oldestAgeSeconds > 300) alerts.push("BACKLOG_AGE_EXCEEDED");
+    if (due && oldestAgeSeconds > 300) alerts.push("BACKLOG_AGE_EXCEEDED");
     if (!online) alerts.push("SENDER_OFFLINE_WITH_BACKLOG");
     if (due && now - Math.max(eligibleSince.get(row.phoneId) || now, claims.get(row.phoneId) || 0) > 120_000) alerts.push("CLAIM_STALLED");
-    return { phoneId: row.phoneId, jobs, connected: online ? 1 : 0, oldest_age_seconds: oldestAgeSeconds,
+    return { phoneId: row.phoneId, jobs, connected: online ? 1 : 0, eligible: due, oldest_age_seconds: oldestAgeSeconds,
       last_claim: claims.get(row.phoneId) || null };
   });
   const reasons = Array.from(new Set(alerts)).sort();
@@ -247,7 +252,9 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
         return result;
       };
       const result = await Promise.race([
-        sendAndConfirm(),
+        withSendFence({ deadlineAt: Date.now() + ACK_TIMEOUT_MS,
+          isCurrent: async () => !!await prisma.waDispatch.findFirst({ where: { id: job.id, messageId, status: "PROCESSING", leaseToken: token, leaseUntil: { gt: new Date() } }, select: { id: true } }),
+        }, sendAndConfirm),
         new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("SEND_TIMEOUT")), ACK_TIMEOUT_MS); }),
       ]);
       if (result === null) return;
@@ -257,15 +264,16 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
         data: { status: "SENT", sentAt: new Date(), leaseToken: null, leaseUntil: null, lastError: null } });
     } catch (error) {
       if (error instanceof SendGuardError) {
+        const restrictionGuard = ["WA_ACCOUNT_RESTRICTED", "WA_RESTRICTION_UNKNOWN"].includes(error.code);
         attemptResult = { status: "SKIPPED", error: error.code };
         await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {
           status: error.code === "RECIPIENT_OPTED_OUT" ? "SUPPRESSED" : "QUEUED",
           lastError: error.code,
           messageId: job.messageId, attempts: job.attempts,
           senderPhoneId: job.senderPhoneId,
-          nextAttemptAt: error.code === "OUTSIDE_OPERATING_HOURS" ? new Date(Date.now() + 30000) : grouped && !job.messageId ? new Date(Date.now() + 1000) : error.retryAt || new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null,
+          nextAttemptAt: restrictionGuard ? error.retryAt || new Date(Date.now() + 60_000) : error.code === "OUTSIDE_OPERATING_HOURS" ? new Date(Date.now() + 30000) : grouped && !job.messageId ? new Date(Date.now() + 1000) : error.retryAt || new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null,
         } });
-        sendGap = error.code === "OUTSIDE_OPERATING_HOURS" ? grouped ? 1000 : 30000 : grouped && !job.messageId ? 1000 : Math.max(1000, (error.retryAt?.getTime() || Date.now() + 60000) - Date.now());
+        sendGap = restrictionGuard ? 60_000 : error.code === "OUTSIDE_OPERATING_HOURS" ? grouped ? 1000 : 30000 : grouped && !job.messageId ? 1000 : Math.max(1000, (error.retryAt?.getTime() || Date.now() + 60000) - Date.now());
         return;
       }
       if (telegram) {
@@ -285,9 +293,9 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
           attemptResult = { status: "FAILED", error: "WA_ACK_463_ACCOUNT_RESTRICTED" };
           await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {
             status: "QUEUED", messageId: null, senderPhoneId: null, lastError: "SENDER_REJECTED_RETRY",
-            nextAttemptAt: new Date(Date.now() + 1000), leaseToken: null, leaseUntil: null,
+            nextAttemptAt: new Date(Date.now() + 60_000), leaseToken: null, leaseUntil: null,
           } });
-          sendGap = 1000;
+          sendGap = 60_000;
           return;
         }
       }
@@ -350,6 +358,7 @@ export function startDispatchWorker() {
     try {
       const [cutoff, order, range] = await Promise.all([getDispatchAgeCutoff(), getDispatchQueueOrder(), getDispatchDelayRange()]);
       pollRange = range;
+      healthPollMaximum = range.maxSeconds;
       const senderOrder = order === "newest" ? Prisma.sql`MAX(d.createdAt) DESC` : Prisma.sql`MIN(d.createdAt) ASC`;
       // Group/limit in MySQL rather than loading every pending row for client-side distinct.
       const candidates = await prisma.$queryRaw<Array<{ phoneId: string; senderPhoneId: string | null; assignedOnly: number | bigint }>>`
@@ -357,7 +366,7 @@ export function startDispatchWorker() {
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
         LEFT JOIN wa_sender_leases actual ON actual.phoneId = d.senderPhoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
-        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE')) AND d.sentAt IS NULL
+        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN')) AND d.sentAt IS NULL
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
@@ -384,14 +393,21 @@ export function startDispatchWorker() {
   const sample = () => {
     if (stopping || sampling) return;
     const startedAt = Date.now();
-    sampling = getDispatchAgeCutoff().then(cutoff => prisma.$queryRaw<QueueSample[]>`
-      SELECT COALESCE(d.senderPhoneId, d.phoneId) AS phoneId, p.channel AS channel, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue
+    sampling = Promise.all([getDispatchAgeCutoff(), getGlobalOperatingHours()]).then(([cutoff, hours]) => {
+      healthHours = hours;
+      return prisma.$queryRaw<QueueSample[]>`
+      SELECT COALESCE(d.senderPhoneId, d.phoneId) AS phoneId, p.channel AS channel, COUNT(*) AS jobs, MIN(d.createdAt) AS oldest, MIN(d.nextAttemptAt) AS nextDue,
+      policy.paused, policy.operatingHours,
+      CAST(GREATEST(COALESCE(policy.nextAllowedAt, '1970-01-01'), COALESCE(sender.nextSendAt, '1970-01-01'), COALESCE(sender.leaseUntil, '1970-01-01')) AS DATETIME(3)) AS readyAt
       FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId LEFT JOIN phones p ON p.id = COALESCE(d.senderPhoneId, d.phoneId)
-      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE')) AND d.sentAt IS NULL
+      LEFT JOIN device_send_policies policy ON policy.phoneId = COALESCE(d.senderPhoneId, d.phoneId)
+      LEFT JOIN wa_sender_leases sender ON sender.phoneId = COALESCE(d.senderPhoneId, d.phoneId)
+      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN')) AND d.sentAt IS NULL
       AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
       AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
       AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))
-      GROUP BY COALESCE(d.senderPhoneId, d.phoneId), p.channel`).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
+      GROUP BY COALESCE(d.senderPhoneId, d.phoneId), p.channel, policy.paused, policy.operatingHours, policy.nextAllowedAt, sender.nextSendAt, sender.leaseUntil`;
+    }).then(rows => { queueSample = rows; progress.queueSampleAt = Date.now(); })
       .catch(error => logFailure("DISPATCH_HEALTH_SAMPLE_FAILED", error, startedAt))
       .finally(() => { sampling = undefined; });
   };
@@ -408,7 +424,7 @@ export function startDispatchWorker() {
   const watchdogTimer = setInterval(watchdog, 10_000);
   recover();
   sample();
-  const initialized = getDispatchDelayRange().then(range => { pollRange = range; }).catch(error => logFailure("DISPATCH_DELAY_SETTING_FAILED", error, progress.startedAt)).finally(schedulePoll);
+  const initialized = getDispatchDelayRange().then(range => { pollRange = range; healthPollMaximum = range.maxSeconds; }).catch(error => logFailure("DISPATCH_DELAY_SETTING_FAILED", error, progress.startedAt)).finally(schedulePoll);
   console.info("DISPATCH_WORKER_STARTED", JSON.stringify({ at: new Date().toISOString(), concurrency, delaySetting: "dispatch-random-delay" }));
   return async () => { stopping = true; progress.running = false; if (timer) clearTimeout(timer); clearInterval(recoveryTimer); clearInterval(sampleTimer); clearInterval(watchdogTimer); await initialized; while (polling) await new Promise(resolve => setTimeout(resolve, 50)); await Promise.allSettled([...Array.from(active.values()), ...(recovery ? [recovery] : []), ...(sampling ? [sampling] : [])]); };
 }

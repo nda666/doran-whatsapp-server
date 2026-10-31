@@ -27,6 +27,10 @@ async function main() {
   console.log('OFFLINE_GUARD_OK');
 
   const onUpdate = require('../dist/src/server/events/connectionUpdate').default;
+  const authStorage = require('../dist/src/server/libs/waAuthState');
+  const originalClearDatabaseAuth = authStorage.clearDatabaseAuth;
+  let clearedDbAuth;
+  authStorage.clearDatabaseAuth = async phoneId => { clearedDbAuth = phoneId; };
   const { prisma } = require('../dist/src/lib/prisma');
   const originalUpdate = prisma.phone.update;
   const originalSocket = sockets.default;
@@ -61,6 +65,7 @@ async function main() {
     await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.loggedOut));
     assert.equal(timers.length, count);
     assert.ok(deletedPath.endsWith('test-user-test-phone'));
+    assert.equal(clearedDbAuth, 'test-phone');
     await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.connectionReplaced));
     assert.equal(timers.length, count);
     process.env.WHATSAPP_ENABLED = 'false';
@@ -70,6 +75,7 @@ async function main() {
     console.log('RECONNECT_BACKOFF_AND_TERMINAL_STATES_OK');
   } finally {
     prisma.phone.update = originalUpdate;
+    authStorage.clearDatabaseAuth = originalClearDatabaseAuth;
     sockets.default = originalSocket;
     global.setTimeout = originalTimeout;
     global.clearTimeout = originalClear;

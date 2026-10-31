@@ -1,0 +1,177 @@
+--- a/src/server/messaging/safety.ts
++++ b/src/server/messaging/safety.ts
+@@ -10,8 +10,10 @@
+ import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
+ import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
+ import { getQuotaReset } from "../dispatch/settings";
+ 
++import { configuredTrafficPolicy, reserveTraffic, type TrafficContext } from "./trafficGuard";
++
+ export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
+   return Math.max(globalDelayMs, (minimumSeconds ?? 0) * 1000) * multiplier;
+ }
+ 
+@@ -49,9 +51,9 @@
+   return true;
+ }
+ 
+ /** Shared transport boundary: every API, campaign, conversation and auto reply passes here. */
+-export async function reserveSend(userId: string, phoneId: string, jid: string) {
++export async function reserveSend(userId: string, phoneId: string, jid: string, traffic?: TrafficContext) {
+   const number = jid.startsWith("+") ? normalizePhoneRecipient(jid) : jid.endsWith("@s.whatsapp.net") ? normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`) : null;
+   if (number && await recipientBlocked(userId, number)) throw new SendGuardError("RECIPIENT_OPTED_OUT");
+   const globalQuota = await getGlobalDeviceQuota();
+   const globalRange = await getDispatchDelayRange();
+@@ -73,8 +75,11 @@
+     const window = await tx.deviceQuotaWindow.findUnique({ where: { phoneId } });
+     const quota = quotaWindowState(window, usage.attempts, limit, effectiveQuotaReset(quotaReset, policy.quotaReset), now);
+     if (quota.used >= limit) throw new SendGuardError("DEVICE_DAILY_LIMIT", quota.resetAt!);
+     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
++    const trafficPolicy = jid.includes("@") ? configuredTrafficPolicy() : null;
++    if (trafficPolicy && !traffic) throw new Error("WA_TRAFFIC_CONTEXT_REQUIRED");
++    const trafficInterval = trafficPolicy ? await reserveTraffic(tx, phoneId, traffic!, trafficPolicy, now) : 0;
+     await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
+     const quotaData = { attempts: quota.used + 1, startedAt: quota.startedAt, lastAttemptAt: now,
+       reachedAt: quota.used + 1 >= limit ? quota.reachedAt ?? now : null };
+     await tx.deviceQuotaWindow.upsert({ where: { phoneId }, create: { phoneId, ...quotaData }, update: quotaData });
+@@ -83,8 +88,8 @@
+     const multiplier = policy.adaptiveEnabled ? health.multiplier : 1;
+     const interval = policy.maxIntervalSeconds == null
+       ? effectiveSendInterval(randomDispatchDelay(globalRange), policy.minIntervalSeconds, multiplier)
+       : randomDispatchDelay(deviceSendIntervalRange(globalRange, policy)) * multiplier;
+-    await tx.deviceSendPolicy.update({ where: { phoneId }, data: { nextAllowedAt: new Date(Date.now() + interval) } });
++    await tx.deviceSendPolicy.update({ where: { phoneId }, data: { nextAllowedAt: new Date(Date.now() + Math.max(interval, trafficInterval)) } });
+     return day;
+   });
+ }
+--- a/src/server/libs/makeWASocket.ts
++++ b/src/server/libs/makeWASocket.ts
+@@ -1,11 +1,13 @@
+ import "pino-pretty";
+ import { captureStop, reserveSend, recipientBlocked, SendGuardError } from "../messaging/safety";
+ 
+ import pino from "pino";
++import { configuredTrafficPolicy, serializePhoneSend, trafficContentHash } from "../messaging/trafficGuard";
++import { assertSendFence } from "../messaging/sendFence";
+ 
+ import _makeWASocket, {
+-  WASocket,
++  WASocket, generateMessageIDV2,
+ } from "@whiskeysockets/baileys";
+ 
+ import { prisma } from "../../lib/prisma";
+ import { getWaMesage } from "../../server/utils/getWaMessage";
+@@ -135,27 +137,34 @@
+     const requireSenderIdentity = () => {
+       if (retiredSockets.has(_waSocket) || session.get(phoneId) !== _waSocket || !acceptsPairingIdentity(_waSocket)) throw new SendGuardError("SENDER_NUMBER_MISMATCH");
+     };
+     _waSocket.sendMessage = async (jid, content, options) => {
++      const trafficPolicy = configuredTrafficPolicy();
++      const perform = async () => {
+       requireSenderIdentity();
+       await auth.assertOwned();
+       await requireUnrestricted(phoneId, _waSocket);
+-      const generationOptions = { ...options, getUrlInfo: safeLinkPreview };
++      const logicalId = trafficPolicy ? options?.messageId || generateMessageIDV2(_waSocket.user!.id) : undefined;
++      const traffic = logicalId ? { logicalId, contentHash: trafficContentHash(content) } : undefined;
++      const generationOptions = { ...options, ...(logicalId ? { messageId: logicalId } : {}), getUrlInfo: safeLinkPreview };
+       const guardJid = jid.endsWith("@lid") ? await _waSocket.signalRepository.lidMapping.getPNForLID(jid) : jid;
+       if (!guardJid) throw new SendGuardError("RECIPIENT_ID_UNRESOLVED");
+-      const day = await reserveSend(userId, phoneId, guardJid);
++      const day = await reserveSend(userId, phoneId, guardJid, traffic);
+       if (guardJid.endsWith("@s.whatsapp.net") && await recipientBlocked(userId, guardJid.split("@")[0].split(":")[0])) throw new SendGuardError("RECIPIENT_OPTED_OUT");
+       let result;
+       requireSenderIdentity();
+       await auth.assertOwned();
++      await assertSendFence();
+       try { result = await sendMessage(jid, content, generationOptions); }
+       catch (error) {
+         await prisma.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { failures: { increment: 1 } } }).catch(() => console.error("SEND_FAILURE_COUNT_FAILED"));
+         throw error;
+       }
+       if (result) await captureChatMessage(phoneId, result, _waSocket).catch(() => console.error("CHAT_OUTGOING_SAVE_FAILED", phoneId));
+       if (result) await storeProtocolMessage(phoneId, result).catch(() => console.error("WA_PROTOCOL_SAVE_FAILED", phoneId));
+       return result;
++      };
++      return trafficPolicy ? serializePhoneSend(phoneId, perform) : perform();
+     };
+ 
+     // console.info("CREATE new session: " + phoneId);
+     _waSocket.ev.on("creds.update", (authState) => {
+--- a/src/server/events/connectionUpdate.ts
++++ b/src/server/events/connectionUpdate.ts
+@@ -17,8 +17,10 @@
+ import { waRecovery } from "../libs/waRecoveryState";
+ import { acceptsPairingIdentity, rejectedPairings } from "../libs/pairingIdentity";
+ import { clearDatabaseAuth } from "../libs/waAuthState";
+ 
++import { recordTrafficReconnect } from "../messaging/trafficGuard";
++
+ const reconnectAttempts = waRecovery.attempts;
+ const reconnectTimers = waRecovery.timers;
+ 
+ export function stopReconnectTimers() {
+@@ -103,8 +105,9 @@
+     if (getAllSession().get(phoneId) && getAllSession().get(phoneId) !== waSock) return;
+     if (persisted) await emitDeviceEvent(phoneId, "isOnline", { phoneId, isOnline });
+   }
+   if (connection === "open") {
++    await recordTrafficReconnect(phoneId);
+     waRecovery.disconnects?.delete(phoneId);
+     waRecovery.blocked.delete(phoneId);
+     const health = waRecovery.sockets.get(waSock);
+     if (health) health.connected = true;
+--- a/src/server/dispatch/worker.ts
++++ b/src/server/dispatch/worker.ts
+@@ -23,8 +23,10 @@
+ import { isTelegramDevice } from "../../lib/messagingChannel";
+ import { prepareTelegramDispatch, sendTelegramDispatch, telegramDispatchOutcome } from "../telegram/dispatch";
+ import { telegramEnabled } from "../telegram/availability";
+ 
++import { withSendFence } from "../messaging/sendFence";
++
+ const runnable = () => ({ OR: [{ campaignId: null }, { campaign: { status: { in: ["WAITING", "PROCESSING"] as ("WAITING" | "PROCESSING")[] }, scheduledAt: { lte: new Date() } } }] });
+ // A future campaign must not expire merely because its queue rows were created early.
+ const ageEligible = (cutoff: Date) => ({ OR: [{ createdAt: { gt: cutoff } }, { campaign: { scheduledAt: { gt: cutoff } } }] });
+ 
+@@ -246,9 +248,11 @@
+         await recordDispatchReceipt(senderId, messageId, 2);
+         return result;
+       };
+       const result = await Promise.race([
+-        sendAndConfirm(),
++        withSendFence({ deadlineAt: Date.now() + ACK_TIMEOUT_MS,
++          isCurrent: async () => !!await prisma.waDispatch.findFirst({ where: { id: job.id, messageId, status: "PROCESSING", leaseToken: token }, select: { id: true } }),
++        }, sendAndConfirm),
+         new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("SEND_TIMEOUT")), ACK_TIMEOUT_MS); }),
+       ]);
+       if (result === null) return;
+       if (!result?.key?.id) throw new Error("NO_MESSAGE_ACK");
+--- a/src/pages/api/public/[action].ts
++++ b/src/pages/api/public/[action].ts
+@@ -10,9 +10,9 @@
+ import { isPairingInProgress } from "@/server/libs/pairingState";
+ import { pairingSessionIdentity, registeredPairingNumber } from "@/server/libs/pairingIdentity";
+ import { registeredPhones } from "@/server/registeredPhones";
+ import { updateDevice } from "@/server/deviceWebhook/events";
+-import { deviceToken } from "@/server/deviceToken";
++import { resolveControlDevice } from "@/server/dispatchControlAuth";
+ import type { Phone } from "@prisma/client";
+ import { DispatchAuthError, resolveDispatchDevice, resolveIntegrationIdentity } from "@/server/dispatchAuth";
+ import { hasEnabledSenderGroup } from "@/server/dispatch/senderGroups";
+ import { isTelegramDevice } from "@/lib/messagingChannel";
+@@ -31,13 +31,9 @@
+       return await registeredPhones(action, identity.user.id, body.number, res);
+     }
+     if (sending) phone = (await resolveDispatchDevice(req, body)).phone;
+     else {
+-      const token = deviceToken(req, body);
+-      if (typeof token !== "string" || token.length > 256) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
+-      const device = await prisma.phone.findUnique({ where: { token } });
+-      if (!device) return res.status(401).json({ result: false, curl_error: null, message: "Token tidak valid." });
+-      phone = device;
++      phone = await resolveControlDevice(req, body);
+     }
+     if (action === "session") return res.json({ channel: phone.channel || "whatsapp", active: phone.active === 1, online: phone.isOnline, name: phone.account_name, number: phone.number,
+       ...(!isTelegramDevice(phone) ? pairingSessionIdentity(phone, session.get(phone.id)) : {}),
+     });

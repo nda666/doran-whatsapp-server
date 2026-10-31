@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Alert, Button, Card, Form, Input, InputNumber, Space, Switch, message } from "antd";
 import axios from "axios";
 import { useDashboardApi } from "@/lib/useDashboardApi";
+import RecipientConsents from "./RecipientConsents";
 export default function MessagingPreferences() {
   const uiText = useUiTranslation();
   const settings = useDashboardApi("/api/messaging-settings");
@@ -24,5 +25,6 @@ export default function MessagingPreferences() {
         <Button type="primary" htmlType="submit" loading={busy}>{uiText("Simpan pengaturan")}</Button>
       </Form>}
     </Card>
+    <RecipientConsents />
   </Space>;
 }

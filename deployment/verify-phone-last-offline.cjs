@@ -12,7 +12,7 @@ function load(file, mocks) {
   let phone = { id: 'phone', isOnline: false, status: 'CLOSE', lastOfflineAt: null }, fail = false;
   const sessions = new Map(), maintenance = new Set(), retired = new WeakSet(), events = [];
   const recovery = { sockets: new WeakMap(), attempts: new Map(), timers: new Map(), blocked: new Set(), disconnects: new Map() };
-  const tx = { phone: {
+  const tx = { deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: {
     update: async ({ data }) => { Object.assign(phone, data); return phone; },
     updateMany: async ({ where, data }) => { if (phone.id !== where.id || phone.isOnline !== where.isOnline) return { count: 0 }; Object.assign(phone, data); return { count: 1 }; },
   } };
@@ -21,6 +21,7 @@ function load(file, mocks) {
     events.push({ name, data });
   } };
   const handler = load('src/server/events/connectionUpdate.ts', {
+    '../libs/waAuthState': { clearDatabaseAuth: async () => {} },
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admins' }, fs: { rmSync() {} }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515 } },
     '../../lib/prisma': { prisma: { ...tx, $transaction: async fn => { if (fail) throw new Error('DB_DOWN'); return fn(tx); } } },

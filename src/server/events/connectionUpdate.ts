@@ -16,6 +16,7 @@ import { updateDevice } from "../deviceWebhook/events";
 import { phoneMaintenance, retiredSockets } from "../libs/phoneMaintenance";
 import { waRecovery } from "../libs/waRecoveryState";
 import { acceptsPairingIdentity, rejectedPairings } from "../libs/pairingIdentity";
+import { clearDatabaseAuth } from "../libs/waAuthState";
 
 const reconnectAttempts = waRecovery.attempts;
 const reconnectTimers = waRecovery.timers;
@@ -86,6 +87,11 @@ export default async function connectionUpdate(
     let persisted = false;
     try {
       await prisma.$transaction(async tx => {
+        if (isOnline) {
+          const readyAt = new Date(Date.now() + 30_000);
+          await tx.deviceSendPolicy.createMany({ data: [{ phoneId }], skipDuplicates: true });
+          await tx.deviceSendPolicy.updateMany({ where: { phoneId, nextAllowedAt: { lt: readyAt } }, data: { nextAllowedAt: readyAt } });
+        }
         // Only the transition from online starts a new offline period.
         // Failed reconnects must preserve the original time.
         if (!isOnline) await tx.phone.updateMany({
@@ -131,6 +137,8 @@ export default async function connectionUpdate(
       DisconnectReason.loggedOut
     ) {
       waRecovery.blocked.add(phoneId);
+      await waitForAuthSave(waSock).catch(() => {});
+      await clearDatabaseAuth(phoneId);
       fs.rmSync(join(process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth", `${userId}-${phoneId}`), {
         recursive: true,
         force: true,

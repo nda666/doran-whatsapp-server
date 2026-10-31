@@ -32,6 +32,8 @@ export function dispatchWaitingReason(job: QueueJob, phone?: { active: number; s
 }
 
 export const dispatchErrorLabels: Record<string, string> = {
+  WA_ACCOUNT_RESTRICTED: "WhatsApp membatasi akun. Menunggu pemeriksaan ulang status pembatasan.",
+  WA_RESTRICTION_UNKNOWN: "Status pembatasan WhatsApp belum dapat diperiksa. Pengiriman ditahan sementara.",
   TELEGRAM_DISABLED: "Telegram dinonaktifkan atau API key belum dikonfigurasi.",
   TELEGRAM_FLOOD_RETRY: "Menunggu durasi flood dari provider Telegram; maksimal tiga percobaan.",
   TELEGRAM_FLOOD_EXHAUSTED: "Batas tiga percobaan Telegram tercapai; retry dihentikan.",

@@ -1,10 +1,11 @@
 import "pino-pretty";
 import { captureStop, reserveSend, recipientBlocked, SendGuardError } from "../messaging/safety";
+import { serializeTransport, markLegacyTransportStarted } from "../messaging/transportSafety";
+import { assertSendFence } from "../messaging/sendFence";
 
 import pino from "pino";
 
 import _makeWASocket, {
-  useMultiFileAuthState,
   WASocket,
 } from "@whiskeysockets/baileys";
 
@@ -25,6 +26,9 @@ import { updateDevice } from "../deviceWebhook/events";
 import { phoneMaintenance, retiredSockets } from "./phoneMaintenance";
 import { waRecovery } from "./waRecoveryState";
 import { captureChatMessage, recordChatReceipt } from "../chat/store";
+import { createDatabaseAuthState, closeDatabaseAuth } from "./waAuthState";
+import { groupMetadataCache, getProtocolMessage, storeProtocolMessage } from "./waMessageStore";
+import { recordRestriction, refreshRestrictions, requireUnrestricted } from "../messaging/restrictions";
 
 const shared = globalThis as typeof globalThis & {
   doranWaSessions?: Map<string, WASocket>;
@@ -71,17 +75,24 @@ const createWASocket = async (
     await waitForAuthSave(existing);
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { state, saveCreds } = await useMultiFileAuthState(
-    `${process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth"}/${userId}-${phoneId}`
-  );
   let _waSocket = {} as WASocket;
+  const auth = await createDatabaseAuthState(phoneId,
+    `${process.env.WHATSAPP_AUTH_FOLDER || "./storage/whatsapp-auth"}/${userId}-${phoneId}`,
+    () => {
+      if (_waSocket.end) {
+        retiredSockets.add(_waSocket);
+        _waSocket.end(new Error("WA_AUTH_LEASE_LOST"));
+        if (session.get(phoneId) === _waSocket) session.delete(phoneId);
+      }
+    });
+  const { state, saveCreds } = auth;
 
   if (session.get(phoneId) && !replaceState) {
     _waSocket = session.get(phoneId)!;
   } else {
     // const webVersion = await fetchLatestWaWebVersion({});
-    _waSocket = await _makeWASocket({
+    const groups = groupMetadataCache(() => _waSocket);
+    try { _waSocket = await _makeWASocket({
       // logger: waSocketLogOption,
       logger: pino({ level: "silent" }),
       auth: state,
@@ -89,12 +100,27 @@ const createWASocket = async (
       syncFullHistory: false,
       markOnlineOnConnect: phone.showOnline,
       qrTimeout: WaSockQrTimeout,
-    });
+      getMessage: async key => {
+        const message = await getProtocolMessage(phoneId, key);
+        if (message || !key.remoteJid?.endsWith("@lid")) return message;
+        const pn = await _waSocket.signalRepository.lidMapping.getPNForLID(key.remoteJid);
+        return pn ? getProtocolMessage(phoneId, { ...key, remoteJid: pn }) : undefined;
+      },
+      cachedGroupMetadata: jid => groups.get(jid),
+    }); } catch (error) { await auth.close(); throw error; }
+    _waSocket.ev.on("groups.update", updates => { for (const group of updates) if (group.id) groups.invalidate(group.id); });
+    _waSocket.ev.on("group-participants.update", update => groups.invalidate(update.id));
     bindPairingIdentity(_waSocket, phone.number);
     rejectedPairings.delete(phoneId);
     waRecovery.blocked.delete(phoneId);
     waRecovery.sockets.set(_waSocket, { createdAt: Date.now(), connected: false });
     session.set(phoneId, _waSocket);
+    const restrictionTimer = setInterval(() => {
+      if (!retiredSockets.has(_waSocket) && session.get(phoneId) === _waSocket && _waSocket.ws.isOpen && _waSocket.user) {
+        refreshRestrictions(phoneId, _waSocket).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
+      }
+    }, 300_000);
+    restrictionTimer.unref();
     const sendMessage = _waSocket.sendMessage.bind(_waSocket);
     _waSocket.ev.on("contacts.upsert", contacts => {
       cacheDeviceContacts(userId, phoneId, contacts).catch(() => console.error("CONTACT_SYNC_FAILED"));
@@ -111,8 +137,11 @@ const createWASocket = async (
     const requireSenderIdentity = () => {
       if (retiredSockets.has(_waSocket) || session.get(phoneId) !== _waSocket || !acceptsPairingIdentity(_waSocket)) throw new SendGuardError("SENDER_NUMBER_MISMATCH");
     };
-    _waSocket.sendMessage = async (jid, content, options) => {
+    _waSocket.sendMessage = (jid, content, options) => serializeTransport(phoneId, async () => {
+      await assertSendFence();
       requireSenderIdentity();
+      await auth.assertOwned();
+      await requireUnrestricted(phoneId, _waSocket);
       const generationOptions = { ...options, getUrlInfo: safeLinkPreview };
       const guardJid = jid.endsWith("@lid") ? await _waSocket.signalRepository.lidMapping.getPNForLID(jid) : jid;
       if (!guardJid) throw new SendGuardError("RECIPIENT_ID_UNRESOLVED");
@@ -120,18 +149,22 @@ const createWASocket = async (
       if (guardJid.endsWith("@s.whatsapp.net") && await recipientBlocked(userId, guardJid.split("@")[0].split(":")[0])) throw new SendGuardError("RECIPIENT_OPTED_OUT");
       let result;
       requireSenderIdentity();
+      await auth.assertOwned();
+      await assertSendFence();
+      markLegacyTransportStarted();
       try { result = await sendMessage(jid, content, generationOptions); }
       catch (error) {
         await prisma.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { failures: { increment: 1 } } }).catch(() => console.error("SEND_FAILURE_COUNT_FAILED"));
         throw error;
       }
       if (result) await captureChatMessage(phoneId, result, _waSocket).catch(() => console.error("CHAT_OUTGOING_SAVE_FAILED", phoneId));
+      if (result) await storeProtocolMessage(phoneId, result).catch(() => console.error("WA_PROTOCOL_SAVE_FAILED", phoneId));
       return result;
-    };
+    });
 
     // console.info("CREATE new session: " + phoneId);
     _waSocket.ev.on("creds.update", (authState) => {
-      const saving = (authWrites.get(_waSocket) || Promise.resolve()).catch(() => {}).then(saveCreds);
+      const saving = saveCreds();
       authWrites.set(_waSocket, saving);
       saving.catch(error => console.error("Auth state save failed:", error.message));
     });
@@ -158,6 +191,16 @@ const createWASocket = async (
 
     // return _waSocket;
     _waSocket.ev.on("connection.update", async (update) => {
+      if (update.reachoutTimeLock && session.get(phoneId) === _waSocket && !retiredSockets.has(_waSocket)) {
+        recordRestriction(phoneId, update.reachoutTimeLock).catch(() => console.error("WA_RESTRICTION_SAVE_FAILED", phoneId));
+      }
+      if (update.connection === "open") refreshRestrictions(phoneId, _waSocket).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
+      if (update.connection === "close") {
+        clearInterval(restrictionTimer);
+        const closing = waitForAuthSave(_waSocket).finally(() => auth.close());
+        authWrites.set(_waSocket, closing);
+        closing.catch(() => console.error("WA_AUTH_CLOSE_FAILED", phoneId));
+      }
       recordQrState(_waSocket, update, WaSockQrTimeout);
       connectionUpdate(_waSocket, userId, phoneId, update).catch(error => {
         console.error("WhatsApp connection update failed:", error.message);
@@ -181,6 +224,7 @@ const createWASocket = async (
         try { if (await captureStop(userId, senderJid, messageIn)) optedOutMessages.add(incoming); }
         catch { optedOutMessages.add(incoming); console.error("OPT_OUT_CAPTURE_FAILED", phoneId); }
       }
+      for (const incoming of batch) await storeProtocolMessage(phoneId, incoming).catch(() => console.error("WA_PROTOCOL_SAVE_FAILED", phoneId));
       // Store every new message in a batch, including messages sent from the phone.
       if (type === "notify" || type === "append") for (const message of batch) {
         await captureChatMessage(phoneId, message, _waSocket).catch(() => console.error("CHAT_INCOMING_SAVE_FAILED", phoneId));
@@ -276,9 +320,9 @@ export async function closeWaSessions() {
     where: { id: { in: Array.from(session.keys()) }, isOnline: true },
     data: { isOnline: false, status: "CLOSE", lastOfflineAt: new Date() },
   }).catch(error => console.error("WA_SHUTDOWN_STATUS_FAILED", error instanceof Error ? error.message : "Unknown error"));
-  const results = await Promise.allSettled(Array.from(session.values()).map(async socket => {
+  const results = await Promise.allSettled(Array.from(session.entries()).map(async ([phoneId, socket]) => {
     try { await waitForAuthSave(socket); }
-    finally { socket.end(new Error("SERVER_SHUTDOWN")); }
+    finally { socket.end(new Error("SERVER_SHUTDOWN")); await closeDatabaseAuth(phoneId); }
   }));
   session.clear();
   if (results.some(result => result.status === "rejected")) throw new Error("WA_SHUTDOWN_FAILED");

@@ -21,6 +21,7 @@ async function main() {
   };
   const add = id => phones.push({ id, userId: 'owner' });
   const recovery = load('src/server/waRecovery.ts', {
+    './libs/waAuthState': { readDatabaseCreds: async () => ({ migrated: false }) },
     'node:path': require('node:path'),
     'node:fs/promises': { readFile: async name => { reads.push(name); if (name.includes('unlinked')) return '{}'; return '{"me":{"id":"linked"}}'; } },
     '../lib/prisma': { prisma: { phone: { findMany: async () => { if (queryFails) throw new Error('DB'); return phones; } } } },
@@ -51,7 +52,7 @@ async function main() {
   const connection = load('src/server/events/connectionUpdate.ts', {
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admin' }, fs: { rmSync() { throw new Error('Credential deletion'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
-    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
     '../constant': { WaSockQrTimeout: 60000 }, '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {}, default: async (_, id) => attempts.push(id) },
     '../libs/socket': { emitDeviceEvent: async () => {} }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired }, '../libs/waRecoveryState': { waRecovery: state },
@@ -74,6 +75,8 @@ async function main() {
     authState: { creds: { me: { id: 'linked' } } },
     sendMessage() {}, end() {}, ev: { on(name, callback) { handlers.set(name, callback); } } });
   const factoryMocks = new Proxy({
+    './waAuthState': { closeDatabaseAuth: async () => {}, createDatabaseAuthState: async () => ({ state: {}, saveCreds: async () => { authSaves++; }, close: async () => {}, assertOwned: async () => {} }) },
+    './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }) },
     '../chat/store': { captureChatMessage: async () => {}, recordChatReceipt: async () => {} },
     pino: { default: () => ({}) },
     '@whiskeysockets/baileys': { default: () => { created++; return newSocket(); }, useMultiFileAuthState: async () => ({ state: {}, saveCreds: async () => { authSaves++; } }) },
@@ -82,7 +85,7 @@ async function main() {
     './waRecoveryState': { waRecovery: state },
     './pairingIdentity': { bindPairingIdentity() {}, acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
   }, { has: () => true, get: (obj, key) => obj[key] || {} });
-  const factory = load('src/server/libs/makeWASocket.ts', factoryMocks, { globalThis: {} });
+  const factory = load('src/server/libs/makeWASocket.ts', factoryMocks, { globalThis: {}, setInterval: () => ({ unref() {} }), clearInterval() {} });
   const first = await factory.default('owner', 'factory');
   assert.equal(factory.session.get('factory'), first);
   assert.equal(await factory.default('owner', 'factory'), first); assert.equal(created, 1);

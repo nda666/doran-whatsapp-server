@@ -1,7 +1,9 @@
+import type { AnyMessageContent } from "@whiskeysockets/baileys";
+import { createLegacySendAttempt, withLegacySendAttempt, canRetryLegacySend, type LegacySendAttempt } from "../messaging/transportSafety";
 import { delay, WAMessage } from "@whiskeysockets/baileys";
 
-// import makeWASocket, { deleteSession } from "@/lib/makeWASocket";
-import makeWASocket, { deleteSession } from "./makeWASocket";
+// import makeWASocket from "@/lib/makeWASocket";
+import makeWASocket from "./makeWASocket";
 
 const sendGroupMessageFromIo = async ({
   phoneId,
@@ -57,9 +59,12 @@ const sendGroupMessage = async (
   phoneId: string,
   userId: string,
   image?: any,
-  id_group?: string
+  id_group?: string,
+  attempt: LegacySendAttempt = createLegacySendAttempt()
 ): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
+  const sendAttempt = (jid: string, content: AnyMessageContent) => withLegacySendAttempt(attempt,
+    () => createdWaSock.sendMessage(jid, content, { messageId: attempt.messageId }));
   try {
     let is_exist_idgroup = await createdWaSock.groupMetadata(id_group!);
     if (!is_exist_idgroup) {
@@ -71,7 +76,7 @@ const sendGroupMessage = async (
     // (phoneCountry || "ID") as CountryCode
     // );
     if (!image) {
-      return await createdWaSock.sendMessage(`${id_group}`, {
+      return await sendAttempt(`${id_group}`, {
         text: message!,
       });
     } else {
@@ -84,12 +89,12 @@ const sendGroupMessage = async (
 
         // const file = new File([blob], fileName || 'image', {type: 'image/png' || 'image/png'});
         // return res.status(200).json({'binary': binaryString});
-        return await createdWaSock.sendMessage(`${id_group}`, {
+        return await sendAttempt(`${id_group}`, {
           image: binaryString,
         });
       } else if (image !== null && !isBase64(image)) {
         // return res.status(200).json('ok');
-        return await createdWaSock.sendMessage(`${id_group}`, {
+        return await sendAttempt(`${id_group}`, {
           image: {
             url: image,
           },
@@ -98,8 +103,7 @@ const sendGroupMessage = async (
       }
     }
   } catch (e: any) {
-    if (e?.output?.statusCode === 428 && retry < 5) {
-      deleteSession(phoneId);
+    if (canRetryLegacySend(attempt, e, retry, 5)) {
       retry++;
       await delay(2000);
       return await sendGroupMessage(
@@ -110,7 +114,8 @@ const sendGroupMessage = async (
         phoneId,
         userId,
         image,
-        id_group
+        id_group,
+        attempt
       );
     } else {
       throw e;

@@ -37,6 +37,7 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
   if (req.method === "GET") {
     const phones = await prisma.phone.findMany({ where: ownerScope(req.user!), select: { id: true, name: true, number: true, isOnline: true, lastSendProcessedAt: true } });
     const ids = phones.map(p => p.id);
+    const restrictions = await prisma.waRestriction.findMany({ where: { phoneId: { in: ids } } });
     const [windows, quotaReset] = await Promise.all([prisma.deviceQuotaWindow.findMany({ where: { phoneId: { in: ids } } }), getQuotaReset()]);
     const windowMap = new Map(windows.map(window => [window.phoneId, window]));
     const [policies, usage, globalInterval, globalQuota, warmupLimits, globalOperatingHours] = await Promise.all([prisma.deviceSendPolicy.findMany({ where: { phoneId: { in: ids } } }), prisma.deviceDailyUsage.findMany({ where: { phoneId: { in: ids }, day: usageDay() } }), getDispatchDelayRange(), getGlobalDeviceQuota(), getWarmupDailyLimits(), getGlobalOperatingHours()]);
@@ -47,7 +48,7 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
       const reset = effectiveQuotaReset(quotaReset, policy.quotaReset);
       const quota = quotaWindowState(windowMap.get(phone.id), used?.attempts || 0, effectiveLimit, reset);
       const effectiveHours = effectiveOperatingHours(globalOperatingHours, policy.operatingHours);
-      return { ...policy, ...phone, globalInterval, globalQuota, globalOperatingHours, effectiveOperatingHours: effectiveHours, operatingHoursState: operatingHoursState(effectiveHours), globalQuotaReset: quotaReset, effectiveQuotaReset: reset, quotaResetAt: quota.resetAt, used: quota.used, effectiveLimit, health: healthAssessment(used?.attempts || 0, used?.failures || 0) };
+      return { ...policy, ...phone, restriction: restrictions.find(item => item.phoneId === phone.id) || null, globalInterval, globalQuota, globalOperatingHours, effectiveOperatingHours: effectiveHours, operatingHoursState: operatingHoursState(effectiveHours), globalQuotaReset: quotaReset, effectiveQuotaReset: reset, quotaResetAt: quota.resetAt, used: quota.used, effectiveLimit, health: healthAssessment(used?.attempts || 0, used?.failures || 0) };
     }));
   }
   if (req.method !== "PUT") return res.status(405).end();

@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261101000000_whatsapp_hardening': '8663cc1f254c7d847bbe8eace59ee2c0ba058650dffd127d1e45fdf38c24cb01',
   '20261025000000_phone_assignment': '48321c65079283d60b499b34f1a33448d2affce51021421701be93323fa161a4',
   '20261024070000_device_channel': '017656197c5f06f58930d06f739585364bda52ec2a746c35b45b2995c3ec71eb',
   '20261021100000_device_quota_reset_override': '631199dee16c982ffd78a032ff59fc2d34130e0fe0b8e0be0a616806cd29bb0a',

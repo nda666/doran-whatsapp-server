@@ -14,9 +14,10 @@ function load(name, mocks) {
   const io = { to: () => io, emit: (name, data) => { if (name === 'qrScanned') assert.equal(persisted.toISOString(), data.lastQrScanAt); events.push({ name, data }); } };
   const recovery = { sockets: new WeakMap(), attempts: new Map(), timers: new Map(), blocked: new Set(), disconnects: new Map() };
   const handler = load('src/server/events/connectionUpdate.ts', {
+    '../libs/waAuthState': { clearDatabaseAuth: async () => {} },
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admins' }, fs: {}, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515 } },
-    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async args => { if (fail) throw new Error('DB unavailable'); updates.push(args); if (args.data.lastQrScanAt) persisted = args.data.lastQrScanAt; } } } },
+    '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async args => { if (fail) throw new Error('DB unavailable'); updates.push(args); if (args.data.lastQrScanAt) persisted = args.data.lastQrScanAt; } } } },
     '../constant': { WaSockQrTimeout: 60000 },
     '../libs/makeWASocket': { getAllSession: () => sessions, deleteSession: id => sessions.delete(id), waitForAuthSave: async () => {} },
     '../libs/socket': { emitDeviceEvent: async (_phoneId, event, data) => io.emit(event, data) }, '../libs/pairingState': { recordPairingProgress: () => undefined },

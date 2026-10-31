@@ -75,6 +75,12 @@ jobs:
       - run: npm run build
       - name: Offline regression suite
         run: node deployment/ci-tests.cjs
+      - name: Encrypted WhatsApp auth storage integration
+        env:
+          WA_HARDENING_DB_TEST: '1'
+        run: node deployment/verify-wa-database-storage.cjs
+      - name: Dispatch monitoring MySQL query
+        run: node deployment/verify-transport-mysql.cjs
       - name: Phone assignment access integration
         run: node deployment/verify-phone-assignment.cjs
       - name: Sender groups and operating hours integration

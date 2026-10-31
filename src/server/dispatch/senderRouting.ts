@@ -51,6 +51,8 @@ export async function selectDispatchSender(origin: Phone, job: WaDispatch, token
       continue;
     }
     if (grouped) {
+      const restriction = await prisma.waRestriction.findUnique({ where: { phoneId: phone.id } });
+      if (restriction?.active) continue;
       const usage = await prisma.deviceDailyUsage.findUnique({ where: { phoneId_day: { phoneId: phone.id, day: usageDay() } } });
       const policy = savedPolicy || { dailyLimit: DEFAULT_DEVICE_DAILY_QUOTA, useGlobalQuota: true, paused: false,
         adaptiveEnabled: true, warmupStartedAt: null, nextAllowedAt: new Date(0) };

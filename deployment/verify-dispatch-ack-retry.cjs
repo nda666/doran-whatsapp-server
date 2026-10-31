@@ -4,7 +4,7 @@ process.env.WHATSAPP_ENABLED = 'true';
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
-let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead, beforeClaim, blockSenderTurn;
+let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead, beforeClaim, blockSenderTurn, groupMode = false;
 class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
 function matches(item, where = {}) {
   return Object.entries(where).every(([key, val]) => {
@@ -26,15 +26,18 @@ async function update({ where, data }) {
 const prisma = {
   recipientSuppression: { findUnique: async () => null },
   waSenderLease: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }), findFirst: async () => ({}) },
-  phone: { findUnique: async () => ({ id: 'phone', userId: 'owner', active: 1, showTyping: true }), findMany: async ({ where }) => [{ id: where.id || 'phone', userId: 'owner', active: 1, showTyping: true }] },
+  phone: { count: async () => 1, findUnique: async () => ({ id: 'phone', userId: 'owner', active: 1, showTyping: true }), findMany: async ({ where }) => [{ id: where.id || 'phone', userId: 'owner', active: 1, showTyping: true }] },
   deviceSendPolicy: { findUnique: async () => null, updateMany: async () => ({ count: 1 }) },
+  waRestriction: { findUnique: async () => null },
   deviceDailyUsage: { updateMany: async () => ({ count: 1 }) },
   waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async () => ({ count: 1 }) },
   waDispatch: {
     findFirst: async ({ where, select }) => select?.id && blockSenderTurn ? { id: 'earlier-job-on-actual-sender' } : matches(row, where) ? { ...row } : null,
     findUnique: async () => { if (beforeRead) { const fn = beforeRead; beforeRead = null; await fn(); } return { ...row }; },
   },
+  senderGroup: { findFirst: async () => ({ id: 'group' }) },
   campaign: { updateMany: async () => ({ count: 0 }) },
+  $queryRaw: async () => [],
   $transaction: async fn => { if (beforeClaim) { const hook = beforeClaim; beforeClaim = null; await hook(); } return fn(prisma); }, $executeRaw: async () => 0,
 };
 const socket = {
@@ -76,12 +79,16 @@ function load(name) {
 }
 timers = new Set();
 const retry = load('src/server/dispatch/retry.ts');
+const routing = load('src/server/dispatch/senderRouting.ts');
+stubs['src/server/dispatch/senderRouting.ts'] = { selectDispatchSender: async (...args) => groupMode
+  ? { phone: { id: 'phone', userId: 'owner', active: 1 }, socket, groupId: 'group', grouped: true, leased: false }
+  : routing.selectDispatchSender(...args) };
 const worker = load('src/server/dispatch/worker.ts');
 const receipts = load('src/server/dispatch/receipts.ts');
 function reset() {
   row = { id: 'dispatch', phoneId: 'phone', senderPhoneId: null, senderGroupId: null, source: 'API', status: 'QUEUED', messageId: null, sentAt: null, deliveredAt: null, readAt: null,
     attempts: 0, nextAttemptAt: new Clock(0), createdAt: new Clock(now - 1000), lastError: null, recipient: 'mock', message: 'test', campaignId: null };
-  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null; beforeClaim = null; blockSenderTurn = false;
+  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null; beforeClaim = null; blockSenderTurn = false; groupMode = false;
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function timeoutAttempt() {
@@ -135,10 +142,20 @@ async function timeoutAttempt() {
   reset(); mode = 'permanent'; await worker.processPhone('phone');
   assert.equal(row.status, 'FAILED'); assert.equal(row.lastError, 'WA_ACK_463_ACCOUNT_RESTRICTED');
   await worker.processPhone('phone'); assert.equal(sends.length, 1, 'no retry of account restriction');
+  reset(); groupMode = true; mode = 'permanent'; await worker.processPhone('phone');
+  assert.equal(row.status, 'QUEUED'); assert.equal(row.lastError, 'SENDER_REJECTED_RETRY');
+  assert.equal(row.nextAttemptAt.getTime() - now, 60000, 'Sender-group fallback waits exactly one minute after 463');
+  now += 59000; await worker.processPhone('phone'); assert.equal(sends.length, 1, 'No group fallback before one minute');
+  now += 1000; mode = 'ack'; await worker.processPhone('phone'); assert.equal(row.status, 'SENT'); assert.equal(sends.length, 2);
   reset(); mode = 'ack'; await worker.processPhone('phone'); assert.equal(row.status, 'SENT');
   reset(); mode = 'error'; await worker.processPhone('phone'); assert.equal(row.status, 'UNCERTAIN', 'early transport failure does not retry');
   reset(); row.status = 'UNCERTAIN'; await worker.processPhone('phone'); assert.equal(sends.length, 0, 'old uncertain not replayed');
   reset(); row.messageId = 'unexplained'; await worker.processPhone('phone'); assert.equal(sends.length, 0, 'unmarked queued send excluded');
+  for (const reason of ['WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN']) {
+    reset(); mode = 'ack'; row.messageId = 'stable-retry-id'; row.lastError = reason;
+    await worker.processPhone('phone'); assert.equal(row.status, 'SENT', 'Restriction-held ACK retries remain eligible after clearance');
+    assert.equal(sends[0], 'stable-retry-id');
+  }
   reset(); mode = 'ack';
   beforeClaim = () => { row.senderPhoneId = 'backup'; };
   await worker.processPhone('phone');

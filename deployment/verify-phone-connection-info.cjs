@@ -36,6 +36,7 @@ async function main() {
   const sessions = new Map(), blocked = new Set(), timers = new Map(), health = new WeakMap(), maintenance = new Set();
   let readMode = 'linked', reads = 0, pairing = false;
   const { getPhoneConnectionInfo } = load('src/server/phoneConnectionInfo.ts', {
+    './libs/waAuthState': { readDatabaseCreds: async () => ({ migrated: false }) },
     'node:path': require('node:path'),
     'node:fs/promises': { readFile: async () => {
       reads++;

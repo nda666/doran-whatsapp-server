@@ -1,10 +1,12 @@
+import type { AnyMessageContent } from "@whiskeysockets/baileys";
+import { createLegacySendAttempt, withLegacySendAttempt, canRetryLegacySend, type LegacySendAttempt } from "../messaging/transportSafety";
 import { readFileSync } from "fs";
 import { CountryCode } from "libphonenumber-js";
 import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
 
 import { delay, WAMessage } from "@whiskeysockets/baileys";
 
-import makeWASocket, { deleteSession } from "./makeWASocket";
+import makeWASocket from "./makeWASocket";
 import toBase64 from "./toBase64";
 
 const sendAttachmentMessageIo = async ({
@@ -48,14 +50,17 @@ const sendAttachmentMessage = async (
   retry: number,
   phoneId: string,
   userId: string,
-  image: any
+  image: any,
+  attempt: LegacySendAttempt = createLegacySendAttempt()
 ): Promise<WAMessage | undefined> => {
   const createdWaSock = await makeWASocket(userId, phoneId);
+  const sendAttempt = (jid: string, content: AnyMessageContent) => withLegacySendAttempt(attempt,
+    () => createdWaSock.sendMessage(jid, content, { messageId: attempt.messageId }));
   try {
     const recipient = normalizePhoneRecipient(_to, (phoneCountry || "ID") as CountryCode);
 
     if (image !== undefined && typeof image == "string") {
-      return await createdWaSock.sendMessage(
+      return await sendAttempt(
         `${recipient}@s.whatsapp.net`,
         {
           image: {
@@ -70,7 +75,7 @@ const sendAttachmentMessage = async (
       console.log(_file);
       if (_file.mimetype?.startsWith("image/")) {
         const image64 = await toBase64(_file.filepath);
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             image: Buffer.from(image64),
@@ -80,7 +85,7 @@ const sendAttachmentMessage = async (
       }
 
       if (_file.mimetype?.startsWith("video/")) {
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             video: readFileSync(_file.filepath),
@@ -90,7 +95,7 @@ const sendAttachmentMessage = async (
       }
 
       if (_file.mimetype?.startsWith("audio/")) {
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             audio: readFileSync(_file.filepath),
@@ -101,7 +106,7 @@ const sendAttachmentMessage = async (
       }
 
       if (_file.mimetype == "application/pdf") {
-        return await createdWaSock.sendMessage(
+        return await sendAttempt(
           `${recipient}@s.whatsapp.net`,
           {
             document: readFileSync(_file.filepath),
@@ -112,7 +117,7 @@ const sendAttachmentMessage = async (
       }
 
       const image64 = await toBase64(image.filepath);
-      return await createdWaSock.sendMessage(
+      return await sendAttempt(
         `${recipient}@s.whatsapp.net`,
         {
           image: Buffer.from(image64),
@@ -121,8 +126,7 @@ const sendAttachmentMessage = async (
       );
     }
   } catch (e: any) {
-    if (e?.output?.statusCode === 428 && retry < 5) {
-      deleteSession(phoneId);
+    if (canRetryLegacySend(attempt, e, retry, 5)) {
       retry++;
       await delay(2000);
       return await sendAttachmentMessage(
@@ -132,7 +136,8 @@ const sendAttachmentMessage = async (
         retry,
         phoneId,
         userId,
-        image
+        image,
+        attempt
       );
     } else {
       throw e;

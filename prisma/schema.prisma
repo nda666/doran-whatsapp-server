@@ -12,6 +12,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model WaAuthSession {
+  phoneId     String    @id @db.VarChar(36)
+  leaseToken  String?   @db.VarChar(36)
+  leaseUntil  DateTime?
+  migratedAt  DateTime?
+  updatedAt   DateTime  @updatedAt
+  @@map("wa_auth_sessions")
+}
+
+model WaAuthKey {
+  phoneId     String @db.VarChar(36)
+  keyHash     String @db.Char(64)
+  keyName     String @db.VarChar(512)
+  value       String @db.LongText
+  @@id([phoneId, keyHash])
+  @@map("wa_auth_keys")
+}
+
+model WaRestriction {
+  phoneId       String    @id @db.VarChar(36)
+  active        Boolean   @default(false)
+  reason        String?   @db.VarChar(100)
+  endsAt        DateTime?
+  checkedAt     DateTime?
+  newChatCap    Json?
+  updatedAt     DateTime  @updatedAt
+  @@map("wa_restrictions")
+}
+
+model WaProtocolMessage {
+  phoneId    String   @db.VarChar(36)
+  keyHash    String   @db.Char(64)
+  value      String   @db.LongText
+  expiresAt  DateTime
+  @@id([phoneId, keyHash])
+  @@index([expiresAt])
+  @@map("wa_protocol_messages")
+}
+
+model RecipientConsent {
+  userId     String    @db.VarChar(36)
+  number     String    @db.VarChar(32)
+  purpose    String    @db.VarChar(24)
+  source     String    @db.VarChar(100)
+  evidence   String    @db.VarChar(1000)
+  grantedAt  DateTime
+  revokedAt  DateTime?
+  updatedAt  DateTime  @updatedAt
+  @@id([userId, number, purpose])
+  @@map("recipient_consents")
+}
+
+model RecipientConsentEvent {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  userId     String   @db.VarChar(36)
+  number     String   @db.VarChar(32)
+  purpose    String   @db.VarChar(24)
+  action     String   @db.VarChar(16)
+  source     String   @db.VarChar(100)
+  evidence   String   @db.VarChar(1000)
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  @@index([userId, number, createdAt])
+  @@map("recipient_consent_events")
+}
+
 enum WaDispatchStatus {
   QUEUED
   PROCESSING
