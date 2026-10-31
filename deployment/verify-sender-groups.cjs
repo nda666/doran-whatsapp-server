@@ -105,7 +105,10 @@ async function main() {
   fs.writeFileSync(path.join(testBackup, 'database.sql'), legacyBaselineSql);
   fs.writeFileSync(path.join(testBackup, 'storage-and-env.tar'), Buffer.alloc(1024));
   const upgrade = await schemaUpgrade.apply(prisma, approvedSql, testBackup);
-  assert.deepEqual(upgrade.created_tables.sort(), ['device_quota_windows', 'sender_groups', 'wa_dispatch_attempts']);
+  assert.deepEqual(upgrade.created_tables.sort(), [
+    'device_quota_windows', 'recipient_consent_events', 'recipient_consents', 'sender_groups',
+    'wa_auth_keys', 'wa_auth_sessions', 'wa_dispatch_attempts', 'wa_protocol_messages', 'wa_restrictions',
+  ]);
   assert.equal(upgrade.created_table_counts.device_quota_windows, '0', 'No usage exists in the empty baseline');
   assert.equal(upgrade.history_updated, false);
   assert.equal((await schemaUpgrade.apply(prisma, approvedSql, testBackup)).executed.length, 0, 'Schema preparation must be idempotent');
