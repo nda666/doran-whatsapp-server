@@ -16,4 +16,10 @@ for (const metrics of [null, { ...healthy.metrics, running: false },
   assert(!dispatchReady(200, { ...healthy, metrics }, now));
 }
 assert(!dispatchReady(200, null, now));
+const slowPoll = { ...healthy, metrics: { ...healthy.metrics, worker_last_poll_success: now - 75000 } };
+assert(dispatchReady(200, slowPoll, now, 105000), '75-second polling is fresh within configured interval plus grace');
+assert(!dispatchReady(200, { ...slowPoll, metrics: { ...slowPoll.metrics, worker_last_poll_success: now - 105001 } }, now, 105000));
+assert(!dispatchReady(200, { ...slowPoll, metrics: { ...slowPoll.metrics, queueSampleAt: now - 60001 } }, now, 105000), 'Sampling retains its own 60-second limit');
+assert(!dispatchReady(200, { ...slowPoll, metrics: { ...slowPoll.metrics, worker_last_poll_success: null } }, now, 105000), 'First successful poll is still required');
+for (const invalid of [NaN, Infinity, -1, 59999]) assert(!dispatchReady(200, healthy, now, invalid));
 console.log('DEPLOY_READINESS_WORKER_FRESHNESS_RUNTIME_FAILURES_AND_EXISTING_BACKLOG_PASSED');

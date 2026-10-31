@@ -350,12 +350,14 @@ def main():
             (shared_public / name).rename(APP / 'public' / name)
             restored_public.append(name)
         pm2('startOrReload', 'ecosystem.config.js', '--only', 'doran-whatsapp', '--update-env')
-        for attempt in range(30):
+        # First polling follows the configured delay (currently up to 75s).
+        # Allow 120s for startup; freshness checks still reject a stopped/stale worker.
+        for attempt in range(60):
             try:
                 run(['node', 'deployment/cd-database.cjs', 'health'], cwd=APP)
                 break
             except RuntimeError:
-                if attempt == 29:
+                if attempt == 59:
                     raise
                 time.sleep(2)
         # Public proxy must also point to a healthy application before success.

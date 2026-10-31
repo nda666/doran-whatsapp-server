@@ -46,7 +46,13 @@ async function main() {
       headers: { Authorization: `Bearer ${admin.token}` }, signal: AbortSignal.timeout(10000),
     });
     const health = await response.json();
-    if (!require('./cd-readiness.cjs').dispatchReady(response.status, health)) throw Error('Dispatch readiness failed');
+    const { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, parseDispatchDelayRange } = require('../dist/src/lib/dispatchSettings');
+    const { decryptSetting } = require('../dist/src/lib/globalSettings');
+    const stored = await db.globalSetting.findUnique({ where: { key: DISPATCH_DELAY_KEY } });
+    const range = stored ? parseDispatchDelayRange(decryptSetting(stored.value)) : DEFAULT_DISPATCH_DELAY;
+    if (!range) throw Error('Invalid dispatch delay');
+    const maximumPollAgeMs = require('../dist/src/server/dispatch/health').pollStaleAfter(range.maxSeconds);
+    if (!require('./cd-readiness.cjs').dispatchReady(response.status, health, Date.now(), maximumPollAgeMs)) throw Error('Dispatch readiness failed');
     await db.$queryRaw`SELECT 1`;
     console.log('LOGIN_DATABASE_DISPATCH_READY');
     if (health.alerts.length) console.log('QUEUE_WARNINGS', health.alerts.join(','));
