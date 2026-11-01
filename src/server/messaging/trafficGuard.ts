@@ -3,9 +3,13 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { SendGuardError } from "./safety";
 
-// Optional audit implementation. No existing send path imports/enables this module.
-export type TrafficPolicy = { maxPerMinute: number; identicalPerHour: number };
+import { getTrafficPolicy } from "../dispatch/settings";
+import { validTrafficPolicy, type TrafficPolicy } from "../../lib/trafficSettings";
+
+// Every figure comes from the administrator-managed `wa-traffic-guard` setting; nothing is hard-coded here.
 export type TrafficContext = { logicalId: string; contentHash: string };
+/** The policy read once by the sender travels with the context, so a setting change cannot split one send. */
+export type TrafficAdmission = TrafficContext & { policy: TrafficPolicy };
 export type TrafficSnapshot = {
   minuteAttempts: number;
   oldestMinuteAt: number | null;
@@ -13,16 +17,6 @@ export type TrafficSnapshot = {
   connectedAt: number | null;
 };
 export type TrafficDecision = { retryAt: number | null; reason: string | null; minimumIntervalMs: number };
-
-export function configuredTrafficPolicy(env: NodeJS.ProcessEnv = process.env): TrafficPolicy | null {
-  if (env.WA_TRAFFIC_GUARD_ENABLED !== "true") return null;
-  const read = (name: string, fallback: number, min: number, max: number) => {
-    const value = env[name] === undefined ? fallback : Number(env[name]);
-    if (!Number.isInteger(value) || value < min || value > max) throw new Error(`Invalid ${name}`);
-    return value;
-  };
-  return { maxPerMinute: read("WA_MAX_PER_MINUTE", 15, 8, 15), identicalPerHour: read("WA_IDENTICAL_PER_HOUR", 4, 3, 5) };
-}
 
 /** Hash content without retaining text or expanding binary attachments into JSON arrays. */
 export function trafficContentHash(content: unknown): string {
@@ -49,14 +43,13 @@ export function trafficContentHash(content: unknown): string {
 
 /** Internal traffic budget; these figures are not published WhatsApp safety limits. */
 export function evaluateTraffic(policy: TrafficPolicy, snapshot: TrafficSnapshot, logicalId: string, now: number, jitterMs: number): TrafficDecision {
-  if (!Number.isInteger(policy.maxPerMinute) || policy.maxPerMinute < 8 || policy.maxPerMinute > 15 ||
-      !Number.isInteger(policy.identicalPerHour) || policy.identicalPerHour < 3 || policy.identicalPerHour > 5 ||
-      !Number.isInteger(jitterMs) || jitterMs < 1200 || jitterMs > 3000) throw new Error("WA_TRAFFIC_POLICY_INVALID");
+  if (!validTrafficPolicy(policy) || !Number.isInteger(jitterMs) || jitterMs < policy.jitterMinMs || jitterMs > policy.jitterMaxMs) throw new Error("WA_TRAFFIC_POLICY_INVALID");
   const age = snapshot.connectedAt === null ? Infinity : Math.max(0, now - snapshot.connectedAt);
-  const cap = Math.min(policy.maxPerMinute, age < 60_000 ? 5 : age < 120_000 ? 10 : policy.maxPerMinute);
+  const cap = Math.min(policy.maxPerMinute, age < 60_000 ? policy.rampFirstMinute : age < 120_000 ? policy.rampSecondMinute : policy.maxPerMinute);
   const decision = { retryAt: null as number | null, reason: null as string | null,
     minimumIntervalMs: Math.ceil(60_000 / cap) + jitterMs };
-  if (age < 30_000) return { ...decision, retryAt: Math.max(now + 1, snapshot.connectedAt! + 30_000), reason: "RECONNECT_COOLDOWN" };
+  const cooldownMs = policy.reconnectCooldownSeconds * 1000;
+  if (age < cooldownMs) return { ...decision, retryAt: Math.max(now + 1, snapshot.connectedAt! + cooldownMs), reason: "RECONNECT_COOLDOWN" };
   const waits: Array<{ retryAt: number; reason: string }> = [];
   if (snapshot.minuteAttempts >= cap) {
     if (snapshot.oldestMinuteAt === null) throw new Error("WA_TRAFFIC_SNAPSHOT_INVALID");
@@ -84,7 +77,7 @@ export async function reserveTraffic(tx: Prisma.TransactionClient, phoneId: stri
   const recovery = await tx.$queryRaw<Array<{ connectedAt: Date }>>`SELECT connectedAt FROM wa_send_recovery WHERE phoneId = ${phoneId}`;
   const decision = evaluateTraffic(policy, { minuteAttempts: Number(minute.total), oldestMinuteAt: minute.oldest?.getTime() ?? null,
     sameContent: repeated.map(row => ({ logicalId: row.logicalId, lastAt: row.lastAt.getTime() })), connectedAt: recovery[0]?.connectedAt.getTime() ?? null },
-    context.logicalId, now.getTime(), randomInt(1200, 3001));
+    context.logicalId, now.getTime(), randomInt(policy.jitterMinMs, policy.jitterMaxMs + 1));
   if (decision.retryAt !== null) throw new SendGuardError("DEVICE_THROTTLED", new Date(decision.retryAt));
   await tx.$executeRaw`INSERT INTO wa_send_traffic (id, phoneId, logicalId, contentHash, admittedAt)
     VALUES (${randomUUID()}, ${phoneId}, ${context.logicalId}, ${context.contentHash}, ${now})`;
@@ -93,11 +86,12 @@ export async function reserveTraffic(tx: Prisma.TransactionClient, phoneId: stri
 }
 
 export async function recordTrafficReconnect(phoneId: string) {
-  if (!configuredTrafficPolicy()) return;
+  const policy = await getTrafficPolicy();
+  if (!policy.enabled) return;
   await prisma.$transaction(async tx => {
     await tx.deviceSendPolicy.createMany({ data: [{ phoneId }], skipDuplicates: true });
     await tx.$queryRaw`SELECT phoneId FROM device_send_policies WHERE phoneId = ${phoneId} FOR UPDATE`;
-    const now = new Date(), readyAt = new Date(now.getTime() + 30_000);
+    const now = new Date(), readyAt = new Date(now.getTime() + policy.reconnectCooldownSeconds * 1000);
     await tx.$executeRaw`INSERT INTO wa_send_recovery (phoneId, connectedAt) VALUES (${phoneId}, ${now})
       ON DUPLICATE KEY UPDATE connectedAt = VALUES(connectedAt)`;
     await tx.deviceSendPolicy.updateMany({ where: { phoneId, nextAllowedAt: { lt: readyAt } }, data: { nextAllowedAt: readyAt } });
@@ -106,7 +100,6 @@ export async function recordTrafficReconnect(phoneId: string) {
 
 // Cleanup metadata only; no message bodies, auth keys or business queue rows are stored here.
 export async function pruneTrafficLedger(now = new Date()) {
-  if (!configuredTrafficPolicy()) return;
   for (let batch = 0; batch < 100; batch++) {
     const count = await prisma.$executeRaw`DELETE FROM wa_send_traffic WHERE admittedAt <= ${new Date(now.getTime() - 2 * 3600000)} LIMIT 10000`;
     if (count < 10000) break;

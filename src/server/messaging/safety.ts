@@ -10,6 +10,7 @@ import { randomDispatchDelay } from "../dispatch/timing";
 import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
 import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { getQuotaReset } from "../dispatch/settings";
+import { reserveTraffic, type TrafficAdmission } from "./trafficGuard";
 
 export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
   return Math.max(globalDelayMs, (minimumSeconds ?? 0) * 1000) * multiplier;
@@ -50,7 +51,7 @@ export async function captureStop(userId: string, jid: string, text: string) {
 }
 
 /** Shared transport boundary: every API, campaign, conversation and auto reply passes here. */
-export async function reserveSend(userId: string, phoneId: string, jid: string) {
+export async function reserveSend(userId: string, phoneId: string, jid: string, traffic?: TrafficAdmission) {
   const number = jid.startsWith("+") ? normalizePhoneRecipient(jid) : jid.endsWith("@s.whatsapp.net") ? normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`) : null;
   if (number && await recipientBlocked(userId, number)) throw new SendGuardError("RECIPIENT_OPTED_OUT");
   const globalQuota = await getGlobalDeviceQuota();
@@ -74,6 +75,8 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
     const quota = quotaWindowState(window, usage.attempts, limit, effectiveQuotaReset(quotaReset, policy.quotaReset), now);
     if (quota.used >= limit) throw new SendGuardError("DEVICE_DAILY_LIMIT", quota.resetAt!);
     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
+    // Only the WhatsApp sender supplies a traffic admission; Telegram reservations never carry one.
+    const trafficInterval = traffic ? await reserveTraffic(tx, phoneId, traffic, traffic.policy, now) : 0;
     await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
     const quotaData = { attempts: quota.used + 1, startedAt: quota.startedAt, lastAttemptAt: now,
       reachedAt: quota.used + 1 >= limit ? quota.reachedAt ?? now : null };
@@ -84,7 +87,7 @@ export async function reserveSend(userId: string, phoneId: string, jid: string) 
     const interval = policy.maxIntervalSeconds == null
       ? effectiveSendInterval(randomDispatchDelay(globalRange), policy.minIntervalSeconds, multiplier)
       : randomDispatchDelay(deviceSendIntervalRange(globalRange, policy)) * multiplier;
-    await tx.deviceSendPolicy.update({ where: { phoneId }, data: { nextAllowedAt: new Date(Date.now() + interval) } });
+    await tx.deviceSendPolicy.update({ where: { phoneId }, data: { nextAllowedAt: new Date(Date.now() + Math.max(interval, trafficInterval)) } });
     return day;
   });
 }

@@ -2,10 +2,13 @@ import "pino-pretty";
 import { captureStop, reserveSend, recipientBlocked, SendGuardError } from "../messaging/safety";
 import { serializeTransport, markLegacyTransportStarted } from "../messaging/transportSafety";
 import { assertSendFence } from "../messaging/sendFence";
+import { trafficContentHash } from "../messaging/trafficGuard";
+import { getTrafficPolicy } from "../dispatch/settings";
 
 import pino from "pino";
 
 import _makeWASocket, {
+  generateMessageIDV2,
   WASocket,
 } from "@whiskeysockets/baileys";
 
@@ -142,10 +145,14 @@ const createWASocket = async (
       requireSenderIdentity();
       await auth.assertOwned();
       await requireUnrestricted(phoneId, _waSocket);
-      const generationOptions = { ...options, getUrlInfo: safeLinkPreview };
+      // A stable logical ID lets retries share one traffic row instead of counting as new identical content.
+      const trafficPolicy = await getTrafficPolicy();
+      const logicalId = trafficPolicy.enabled ? options?.messageId || generateMessageIDV2(_waSocket.user?.id) : undefined;
+      const traffic = logicalId ? { logicalId, contentHash: trafficContentHash(content), policy: trafficPolicy } : undefined;
+      const generationOptions = { ...options, ...(logicalId ? { messageId: logicalId } : {}), getUrlInfo: safeLinkPreview };
       const guardJid = jid.endsWith("@lid") ? await _waSocket.signalRepository.lidMapping.getPNForLID(jid) : jid;
       if (!guardJid) throw new SendGuardError("RECIPIENT_ID_UNRESOLVED");
-      const day = await reserveSend(userId, phoneId, guardJid);
+      const day = await reserveSend(userId, phoneId, guardJid, traffic);
       if (guardJid.endsWith("@s.whatsapp.net") && await recipientBlocked(userId, guardJid.split("@")[0].split(":")[0])) throw new SendGuardError("RECIPIENT_OPTED_OUT");
       let result;
       requireSenderIdentity();

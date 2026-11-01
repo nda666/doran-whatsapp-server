@@ -17,6 +17,7 @@ import { phoneMaintenance, retiredSockets } from "../libs/phoneMaintenance";
 import { waRecovery } from "../libs/waRecoveryState";
 import { acceptsPairingIdentity, rejectedPairings } from "../libs/pairingIdentity";
 import { clearDatabaseAuth } from "../libs/waAuthState";
+import { recordTrafficReconnect } from "../messaging/trafficGuard";
 
 const reconnectAttempts = waRecovery.attempts;
 const reconnectTimers = waRecovery.timers;
@@ -109,6 +110,7 @@ export default async function connectionUpdate(
     if (persisted) await emitDeviceEvent(phoneId, "isOnline", { phoneId, isOnline });
   }
   if (connection === "open") {
+    await recordTrafficReconnect(phoneId).catch(error => console.error("WA_TRAFFIC_RECONNECT_FAILED", phoneId, error instanceof Error ? error.message : "Unknown error"));
     waRecovery.disconnects?.delete(phoneId);
     waRecovery.blocked.delete(phoneId);
     const health = waRecovery.sockets.get(waSock);

@@ -15,11 +15,22 @@ function load(file, dependencies = {}) {
   return module.exports;
 }
 (async () => {
-  const traffic = load('src/server/messaging/trafficGuard.ts'), fence = load('src/server/messaging/sendFence.ts');
-  assert.equal(traffic.configuredTrafficPolicy({}), null);
-  assert.deepEqual(traffic.configuredTrafficPolicy({ WA_TRAFFIC_GUARD_ENABLED: 'true' }), { maxPerMinute: 15, identicalPerHour: 4 });
-  for (const value of ['0', '7', '16', '8.5', 'bad']) assert.throws(() => traffic.configuredTrafficPolicy({ WA_TRAFFIC_GUARD_ENABLED: 'true', WA_MAX_PER_MINUTE: value }));
-  const policy = { maxPerMinute: 15, identicalPerHour: 4 }, now = 10_000_000;
+  const settings = load('src/lib/trafficSettings.ts');
+  const traffic = load('src/server/messaging/trafficGuard.ts', { '../dispatch/settings': { getTrafficPolicy: async () => settings.DEFAULT_TRAFFIC_POLICY }, '../../lib/trafficSettings': settings });
+  const fence = load('src/server/messaging/sendFence.ts');
+  assert.equal(settings.DEFAULT_TRAFFIC_POLICY.enabled, false, 'Guard is disabled until an administrator enables it');
+  assert.deepEqual(settings.parseTrafficPolicy('{}'), settings.DEFAULT_TRAFFIC_POLICY, 'Missing fields fall back to defaults');
+  assert.equal(settings.parseTrafficPolicy('{"enabled":true,"maxPerMinute":20}').maxPerMinute, 20);
+  for (const bad of ['', 'bad', '[]', '{"maxPerMinute":0}', '{"maxPerMinute":61}', '{"maxPerMinute":8.5}', '{"identicalPerHour":101}', '{"enabled":"yes"}',
+    '{"jitterMinMs":5000,"jitterMaxMs":1000}', '{"rampFirstMinute":12,"rampSecondMinute":10}', '{"maxPerMinute":4,"rampFirstMinute":5}', '{"reconnectCooldownSeconds":601}']) assert.equal(settings.parseTrafficPolicy(bad), null, bad);
+  const policy = { ...settings.DEFAULT_TRAFFIC_POLICY, enabled: true }, now = 10_000_000;
+  const custom = { ...policy, maxPerMinute: 20, identicalPerHour: 2, reconnectCooldownSeconds: 10, rampFirstMinute: 4, rampSecondMinute: 8, jitterMinMs: 0, jitterMaxMs: 500 };
+  const emptySnapshot = { minuteAttempts: 0, oldestMinuteAt: null, sameContent: [], connectedAt: null };
+  assert.equal(traffic.evaluateTraffic(custom, { ...emptySnapshot, connectedAt: now - 5000 }, 'x', now, 0).retryAt, now + 5000, 'Cooldown follows the setting');
+  assert.equal(traffic.evaluateTraffic(custom, { ...emptySnapshot, connectedAt: now - 10000 }, 'x', now, 500).minimumIntervalMs, 15500, 'First-minute cap follows the setting');
+  assert.equal(traffic.evaluateTraffic(custom, { ...emptySnapshot, connectedAt: now - 70000 }, 'x', now, 500).minimumIntervalMs, 8000, 'Second-minute cap follows the setting');
+  assert.equal(traffic.evaluateTraffic(custom, { ...emptySnapshot, sameContent: [1, 2].map(id => ({ logicalId: String(id), lastAt: now - id })) }, 'x', now, 0).reason, 'IDENTICAL_HOURLY_LIMIT');
+  assert.throws(() => traffic.evaluateTraffic(custom, emptySnapshot, 'x', now, 501), /POLICY_INVALID/, 'Jitter outside the configured range is rejected');
   const empty = { minuteAttempts: 0, oldestMinuteAt: null, sameContent: [], connectedAt: null };
   const check = snapshot => traffic.evaluateTraffic(policy, { ...empty, ...snapshot }, 'new', now, 1200);
   assert.equal(check({}).minimumIntervalMs, 5200, '1.2s jitter is added to 4s minimum; it cannot override RPM pacing');

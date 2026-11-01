@@ -37,6 +37,7 @@ async function main() {
     '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
     '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
+    '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   };
   const exports = {};
   vm.runInNewContext(code, { exports, require: name => { assert.ok(name in mocks, name); return mocks[name]; },

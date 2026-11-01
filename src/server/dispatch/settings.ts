@@ -1,4 +1,5 @@
 import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, parseWarmupDailyLimits } from "../../lib/warmupSettings";
+import { DEFAULT_TRAFFIC_POLICY, TRAFFIC_GUARD_KEY, parseTrafficPolicy } from "../../lib/trafficSettings";
 import { prisma } from "../../lib/prisma";
 import { decryptSetting } from "../../lib/globalSettings";
 import { DEFAULT_DISPATCH_MAX_AGE_DAYS, DISPATCH_MAX_AGE_DAYS_KEY, dispatchAgeCutoff, parseDispatchMaxAgeDays } from "../../lib/dispatchSettings";
@@ -64,6 +65,13 @@ export async function getDispatchDisplayWindow() {
 // API jobs use the current global limit, including jobs queued before it changed.
 // Campaigns retain their scheduled delivery deadline in addition to the age limit.
 export const dispatchDeadline = () => ({ OR: [{ campaignId: null }, { expiresAt: { gt: new Date() } }] });
+
+export async function getTrafficPolicy() {
+  const setting = await prisma.globalSetting.findUnique({ where: { key: TRAFFIC_GUARD_KEY } });
+  const policy = setting ? parseTrafficPolicy(decryptSetting(setting.value)) : DEFAULT_TRAFFIC_POLICY;
+  if (!policy) throw new Error("Invalid traffic guard setting");
+  return policy;
+}
 
 export async function getWarmupDailyLimits() {
   const setting = await prisma.globalSetting.findUnique({ where: { key: WARMUP_DAILY_LIMITS_KEY } });

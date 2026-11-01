@@ -10,6 +10,7 @@ import { decryptSetting, encryptSetting, POSTMARK_TOKEN_KEY, secretSetting, sett
 import { DEFAULT_DISPATCH_MAX_AGE_DAYS, DISPATCH_MAX_AGE_DAYS_KEY, DISPATCH_MAX_AGE_LABEL, parseDispatchMaxAgeDays } from "@/lib/dispatchSettings";
 import { DEFAULT_DISPATCH_QUEUE_ORDER, DISPATCH_QUEUE_ORDER_KEY, DISPATCH_QUEUE_ORDER_LABEL, parseDispatchQueueOrder } from "@/lib/dispatchSettings";
 import { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, DISPATCH_DELAY_LABEL, parseDispatchDelayRange } from "@/lib/dispatchSettings";
+import { DEFAULT_TRAFFIC_POLICY, TRAFFIC_GUARD_ERROR, TRAFFIC_GUARD_KEY, TRAFFIC_GUARD_LABEL, parseTrafficPolicy } from "@/lib/trafficSettings";
 import { DEFAULT_PHONE_FORM_FIELDS, PHONE_FORM_FIELDS_KEY, PHONE_FORM_FIELDS_LABEL, parsePhoneFormFields } from "@/lib/phoneFormFields";
 
 import { DEVICE_DAILY_QUOTA_KEY, DEVICE_DAILY_QUOTA_LABEL, DEFAULT_DEVICE_DAILY_QUOTA, parseDeviceDailyQuota } from "@/lib/deviceQuota";
@@ -23,6 +24,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       { key: QUOTA_RESET_KEY, label: QUOTA_RESET_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_QUOTA_RESET)) },
       { key: OPERATING_HOURS_KEY, label: OPERATING_HOURS_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_OPERATING_HOURS)) },
       { key: WARMUP_DAILY_LIMITS_KEY, label: WARMUP_DAILY_LIMITS_LABEL, value: encryptSetting(DEFAULT_WARMUP_DAILY_LIMITS.join(",")) },
+      { key: TRAFFIC_GUARD_KEY, label: TRAFFIC_GUARD_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_TRAFFIC_POLICY)) },
       { key: DEVICE_DAILY_QUOTA_KEY, label: DEVICE_DAILY_QUOTA_LABEL, value: encryptSetting(String(DEFAULT_DEVICE_DAILY_QUOTA)) },
       { key: EMAIL_FROM_KEY, label: EMAIL_FROM_LABEL, value: encryptSetting(DEFAULT_EMAIL_FROM) },
       { key: PHONE_FORM_FIELDS_KEY, label: PHONE_FORM_FIELDS_LABEL, value: encryptSetting(JSON.stringify(DEFAULT_PHONE_FORM_FIELDS)) },
@@ -51,6 +53,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (key === DISPATCH_MAX_AGE_DAYS_KEY && parseDispatchMaxAgeDays(value) === null) return res.status(400).json({ message: "Maksimal usia data antrean harus berupa bilangan bulat 1–3650 hari." });
   if (key === DISPATCH_QUEUE_ORDER_KEY && parseDispatchQueueOrder(value) === null) return res.status(400).json({ message: "Pilih data terlama dahulu atau data terbaru dahulu." });
   if (key === WARMUP_DAILY_LIMITS_KEY && parseWarmupDailyLimits(value) === null) return res.status(400).json({ message: WARMUP_LIMITS_ERROR });
+  if (key === TRAFFIC_GUARD_KEY && parseTrafficPolicy(value) === null) return res.status(400).json({ message: TRAFFIC_GUARD_ERROR });
   if (key === DEVICE_DAILY_QUOTA_KEY && parseDeviceDailyQuota(value) === null) return res.status(400).json({ message: "Kuota harian harus berupa bilangan bulat 1–100000." });
   if (key === DISPATCH_DELAY_KEY && parseDispatchDelayRange(value) === null) return res.status(400).json({ message: "Jeda harus bilangan bulat minimal 1 detik; Hingga harus sama atau lebih besar dari Mulai." });
   if (key === OPERATING_HOURS_KEY && parseOperatingHours(value) === null) return res.status(400).json({ message: OPERATING_HOURS_ERROR });
@@ -58,7 +61,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (key === POSTMARK_TOKEN_KEY && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) return res.status(400).json({ message: "Format token server Postmark tidak valid." });
   if (key === EMAIL_FROM_KEY && !emailFromInput.safeParse(value).success) return res.status(400).json({ message: "Masukkan alamat email pengirim yang valid." });
   try {
-    const data = { label, value: encryptSetting(key === WARMUP_DAILY_LIMITS_KEY ? parseWarmupDailyLimits(value)!.join(",") : value) };
+    const data = { label, value: encryptSetting(key === WARMUP_DAILY_LIMITS_KEY ? parseWarmupDailyLimits(value)!.join(",") : key === TRAFFIC_GUARD_KEY ? JSON.stringify(parseTrafficPolicy(value)) : value) };
     const row = id ? await prisma.globalSetting.update({ where: { id }, data }) : await prisma.globalSetting.create({ data: { ...data, key } });
     return res.status(id ? 200 : 201).json(decode(row));
   } catch (error: unknown) {
