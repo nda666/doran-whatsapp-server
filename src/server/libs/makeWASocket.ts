@@ -16,7 +16,8 @@ import { prisma } from "../../lib/prisma";
 import { getWaMesage } from "../../server/utils/getWaMessage";
 import { getPhoneById } from "../../services/phone";
 import { WaSockQrTimeout } from "../constant";
-import connectionUpdate, { rejectPairingIdentity } from "../events/connectionUpdate";
+import connectionUpdate, { rejectPairingIdentity, clearPhoneReconnect } from "../events/connectionUpdate";
+import { ownerCanSend } from "../messaging/recipientPolicy";
 import { acceptsPairingIdentity, bindPairingIdentity, rejectedPairings } from "./pairingIdentity";
 import { handleMessageInEvent } from "../events/handleMessageInEvent";
 import { handleQuotedMessageEvent } from "../events/handleQuotedMessageEvent";
@@ -31,7 +32,9 @@ import { waRecovery } from "./waRecoveryState";
 import { captureChatMessage, recordChatReceipt } from "../chat/store";
 import { createDatabaseAuthState, closeDatabaseAuth } from "./waAuthState";
 import { groupMetadataCache, getProtocolMessage, storeProtocolMessage } from "./waMessageStore";
-import { alreadyProcessed } from "../messaging/incomingDedupe";
+import { claimLiveIncoming } from "../messaging/incomingDedupe";
+import { getAutoReplyMaxAgeSeconds } from "../messaging/autoReplyAge";
+import { autoReplyAgeAllowed } from "../../lib/autoReplyAge";
 import { recordReply } from "../messaging/engagement";
 import { usageDay } from "../messaging/safety";
 import { recordRestriction, refreshRestrictions, requireUnrestricted } from "../messaging/restrictions";
@@ -65,6 +68,7 @@ const createWASocket = async (
   if (!phone || phone.userId !== userId || phone.active !== 1) {
     throw new Error(`Device ${phoneId} is not active`);
   }
+  if (!await ownerCanSend(userId)) throw new SendGuardError("ACCOUNT_INACTIVE");
   const existing = session.get(phoneId);
   if (existing && !replaceState && !existing.ws.isClosed && !existing.ws.isClosing) {
     bindPairingIdentity(existing, phone.number);
@@ -92,6 +96,9 @@ const createWASocket = async (
       }
     });
   const { state, saveCreds } = auth;
+  // An admin may disable the owner while auth migration/lease acquisition is awaiting I/O.
+  try { if (!await ownerCanSend(userId)) throw new SendGuardError("ACCOUNT_INACTIVE"); }
+  catch (error) { await auth.close(); throw error; }
 
   if (session.get(phoneId) && !replaceState) {
     _waSocket = session.get(phoneId)!;
@@ -121,21 +128,29 @@ const createWASocket = async (
     waRecovery.blocked.delete(phoneId);
     waRecovery.sockets.set(_waSocket, { createdAt: Date.now(), connected: false });
     session.set(phoneId, _waSocket);
+    const activeOwner = async () => {
+      if (retiredSockets.has(_waSocket) || session.get(phoneId) !== _waSocket) return false;
+      try {
+        if (await ownerCanSend(userId)) return !retiredSockets.has(_waSocket) && session.get(phoneId) === _waSocket;
+        await suspendWaPhone(phoneId, _waSocket);
+      } catch { console.error("WA_OWNER_ACTIVITY_CHECK_FAILED", phoneId); }
+      return false;
+    };
     const restrictionTimer = setInterval(() => {
       if (!retiredSockets.has(_waSocket) && session.get(phoneId) === _waSocket && _waSocket.ws.isOpen && _waSocket.user) {
-        refreshRestrictions(phoneId, _waSocket).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
+        activeOwner().then(async active => { if (active) await refreshRestrictions(phoneId, _waSocket); }).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
       }
     }, 300_000);
     restrictionTimer.unref();
     const sendMessage = _waSocket.sendMessage.bind(_waSocket);
     _waSocket.ev.on("contacts.upsert", contacts => {
-      cacheDeviceContacts(userId, phoneId, contacts).catch(() => console.error("CONTACT_SYNC_FAILED"));
+      activeOwner().then(async active => { if (active) await cacheDeviceContacts(userId, phoneId, contacts); }).catch(() => console.error("CONTACT_SYNC_FAILED"));
     });
     _waSocket.ev.on("contacts.update", contacts => {
-      cacheDeviceContacts(userId, phoneId, contacts).catch(() => console.error("CONTACT_SYNC_FAILED"));
+      activeOwner().then(async active => { if (active) await cacheDeviceContacts(userId, phoneId, contacts); }).catch(() => console.error("CONTACT_SYNC_FAILED"));
     });
     _waSocket.ev.on("call", calls => {
-      prisma.phone.findFirst({ where: { id: phoneId, userId } }).then(async current => {
+      activeOwner().then(async active => active ? prisma.phone.findFirst({ where: { id: phoneId, userId } }) : null).then(async current => {
         if (!current?.rejectCall) return;
         for (const call of calls) if (call.status === "offer") await _waSocket.rejectCall(call.id, call.from);
       }).catch(() => console.error("CALL_REJECTION_FAILED"));
@@ -204,13 +219,14 @@ const createWASocket = async (
       if (update.reachoutTimeLock && session.get(phoneId) === _waSocket && !retiredSockets.has(_waSocket)) {
         recordRestriction(phoneId, update.reachoutTimeLock).catch(() => console.error("WA_RESTRICTION_SAVE_FAILED", phoneId));
       }
-      if (update.connection === "open") refreshRestrictions(phoneId, _waSocket).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
       if (update.connection === "close") {
         clearInterval(restrictionTimer);
         const closing = waitForAuthSave(_waSocket).finally(() => auth.close());
         authWrites.set(_waSocket, closing);
         closing.catch(() => console.error("WA_AUTH_CLOSE_FAILED", phoneId));
       }
+      if (!await activeOwner()) return;
+      if (update.connection === "open") refreshRestrictions(phoneId, _waSocket).catch(() => console.error("WA_RESTRICTION_QUERY_FAILED", phoneId));
       recordQrState(_waSocket, update, WaSockQrTimeout);
       connectionUpdate(_waSocket, userId, phoneId, update).catch(error => {
         console.error("WhatsApp connection update failed:", error.message);
@@ -221,18 +237,26 @@ const createWASocket = async (
 
     // for reply
     _waSocket.ev.on("messages.upsert", async ({ messages: batch, type }) => {
+      const receivedAt = Date.now();
       if (phoneMaintenance.has(phoneId) || retiredSockets.has(_waSocket) || !acceptsPairingIdentity(_waSocket)) return;
       if (process.env.DORAN_SHUTTING_DOWN === "true") return;
-      // Honor STOP before media storage, webhook calls or auto replies can delay the batch.
+      if (!await activeOwner()) return;
+      // Honor live STOP before storage/webhooks delay the batch. Replayed history cannot revoke a later re-consent.
       const optedOutMessages = new Set<(typeof batch)[number]>();
-      for (const incoming of batch) {
+      if (type === "notify") for (const incoming of batch) {
         if (incoming.key.fromMe) continue;
         const { messageIn } = getWaMesage([incoming]);
         if (!messageIn || !/^\s*(STOP|BERHENTI|UNSUBSCRIBE)[.!\s]*$/i.test(messageIn)) continue;
         const jid = incoming.key.remoteJid || "";
         const senderJid = jid.endsWith("@lid") ? incoming.key.remoteJidAlt || await _waSocket.signalRepository.lidMapping.getPNForLID(jid) || jid : jid;
-        try { if (await captureStop(userId, senderJid, messageIn)) optedOutMessages.add(incoming); }
+        try { if (await captureStop(userId, senderJid, messageIn, { phoneId, key: incoming.key })) optedOutMessages.add(incoming); }
         catch { optedOutMessages.add(incoming); console.error("OPT_OUT_CAPTURE_FAILED", phoneId); }
+      }
+      // Snapshot before storage/media work. Failure only holds auto-reply; STOP/history/webhooks remain independent.
+      let autoReplyMaxAgeSeconds: number | null = null;
+      if (type === "notify") {
+        try { autoReplyMaxAgeSeconds = await getAutoReplyMaxAgeSeconds(); }
+        catch { console.error("AUTO_REPLY_AGE_SETTING_FAILED", phoneId); }
       }
       for (const incoming of batch) await storeProtocolMessage(phoneId, incoming).catch(() => console.error("WA_PROTOCOL_SAVE_FAILED", phoneId));
       // Store every new message in a batch, including messages sent from the phone.
@@ -242,7 +266,8 @@ const createWASocket = async (
       for (const incoming of batch) {
       if (incoming.key.fromMe) continue;
       // The same inbound message must not trigger webhooks or automatic replies twice.
-      if (alreadyProcessed(phoneId, incoming.key.id)) continue;
+      try { if (!await claimLiveIncoming(phoneId, incoming.key, type)) continue; }
+      catch { console.error("INCOMING_CLAIM_FAILED", phoneId); continue; }
       if (type === "notify" && !incoming.key.remoteJid?.endsWith("@g.us")) {
         const replyJid = incoming.key.remoteJid?.endsWith("@lid") ? incoming.key.remoteJidAlt : incoming.key.remoteJid;
         recordReply(phoneId, replyJid, usageDay()).catch(() => console.error("REPLY_COUNT_FAILED", phoneId));
@@ -252,6 +277,8 @@ const createWASocket = async (
       const { messageIn, messageType, quotedMessage } = getWaMesage(messages);
 
       const getPhone = await getPhoneById(phoneId);
+      // Storage/media may take time; recheck before starting external inbound effects.
+      if (!await activeOwner()) return;
       if (getPhone?.webhookUrl) {
         const url = getPhone.webhookUrl;
         sendDeviceWebhook(url, { event: "message.incoming", device_id: phoneId, sender: messages[0].key.remoteJid, recipient: getPhone.number, message: messageIn || "", message_id: messages[0].key.id })
@@ -265,6 +292,7 @@ const createWASocket = async (
       if (type !== "notify") continue;
       if (getPhone?.readReceipt && !messages[0].key.fromMe) await _waSocket.readMessages(messages.map(m => m.key));
       if (optedOutMessages.has(incoming)) continue;
+      const allowAutoReply = autoReplyMaxAgeSeconds !== null && autoReplyAgeAllowed(incoming.messageTimestamp, autoReplyMaxAgeSeconds, receivedAt);
       if (messageIn && !quotedMessage && getPhone) {
         await handleMessageInEvent({
           phone: getPhone,
@@ -273,6 +301,7 @@ const createWASocket = async (
           messages: messages,
           userId: userId,
           allowAi: type === "notify",
+          allowAutoReply,
         });
       }
 
@@ -285,6 +314,7 @@ const createWASocket = async (
           waSocket: _waSocket,
           userId,
           allowAi: type === "notify",
+          allowAutoReply,
         });
       }
       } catch (error) {
@@ -326,6 +356,37 @@ export const deleteSession = (phoneId: string) => {
 
 export async function waitForPendingSocket(userId: string, phoneId: string) {
   await pendingSockets.get(`${userId}:${phoneId}`)?.catch(() => {});
+}
+
+/** Stop connectivity without logout, deleting credentials, or permanently blocking reactivation. */
+export async function suspendWaPhone(phoneId: string, expectedSocket?: WASocket) {
+  const socket = session.get(phoneId);
+  if (expectedSocket && socket !== expectedSocket) return;
+  clearPhoneReconnect(phoneId);
+  if (socket) {
+    retiredSockets.add(socket);
+    session.delete(phoneId);
+    try { socket.end(new Error("WA_OWNER_INACTIVE")); }
+    finally {
+      try { await waitForAuthSave(socket); }
+      finally { await closeDatabaseAuth(phoneId); }
+    }
+  }
+  await prisma.phone.updateMany({ where: { id: phoneId, isOnline: true }, data: { isOnline: false, status: "CLOSE", lastOfflineAt: new Date() } });
+}
+
+export async function suspendOwnedWaSessions(userId: string) {
+  // Assignment is an access grant; disabling an assignee must not disconnect a different owner's device.
+  const phones = await prisma.phone.findMany({ where: { userId, channel: "whatsapp" }, select: { id: true } });
+  let failed = false;
+  for (const phone of phones) {
+    try {
+      await waitForPendingSocket(userId, phone.id);
+      if (await ownerCanSend(userId)) return; // A later activation wins over a delayed suspension.
+      await suspendWaPhone(phone.id);
+    } catch { failed = true; console.error("WA_PHONE_SUSPEND_FAILED", phone.id); }
+  }
+  if (failed) throw new Error("WA_ACCOUNT_SUSPEND_INCOMPLETE");
 }
 
 export const getAllSession = () => {

@@ -20,6 +20,7 @@ import toBase64 from "../libs/toBase64";
 import { sendAutoReply } from "../campaigns/autoReply";
 import { webhookSender } from "../utils/webhookSender";
 import { sendAiAutoReply } from "../ai/service";
+import { ownerCanSend } from "../messaging/recipientPolicy";
 
 type HandleMessageInEventProps = {
   phone: Phone;
@@ -28,6 +29,7 @@ type HandleMessageInEventProps = {
   messages: WAMessage[];
   userId: string;
   allowAi?: boolean;
+  allowAutoReply?: boolean;
 };
 
 export const handleMessageInEvent = async (
@@ -46,6 +48,7 @@ export const handleMessageInEvent = async (
   let phone_number = phone && phone.number;
 
   for (const item of phoneReplies) {
+    if (props.allowAutoReply === false && item.type !== "webhook") continue;
     try {
     const replyText = JSON.parse(JSON.stringify(item.reply));
 
@@ -198,6 +201,7 @@ export const handleMessageInEvent = async (
         };
       }
 
+      if (!await ownerCanSend(userId)) return;
       const { result, error } = await runFetchGetResponse({
         url: item.url,
         ...options,

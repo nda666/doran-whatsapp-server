@@ -21,11 +21,12 @@ async function main() {
   };
   const add = id => phones.push({ id, userId: 'owner' });
   const recovery = load('src/server/waRecovery.ts', {
+    './messaging/recipientPolicy': { ownerCanSend: async userId => userId !== 'inactive' },
     './libs/waAuthState': { readDatabaseCreds: async () => ({ migrated: false }) },
     'node:path': require('node:path'),
     'node:fs/promises': { readFile: async name => { reads.push(name); if (name.includes('unlinked')) return '{}'; return '{"me":{"id":"linked"}}'; } },
     '../lib/prisma': { prisma: { phone: { findMany: async () => { if (queryFails) throw new Error('DB'); return phones; } } } },
-    './libs/makeWASocket': { session: sessions, waitForPendingSocket: async () => {}, waitForAuthSave: async s => saves.push(s), default: async (_, id) => { attempts.push(id); if (id === failDevice) throw new Error('CREATE_FAILED'); socket(id); } },
+    './libs/makeWASocket': { suspendWaPhone: async id => { ended.push(id); sessions.delete(id); state.timers.delete(id); }, session: sessions, waitForPendingSocket: async () => {}, waitForAuthSave: async s => saves.push(s), default: async (_, id) => { attempts.push(id); if (id === failDevice) throw new Error('CREATE_FAILED'); socket(id); } },
     './libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     './libs/waRecoveryState': { waRecovery: state },
   }, { process: { env } });
@@ -39,6 +40,11 @@ async function main() {
   await Promise.all([recovery.recoverWaConnections(), recovery.recoverWaConnections()]);
   assert.deepEqual(attempts, ['stuck', 'closed', 'missing', 'fails', 'after-fail']);
   assert.deepEqual(ended, ['stuck', 'closed']); assert.equal(retired.has(stuck), true); assert.equal(saves.length, 2);
+  phones = [{ id: 'inactive-device', userId: 'inactive' }];
+  socket('inactive-device'); state.timers.set('inactive-device', {});
+  const previousAttempts = attempts.length;
+  await recovery.recoverWaConnections();
+  assert.equal(attempts.length, previousAttempts); assert.equal(sessions.has('inactive-device'), false); assert.equal(state.timers.has('inactive-device'), false);
   attempts.length = 0;
   env.DORAN_SHUTTING_DOWN = 'true'; await recovery.recoverWaConnections(); assert.equal(attempts.length, 0);
   delete env.DORAN_SHUTTING_DOWN; env.WHATSAPP_ENABLED = 'false'; await recovery.recoverWaConnections(); assert.equal(attempts.length, 0);
@@ -50,6 +56,7 @@ async function main() {
   sessions.set('db-failure', connected);
   let dbDown = true;
   const connection = load('src/server/events/connectionUpdate.ts', {
+    '../libs/waAuthState': { clearDatabaseAuth: async () => { throw Error('Unexpected logout'); } },
     '../../lib/access': { SUPER_ADMIN_ROOM: 'admin' }, fs: { rmSync() { throw new Error('Credential deletion'); } }, path: require('node:path'),
     '@whiskeysockets/baileys': { DisconnectReason: { loggedOut: 401, restartRequired: 515, connectionReplaced: 440, badSession: 500, forbidden: 403, multideviceMismatch: 411 } },
     '../../lib/prisma': { prisma: { $transaction(fn) { return fn({ deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: { ...this.phone, updateMany: async () => ({ count: 0 }) } }); }, phone: { update: async () => { if (dbDown) throw new Error('DB_DOWN'); } } } },
@@ -61,7 +68,7 @@ async function main() {
   }, { setTimeout: (callback, delay) => { const timer = { callback, delay, unref() {} }; timers.push(timer); return timer; }, clearTimeout() {} });
   const close = code => ({ connection: 'close', lastDisconnect: { error: { output: { statusCode: code } } } });
   await connection.default(connected, 'owner', 'db-failure', close(408));
-  assert.equal(timers[0].delay, 2000); assert.equal(sessions.has('db-failure'), false);
+  assert(timers[0].delay >= 2000 && timers[0].delay <= 2800); assert.equal(sessions.has('db-failure'), false);
   timers[0].callback(); await new Promise(resolve => setImmediate(resolve)); assert.equal(attempts.at(-1), 'db-failure');
   dbDown = false;
   const qr = { authState: { creds: {} } }; sessions.set('qr-expired', qr);
@@ -76,6 +83,7 @@ async function main() {
     authState: { creds: { me: { id: 'linked' } } },
     sendMessage() {}, end() {}, ev: { on(name, callback) { handlers.set(name, callback); } } });
   const factoryMocks = new Proxy({
+    '../messaging/recipientPolicy': { ownerCanSend: async () => true },
     './waAuthState': { closeDatabaseAuth: async () => {}, createDatabaseAuthState: async () => ({ state: {}, saveCreds: async () => { authSaves++; }, close: async () => {}, assertOwned: async () => {} }) },
     './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }) },
     '../chat/store': { captureChatMessage: async () => {}, recordChatReceipt: async () => {} },

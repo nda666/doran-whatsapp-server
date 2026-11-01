@@ -40,10 +40,11 @@ export async function sendChatReply(conversationId: string, scope: Prisma.ChatCo
   if (input.mediaId) {
     const asset = await prisma.mediaAsset.findFirst({ where: { id: input.mediaId, ...assetScope } });
     if (!asset) throw new ChatSendError(404, "File tidak ditemukan.");
+    if ((await fs.stat(assetPath(asset.filename))).size > CHAT_MEDIA_LIMIT) throw new ChatSendError(400, "Lampiran maksimal 25 MB.");
     buffer = await fs.readFile(assetPath(asset.filename));
     if (buffer.length > CHAT_MEDIA_LIMIT) throw new ChatSendError(400, "Lampiran maksimal 25 MB.");
     // The actor is already authorized for this asset by ownerScope above.
-    content = await loadAssetContent(asset, asset.userId, input.text);
+    content = await loadAssetContent(asset, asset.userId, input.text, buffer);
     type = asset.mime.startsWith("image/") ? "image" : asset.mime.startsWith("video/") ? "video" : asset.mime.startsWith("audio/") ? "audio" : "document";
     mediaPath = `${randomUUID()}.bin`; mediaMime = asset.mime; mediaName = asset.originalName || asset.name;
     await fs.mkdir(chatMediaDirectory(), { recursive: true });

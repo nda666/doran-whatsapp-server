@@ -5,6 +5,7 @@ import { isSuperAdmin } from "@/lib/access";
 import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { getSocketIO } from "@/server/libs/socket";
+import { suspendOwnedWaSessions } from "@/server/libs/makeWASocket";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -14,10 +15,14 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   const target = await prisma.user.findUnique({ where: { id: String(req.query.id) } });
   if (!target) return res.status(404).end();
   if (isSuperAdmin(target) || target.id === req.user!.id) return res.status(409).json({ message: "Status akun administrator ini tidak dapat diubah." });
-  await prisma.user.update({ where: { id: target.id }, data: { approvalStatus: parsed.data.approvalStatus } });
+  await prisma.$transaction(async tx => {
+    await tx.user.update({ where: { id: target.id }, data: { approvalStatus: parsed.data.approvalStatus,
+      ...(parsed.data.approvalStatus === "REJECTED" ? { sessionVersion: { increment: 1 } } : {}) } });
+    if (parsed.data.approvalStatus === "REJECTED") await tx.session.deleteMany({ where: { userId: target.id } });
+  });
   if (parsed.data.approvalStatus === "REJECTED") {
-    await prisma.session.deleteMany({ where: { userId: target.id } });
     getSocketIO.in(target.id).disconnectSockets(true);
+    await suspendOwnedWaSessions(target.id).catch(() => console.error("WA_ACCOUNT_SUSPEND_FAILED", target.id));
   }
   return res.json({ message: parsed.data.approvalStatus === "APPROVED" ? "Pengguna disetujui dan dapat masuk." : "Pendaftaran pengguna ditolak." });
 }

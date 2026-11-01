@@ -27,6 +27,11 @@ const tests = [
   'verify-quota-recovery.cjs', 'verify-device-quota-reset.cjs',
   'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
   'verify-feature-schema.cjs', 'verify-wave-hardening.cjs',
+  'verify-inbound-media-retention.cjs',
+  'verify-auto-reply-age.cjs', 'verify-webhook-sender.cjs',
+  'verify-traffic-audit.cjs',
+  'verify-wa-recovery.cjs',
+  'verify-dependency-patches.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);

@@ -113,7 +113,7 @@ def compare_counts(before, after, added_tables=(), created_table_counts=None):
     created_table_counts = created_table_counts or {}
     expected = dict(before['counts'])
     for table in added_tables:
-        if table not in {'sender_groups', 'wa_dispatch_attempts', 'device_quota_windows', 'wa_send_traffic', 'wa_send_recovery'} or table in expected:
+        if table not in {'sender_groups', 'wa_dispatch_attempts', 'device_quota_windows', 'wa_send_traffic', 'wa_send_recovery', 'wa_incoming_effects'} or table in expected:
             raise RuntimeError('Unexpected schema table addition')
         expected[table] = str(created_table_counts.get(table, '0')) if table == 'device_quota_windows' else '0'
     if expected != after['counts']:

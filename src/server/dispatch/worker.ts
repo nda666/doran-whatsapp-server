@@ -383,7 +383,7 @@ export function startDispatchWorker() {
         JOIN wa_sender_leases l ON l.phoneId = d.phoneId
         LEFT JOIN wa_sender_leases actual ON actual.phoneId = d.senderPhoneId
         LEFT JOIN campaigns c ON c.id = d.campaignId
-        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN')) AND d.sentAt IS NULL
+        WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN', 'ACCOUNT_INACTIVE', 'RECIPIENT_FREQUENCY')) AND d.sentAt IS NULL
         AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
         AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
         AND d.nextAttemptAt <= ${new Date()}
@@ -419,7 +419,7 @@ export function startDispatchWorker() {
       FROM wa_dispatches d LEFT JOIN campaigns c ON c.id = d.campaignId LEFT JOIN phones p ON p.id = COALESCE(d.senderPhoneId, d.phoneId)
       LEFT JOIN device_send_policies policy ON policy.phoneId = COALESCE(d.senderPhoneId, d.phoneId)
       LEFT JOIN wa_sender_leases sender ON sender.phoneId = COALESCE(d.senderPhoneId, d.phoneId)
-      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN')) AND d.sentAt IS NULL
+      WHERE d.status = 'QUEUED' AND (d.messageId IS NULL OR d.lastError IN ('ACK_TIMEOUT_RETRY', 'MEDIA_PREPARATION_FAILED', 'DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'DEVICE_SAFETY_PAUSED', 'OUTSIDE_OPERATING_HOURS', 'TELEGRAM_FLOOD_RETRY', 'TELEGRAM_DISABLED', 'DEVICE_INACTIVE', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN', 'ACCOUNT_INACTIVE', 'RECIPIENT_FREQUENCY')) AND d.sentAt IS NULL
       AND d.deliveredAt IS NULL AND d.readAt IS NULL AND (d.createdAt > ${cutoff} OR c.scheduledAt > ${cutoff})
       AND (d.campaignId IS NULL OR d.expiresAt > ${new Date()})
       AND (d.campaignId IS NULL OR (c.status IN ('WAITING', 'PROCESSING') AND c.scheduledAt <= ${new Date()}))

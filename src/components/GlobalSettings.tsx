@@ -1,5 +1,6 @@
 import { useUiTranslation, type UiTranslator } from "@/lib/uiTranslation";
 import { DEVICE_DAILY_QUOTA_KEY } from "@/lib/deviceQuota";
+import { AUTO_REPLY_MAX_AGE_KEY, MAX_AUTO_REPLY_AGE_SECONDS, AUTO_REPLY_AGE_ERROR, parseAutoReplyMaxAge } from "@/lib/autoReplyAge";
 import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, WARMUP_LIMITS_ERROR, parseWarmupDailyLimits } from "@/lib/warmupSettings";
 import { useState } from "react";
 import { DEFAULT_QUOTA_RESET, QUOTA_RESET_KEY, parseQuotaReset, type QuotaReset } from "@/lib/quotaReset";
@@ -32,6 +33,7 @@ type Setting = { id: string; label: string; key: string; value: string; secret: 
 type Values = { label: string; key?: string; value: string; minSeconds?: number; maxSeconds?: number; visibleFields?: string[]; operatingHours?: OperatingHours; quotaReset?: QuotaReset; traffic?: TrafficPolicy };
 const generalHelp = (uiText: UiTranslator) => (uiText("Pengaturan global berlaku untuk seluruh aplikasi. Key dibuat sebagai slug dan tidak dapat diubah setelah disimpan."));
 const settingHelp = (uiText: UiTranslator): Record<string, string> => ({
+  [AUTO_REPLY_MAX_AGE_KEY]: uiText("Batas usia pesan masuk saat diterima untuk memicu balasan otomatis, termasuk AI. Nilai 0 menonaktifkan batas; 120 berarti 2 menit. Pesan tetap disimpan pada histori jika penyimpanan aktif; webhook perangkat dan rule webhook tetap diproses. STOP tetap dihormati. Pengaturan ini terpisah dari usia antrean dan berlaku untuk event berikutnya tanpa restart. Saat batas aktif, timestamp yang tidak valid tidak memicu balasan otomatis."),
   [QUOTA_RESET_KEY]: uiText("Default: reset setiap pukul 00.00 WIB. Pada pilihan setelah kuota terpenuhi, jika sisa waktu menuju 00.00 WIB lebih besar dari durasi jeda, reset pada 00.00 WIB. Jika sama atau lebih kecil, reset setelah durasi jeda yang diatur. Perbandingan dihitung saat kuota terpenuhi. Pengaturan khusus nomor dan jam operasional tetap berlaku."),
   [OPERATING_HOURS_KEY]: uiText("Jam pengiriman setiap hari dalam WIB. Nomor mengikuti jadwal global kecuali memiliki jadwal khusus. Jadwal khusus menggantikan jadwal global untuk nomor tersebut. Di luar jadwal, pesan antrean menunggu tanpa mengonsumsi percobaan atau kuota. Batas usia antrean tetap berlaku. Perubahan terbaca pada pemeriksaan berikutnya tanpa restart."),
   [WARMUP_DAILY_LIMITS_KEY]: uiText("Batas percobaan per hari untuk setiap tahap pemanasan, dipisahkan koma. Contoh: 25,50,100,200,350,500. Setiap tahap berlangsung dua hari, lalu mengikuti kuota perangkat. Kuota perangkat tetap menjadi batas maksimum. Perubahan berlaku pada pengiriman berikutnya tanpa mengulang tanggal mulai pemanasan."),
@@ -63,6 +65,7 @@ export default function GlobalSettings() {
   const warmupSetting = (editing?.key || formKey) === WARMUP_DAILY_LIMITS_KEY;
   const quotaSetting = (editing?.key || formKey) === DEVICE_DAILY_QUOTA_KEY;
   const ageSetting = (editing?.key || formKey) === DISPATCH_MAX_AGE_DAYS_KEY;
+  const autoReplyAgeSetting = (editing?.key || formKey) === AUTO_REPLY_MAX_AGE_KEY;
   const orderSetting = (editing?.key || formKey) === DISPATCH_QUEUE_ORDER_KEY;
   const fieldsSetting = (editing?.key || formKey) === PHONE_FORM_FIELDS_KEY;
   const delaySetting = (editing?.key || formKey) === DISPATCH_DELAY_KEY;
@@ -107,7 +110,9 @@ export default function GlobalSettings() {
       <Form id="global-setting-form" className={resetSetting ? styles.resetBody : fieldsSetting ? styles.visibilityBody : hoursSetting ? styles.hoursBody : undefined} form={form} layout="vertical" disabled={busy} onFinish={save} requiredMark={false}>
         <Form.Item hidden={(fieldsSetting || hoursSetting || resetSetting) && !!editing} name="label" label={uiText("Label")} rules={[{ required: true, whitespace: true, message: uiText("Label wajib diisi.") }, { max: 200 }]}><Input maxLength={200} /></Form.Item>
         <Form.Item hidden={(fieldsSetting || hoursSetting || resetSetting) && !!editing} name="key" label={uiText("Key")} extra={editing ? uiText("Key tidak dapat diubah setelah dibuat.") : uiText("Opsional. Jika kosong, key dibuat dari label. Contoh: Postmark Server Token → postmark-server-token.")}><Input disabled={!!editing || busy} maxLength={200} placeholder={uiText("Otomatis dari label")} /></Form.Item>
-        {resetSetting ? <>
+        {autoReplyAgeSetting ? <Form.Item name="value" label={uiText("Maksimal usia pesan masuk (detik)")} extra={settingHelp(uiText)[AUTO_REPLY_MAX_AGE_KEY]} rules={[{ validator: (_, value) => value !== null && value !== undefined && parseAutoReplyMaxAge(String(value)) !== null ? Promise.resolve() : Promise.reject(new Error(uiText(AUTO_REPLY_AGE_ERROR))) }]}>
+          <InputNumber min={0} max={MAX_AUTO_REPLY_AGE_SECONDS} precision={0} stringMode style={{ width: "100%" }} />
+        </Form.Item> : resetSetting ? <>
           <p className={styles.resetIntro}>{uiText("Pilih kapan kuota pengiriman kembali tersedia. Nomor dengan pengaturan khusus mengikuti pilihannya sendiri.")}</p>
           <Form.Item name={["quotaReset", "mode"]} className={styles.resetChoiceField} rules={[{ required: true }]}>
             <Radio.Group className={styles.resetChoices} aria-label={uiText("Waktu reset kuota")}>

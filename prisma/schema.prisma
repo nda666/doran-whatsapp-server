@@ -59,6 +59,15 @@ model WaSendRecovery {
   @@map("wa_send_recovery")
 }
 
+model WaIncomingEffect {
+  phoneId   String   @db.VarChar(36)
+  keyHash   String   @db.Char(64)
+  action    String   @db.VarChar(16)
+  createdAt DateTime @default(now())
+  @@id([phoneId, keyHash, action])
+  @@map("wa_incoming_effects")
+}
+
 model WaProtocolMessage {
   phoneId    String   @db.VarChar(36)
   keyHash    String   @db.Char(64)
@@ -231,6 +240,8 @@ model WaDispatch {
   @@index([userId, createdAt])
   @@index([requestJobKey])
   @@index([senderPhoneId, messageId])
+  @@index([userId, recipient, status, createdAt], map: "wa_dispatch_recipient_created_idx")
+  @@index([userId, recipient, status, sentAt], map: "wa_dispatch_recipient_sent_idx")
   @@index([campaignId, status])
   @@map("wa_dispatches")
 }
@@ -467,6 +478,9 @@ model ChatMessage {
   @@unique([conversationId, waMessageId])
   @@unique([conversationId, clientRequestId])
   @@index([conversationId, createdAt, id])
+  @@index([waMessageId, direction, status], map: "chat_message_receipt_idx")
+  @@index([mediaPath], map: "chat_message_media_path_idx")
+  @@index([createdAt, id], map: "chat_message_retention_idx")
   @@map("chat_messages")
 }
 

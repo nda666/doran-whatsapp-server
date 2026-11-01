@@ -17,6 +17,7 @@ import {
 import { sendAutoReply } from "../campaigns/autoReply";
 import { webhookSender } from "../utils/webhookSender";
 import { sendAiAutoReply } from "../ai/service";
+import { ownerCanSend } from "../messaging/recipientPolicy";
 
 export type HandleQuotedMessageEventProps = {
   messageType: string;
@@ -26,6 +27,7 @@ export type HandleQuotedMessageEventProps = {
   messages: WAMessage[];
   userId: string;
   allowAi?: boolean;
+  allowAutoReply?: boolean;
 };
 export const handleQuotedMessageEvent = async (
   props: HandleQuotedMessageEventProps
@@ -59,6 +61,7 @@ export const handleQuotedMessageEvent = async (
   const senderNum = messages[0].key.remoteJid?.split("@")[0];
 
   for (const val of replies_list) {
+    if (props.allowAutoReply === false && val.type !== "webhook") continue;
     try {
     if (val.type === "ai") {
       if (props.allowAi && clientMessage && messageKeywordTypeChecker(clientMessage, val.keyword, val.type_keyword)) {
@@ -180,6 +183,7 @@ export const handleQuotedMessageEvent = async (
           };
         }
 
+        if (!await ownerCanSend(userId)) return;
         const webhookRes = await runFetchGetResponse({
           url: val.url,
           ...options,

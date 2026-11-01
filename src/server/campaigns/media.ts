@@ -9,12 +9,13 @@ export function assetPath(filename: string) {
   if (!/^[a-f0-9-]{36}\.[a-z0-9]+$/i.test(filename)) throw new Error("INVALID_MEDIA_PATH");
   return path.join(mediaDirectory(), filename);
 }
-export async function loadAssetContent(asset: MediaAsset, userId: string, caption: string): Promise<AnyMessageContent> {
+export async function loadAssetContent(asset: MediaAsset, userId: string, caption: string, loadedBuffer?: Buffer): Promise<AnyMessageContent> {
   if (asset.userId !== userId) {
     const actor = await prisma.user.findUnique({ where: { id: userId } });
     if (!actor || !isApproved(actor) || !isSuperAdmin(actor)) throw new Error("MEDIA_NOT_OWNED");
   }
-  const buffer = await fs.readFile(assetPath(asset.filename));
+  if (!loadedBuffer && (await fs.stat(assetPath(asset.filename))).size > 25 * 1024 * 1024) throw new Error("MEDIA_TOO_LARGE");
+  const buffer = loadedBuffer || await fs.readFile(assetPath(asset.filename));
   if (buffer.length > 25 * 1024 * 1024) throw new Error("MEDIA_TOO_LARGE");
   if (asset.mime.startsWith("image/")) return { image: buffer, caption };
   if (asset.mime.startsWith("video/")) return { video: buffer, caption };

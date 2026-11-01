@@ -1,6 +1,7 @@
 import { startMessagingAlerts } from "./messaging/alerts";
 import { startDailyWarmup } from "./messaging/dailyWarmup";
 import { pruneTrafficLedger } from "./messaging/trafficGuard";
+import { startMediaMaintenance } from "./chat/retention";
 import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
@@ -24,6 +25,7 @@ import { startDispatchWebhookWorker } from "./dispatchWebhook/worker";
 import { queueAccess } from "./queueAccess";
 let stopMessagingAlerts: (() => Promise<void>) | undefined;
 let stopDailyWarmup: (() => Promise<void>) | undefined;
+let stopMediaMaintenance: (() => Promise<void>) | undefined;
 let stopDispatchWebhookWorker: (() => Promise<void>) | undefined;
 let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
 let stopDispatchWorker: (() => Promise<void>) | undefined;
@@ -95,6 +97,7 @@ nextApp.prepare().then(async () => {
     stopDeviceWebhookWorker = startDeviceWebhookWorker();
     stopMessagingAlerts = startMessagingAlerts();
     stopDailyWarmup = startDailyWarmup();
+    stopMediaMaintenance = startMediaMaintenance();
     stopDispatchWebhookWorker = startDispatchWebhookWorker();
     if (process.env.DISPATCH_QUEUE_ENABLED === "true" && (process.env.WHATSAPP_ENABLED !== "false" || process.env.TELEGRAM_ENABLED === "true")) stopDispatchWorker = startDispatchWorker();
     if (process.env.NODE_ENV !== "production") {
@@ -143,7 +146,7 @@ const shutdown = createGracefulShutdown({
     if (pruneInterval) clearInterval(pruneInterval);
     stopReconnectTimers();
   },
-  drain: [() => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
+  drain: [() => stopMediaMaintenance?.(), () => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
   close: [
     closeWaSessions,
     async () => { if (io.engine) await io.close(); else io.disconnectSockets(true); },

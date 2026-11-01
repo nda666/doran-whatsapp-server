@@ -236,6 +236,10 @@ class DeploymentGuards(unittest.TestCase):
         deploy.compare_counts(before, after, ['sender_groups', 'wa_dispatch_attempts'])
         traffic = {'counts': dict(before['counts'], wa_send_traffic='0', wa_send_recovery='0'), 'migrations': before['migrations']}
         deploy.compare_counts(before, traffic, ['wa_send_traffic', 'wa_send_recovery'])
+        inbound = {'counts': dict(before['counts'], wa_incoming_effects='0'), 'migrations': before['migrations']}
+        deploy.compare_counts(before, inbound, ['wa_incoming_effects'])
+        with self.assertRaises(RuntimeError):
+            deploy.compare_counts(before, {'counts': dict(before['counts'], wa_incoming_effects='1'), 'migrations': before['migrations']}, ['wa_incoming_effects'])
         for table in ['users', 'unexpected']:
             with self.assertRaises(RuntimeError):
                 deploy.compare_counts(before, after, [table])

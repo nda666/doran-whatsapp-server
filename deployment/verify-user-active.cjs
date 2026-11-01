@@ -14,7 +14,7 @@ function load(relative, stubs = {}) {
 const access = load('src/lib/access.ts');
 const actor = { id: 'admin', email: 'admin@gmail.com', role: 'ADMIN', approvalStatus: 'APPROVED', isActive: true, sessionVersion: 0 };
 let user = { id: 'user', email: 'user@example.invalid', role: 'USER', approvalStatus: 'APPROVED', isActive: true, sessionVersion: 0, password: 'hash' };
-let deletes = 0, signals = 0, disconnects = 0;
+let deletes = 0, signals = 0, disconnects = 0, suspensions = 0;
 const db = { user: {
   findUnique: async () => user, findFirst: async () => user,
   update: async ({ data }) => { user = { ...user, ...data, sessionVersion: data.sessionVersion ? user.sessionVersion + data.sessionVersion.increment : user.sessionVersion }; return user; },
@@ -28,13 +28,16 @@ const response = () => ({ code: 200, setHeader() {}, status(n) { this.code=n;ret
   assert(access.isCurrentSession(user, {}));
   const handler=load('src/pages/api/admin/users/[id]/active.ts', {
     '@/lib/prisma': { prisma: db }, '@/lib/access': access, '@/middleware/apiSuperAdminMiddleware': defaults(fn=>fn), '@/server/libs/socket': { getSocketIO: socket },
+    '@/server/libs/makeWASocket': { suspendOwnedWaSessions: async id => { assert.equal(id, 'user'); assert.equal(user.isActive, false); suspensions++; } },
   }).default;
   const patch = async body => { const res=response();await handler({method:'PATCH',body,query:{id:user.id},user:actor},res);return res; };
   assert.equal((await patch({isActive:'false'})).code,400);
   assert.equal((await patch({isActive:false})).code,200);
   assert.equal(user.isActive,false);assert.equal(user.sessionVersion,1);assert.equal(deletes,1);assert.equal(signals,1);assert.equal(disconnects,1);
+  assert.equal(suspensions, 1);
   assert(!access.isCurrentSession(user,{sessionVersion:0}));
   assert.equal((await patch({isActive:true})).code,200);
+  assert.equal(suspensions, 1, 'Activation must not suspend WhatsApp');
   assert.equal(user.sessionVersion,1); assert(!access.isCurrentSession(user,{})); assert(access.isCurrentSession(user,{sessionVersion:1}));
   const auth=load('src/middleware/apiAuthMiddleware.ts', { '../lib/prisma': { prisma: db }, '../lib/access': access, 'next-auth/jwt': { getToken: async()=>({id:user.id,sessionVersion:0}) } }).default;
   let ran=0,res=response();await auth(()=>{ran++;})({method:'GET',headers:{}},res);assert.equal(res.code,401);assert.equal(ran,0);
@@ -54,6 +57,15 @@ const response = () => ({ code: 200, setHeader() {}, status(n) { this.code=n;ret
     'socket.io-client':{io:()=>({on:(event,fn)=>{listeners[event]=fn;},disconnect:()=>{}})},
   }).default;
   Guard();const cleanup=effects[0]();listeners['account:disabled']();listeners['account:disabled']();assert.equal(logouts,1);cleanup();
+  const approval=load('src/pages/api/admin/users/[id]/approval.ts', {
+    '@/lib/prisma': { prisma: db }, '@/lib/access': access, '@/middleware/apiSuperAdminMiddleware': defaults(fn=>fn), '@/server/libs/socket': { getSocketIO: socket },
+    '@/server/libs/makeWASocket': { suspendOwnedWaSessions: async id => { assert.equal(id, 'user'); assert.equal(user.approvalStatus, 'REJECTED'); suspensions++; } },
+  }).default;
+  const versionBeforeRejection = user.sessionVersion;
+  await approval({method:'PATCH',body:{approvalStatus:'REJECTED'},query:{id:user.id},user:actor}, response());
+  assert.equal(user.sessionVersion, versionBeforeRejection + 1); assert.equal(suspensions, 2);
+  await approval({method:'PATCH',body:{approvalStatus:'APPROVED'},query:{id:user.id},user:actor}, response());
+  assert.equal(suspensions, 2); assert(!access.isCurrentSession(user, {sessionVersion:versionBeforeRejection}));
   user={...actor};assert.equal((await patch({isActive:false})).code,409);
   user=null;res=response();await handler({method:'PATCH',body:{isActive:false},query:{id:'missing'},user:actor},res);assert.equal(res.code,404);
   console.log('USER_ACTIVE_OK: deactivate/revoke/emit, inactive login and API denied, stale JWT rejected after reactivation, fresh login, super admin protected');

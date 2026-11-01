@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261101030000_inbound_dedupe_media_indexes': '0264c907433235d98d2c96d0f907f614b24b8c57d62354bdb7c8edd65baba8a8',
   '20261101020000_reply_ratio_send_hours': '07d36dc503affceb751e66a531adcbff809c572e153fd31c5f0f414daff9b714',
   '20261101010000_wa_traffic_guard': '445bfd3c95f589948bb9d9c57f318ef0863e4cebab97ca9d2b527692d11fdf8d',
   '20261101000000_whatsapp_hardening': '8663cc1f254c7d847bbe8eace59ee2c0ba058650dffd127d1e45fdf38c24cb01',

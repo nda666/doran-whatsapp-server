@@ -26,7 +26,7 @@ async function persistence() {
     $transaction: async fn => { const value=await fn({ ...db, phone: { findUnique: async () => ({ ...phone, saveIncomingMessages: recheck }) } }); if(failCommit)throw Error('COMMIT_FAILED'); return value; },
   };
   const store = load('src/server/chat/store.ts', {
-    '../../lib/prisma': { prisma: db }, './content': content, './media': media,
+    '../../lib/prisma': { prisma: db }, './content': content, './media': { ...media, writeChatMedia: async () => `${crypto.randomUUID()}.bin` },
     '@whiskeysockets/baileys': { downloadContentFromMessage: async () => (async function* () { yield Buffer.from('file'); })() },
     'node:fs/promises': { mkdir: async()=>{}, writeFile:async()=>{}, unlink:async name=>{removes.push(name);} },
   });
@@ -57,6 +57,8 @@ async function sending() {
     $transaction:fn=>{const task=serial.then(()=>fn(db));serial=task.catch(()=>{});return task;},
   };
   const sender=load('src/server/chat/send.ts',{
+    '../messaging/safety': { SendGuardError: class extends Error {} },
+    '../messaging/sendFence': { withSendFence: (_fence, task) => task() },
     '../../lib/prisma':{prisma:db},'../libs/makeWASocket':{session:new Map([['phone',socket]])},'../libs/phoneMaintenance':{phoneMaintenance:new Set()},
     '../campaigns/media':{},'./media':media,'./content':content,'@whiskeysockets/baileys':{generateMessageIDV2:()=>crypto.randomUUID()},
   });
@@ -80,7 +82,7 @@ async function routes() {
     chatConversation:{findFirst:async args=>{lastWhere=args.where;return found?{id,phoneId:'phone',userId:'owner'}:null;},findMany:async()=>[],count:async()=>0,update:async()=>{writes++;}},
     chatMessage:{findFirst:async()=>null,findMany:async()=>[]},
   };
-  const stubs={'@/middleware/apiAuthMiddleware':{__esModule:true,default:fn=>fn},'@/lib/prisma':{prisma:db},'@/lib/access':{ownerScope:user=>({userId:user.id})},'@/server/chat/public':load('src/server/chat/public.ts',{}),'@/server/chat/media':media};
+  const stubs={'@/middleware/apiAuthMiddleware':{__esModule:true,default:fn=>fn},'@/lib/prisma':{prisma:db},'@/lib/access':{ownerScope:user=>({userId:user.id}),conversationScope:user=>({userId:user.id}),phoneScope:user=>({userId:user.id})},'@/server/chat/public':load('src/server/chat/public.ts',{}),'@/server/chat/media':media};
   const list=load('src/pages/api/conversations/index.ts',stubs).default;
   const detail=load('src/pages/api/conversations/[id].ts',stubs).default;
   const request=async(handler,method,query,body)=>{const res={code:200,status(code){this.code=code;return this;},setHeader(){},json(value){this.value=value;return this;},end(){}};await handler({method,query,body,user:{id:'owner'}},res);return res;};

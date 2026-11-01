@@ -1,10 +1,9 @@
-import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 import type { WAMessage, WASocket } from "@whiskeysockets/baileys";
 import { prisma } from "../../lib/prisma";
 import { chatContent, chatJid, CHAT_MEDIA_LIMIT } from "./content";
-import { chatMediaDirectory, chatMediaPath } from "./media";
+import { chatMediaPath, writeChatMedia } from "./media";
 
 export async function captureChatMessage(phoneId: string, message: WAMessage, socket?: WASocket) {
   let jid = message.key.remoteJid || "";
@@ -35,15 +34,7 @@ export async function captureChatMessage(phoneId: string, message: WAMessage, so
     try {
       if (Number(parsed.media.fileLength || 0) > CHAT_MEDIA_LIMIT) throw new Error("CHAT_MEDIA_TOO_LARGE");
       const stream = await downloadContentFromMessage(parsed.media, parsed.mediaType as "image" | "video" | "audio" | "document" | "sticker", { options: { signal: AbortSignal.timeout(15000) } });
-      const chunks: Buffer[] = []; let size = 0;
-      for await (const chunk of stream) {
-        size += chunk.length;
-        if (size > CHAT_MEDIA_LIMIT) { stream.destroy(); throw new Error("CHAT_MEDIA_TOO_LARGE"); }
-        chunks.push(Buffer.from(chunk));
-      }
-      mediaPath = `${randomUUID()}.bin`;
-      await fs.mkdir(chatMediaDirectory(), { recursive: true });
-      await fs.writeFile(chatMediaPath(mediaPath), Buffer.concat(chunks));
+      mediaPath = await writeChatMedia(stream, CHAT_MEDIA_LIMIT);
     } catch {
       if (mediaPath) await fs.unlink(chatMediaPath(mediaPath)).catch(() => {});
       mediaPath = null;

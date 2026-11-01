@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prisma } from "../lib/prisma";
-import makeWASocket, { session, waitForAuthSave, waitForPendingSocket } from "./libs/makeWASocket";
+import makeWASocket, { session, waitForAuthSave, waitForPendingSocket, suspendWaPhone } from "./libs/makeWASocket";
+import { ownerCanSend } from "./messaging/recipientPolicy";
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { waRecovery } from "./libs/waRecoveryState";
 import { readDatabaseCreds } from "./libs/waAuthState";
@@ -29,8 +30,10 @@ export async function recoverWaConnections() {
     const phones = await prisma.phone.findMany({ where: { active: 1, channel: "whatsapp" }, select: { id: true, userId: true } });
     for (const phone of phones) {
       if (process.env.DORAN_SHUTTING_DOWN === "true" || process.env.WHATSAPP_ENABLED === "false") break;
-      if (phoneMaintenance.has(phone.id) || waRecovery.blocked.has(phone.id) || waRecovery.timers.has(phone.id)) continue;
       try {
+        // Check before timer/blocked shortcuts so existing inactive-owner sockets are also retired.
+        if (!await ownerCanSend(phone.userId)) { await suspendWaPhone(phone.id); continue; }
+        if (phoneMaintenance.has(phone.id) || waRecovery.blocked.has(phone.id) || waRecovery.timers.has(phone.id)) continue;
         await waitForPendingSocket(phone.userId, phone.id);
         const socket = session.get(phone.id);
         if (socket) {

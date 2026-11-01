@@ -29,6 +29,8 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
   const recovery = { attempts: new Map(), timers: new Map(), blocked: new Set(), sockets: new WeakMap(), disconnects: new Map() };
   const phone = { id: 'phone', userId: 'owner', number: initialNumber, active: 1, isOnline: false, channel: 'whatsapp' };
   let transportSends = 0, reservations = 0, ended = 0, onReserve, onTransport;
+  const incomingClaims = new Set();
+  const incomingEffects = { replies: 0, webhooks: 0, stops: 0, saved: 0, failClaim: false, maxAge: 0, failAge: false, ownerActive: true, failOwner: false, authClosed: 0 };
   const socket = Object.assign(simpleSocket(null), {
     ev: { on(name, callback) { handlers.set(name, callback); } },
     authState: { creds: {} },
@@ -37,11 +39,17 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
   });
   class SendGuardError extends Error { constructor(code) { super(code); this.code = code; } }
   const phoneDb = {
+    findMany: async ({ where }) => where.userId === phone.userId ? [phone] : [],
     findUnique: async () => phone,
     update: async ({ data }) => { writes.push(data); Object.assign(phone, data); return phone; },
     updateMany: async () => ({ count: 0 }),
   };
-  const db = { phone: phoneDb, $transaction: async fn => {
+  const db = { phone: phoneDb, inboxMessage: { create: async () => ({}) }, waIncomingEffect: { create: async ({ data }) => {
+    if (incomingEffects.failClaim) throw Error('DB_OFFLINE');
+    const id = JSON.stringify(data);
+    if (incomingClaims.has(id)) throw Object.assign(Error('duplicate'), { code: 'P2002' });
+    incomingClaims.add(id); return data;
+  } }, $transaction: async fn => {
     if (dbFailure) throw new Error('DB_OFFLINE');
     return fn({ deviceSendPolicy: { createMany: async () => ({ count: 1 }), updateMany: async () => ({ count: 1 }) }, phone: phoneDb });
   } };
@@ -63,23 +71,26 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   });
   const factory = load('src/server/libs/makeWASocket.ts', {
-    './waAuthState': { closeDatabaseAuth: async () => {}, createDatabaseAuthState: async () => ({ state: {}, saveCreds: async () => {}, close: async () => {}, assertOwned: async () => {} }) },
+    './waAuthState': { closeDatabaseAuth: async () => { incomingEffects.authClosed++; }, createDatabaseAuthState: async () => { await incomingEffects.onAuth?.(); return { state: {}, saveCreds: async () => {}, close: async () => { incomingEffects.authClosed++; }, assertOwned: async () => {} }; } },
+    '../messaging/recipientPolicy': { ownerCanSend: async () => { if (incomingEffects.failOwner) throw Error('DB_UNAVAILABLE'); return incomingEffects.ownerActive; } },
     './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }), getProtocolMessage: async () => undefined, storeProtocolMessage: async () => {} },
     '../messaging/transportSafety': load('src/server/messaging/transportSafety.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError }, '@whiskeysockets/baileys': { generateMessageIDV2: () => 'legacy-id' } }),
     '../messaging/sendFence': load('src/server/messaging/sendFence.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError } }),
-    '../messaging/incomingDedupe': { alreadyProcessed: () => false }, '../messaging/engagement': { recordReply: async () => false },
+    '../messaging/incomingDedupe': load('src/server/messaging/incomingDedupe.ts', { 'node:crypto': require('node:crypto'), '../../lib/prisma': { prisma: db } }), '../messaging/engagement': { recordReply: async () => false },
+    '../messaging/autoReplyAge': { getAutoReplyMaxAgeSeconds: async () => { if (incomingEffects.failAge) throw Error('SETTING_FAILED'); return incomingEffects.maxAge; } },
+    '../../lib/autoReplyAge': load('src/lib/autoReplyAge.ts'),
     '../messaging/trafficGuard': { trafficContentHash: () => 'hash' }, '../dispatch/settings': { getTrafficPolicy: async () => ({ enabled: false }) },
     '../messaging/restrictions': { recordRestriction: async () => {}, refreshRestrictions: async () => {}, requireUnrestricted: async () => {} },
     'pino-pretty': {}, pino: () => ({}),
-    '../messaging/safety': { SendGuardError, usageDay: () => '2026-11-01', reserveSend: async () => { reservations++; await onReserve?.(); return 'day'; }, recipientBlocked: async () => false },
+    '../messaging/safety': { SendGuardError, captureStop: async () => { incomingEffects.stops++; return true; }, usageDay: () => '2026-11-01', reserveSend: async () => { reservations++; await onReserve?.(); return 'day'; }, recipientBlocked: async () => false },
     '@whiskeysockets/baileys': { __esModule: true, default: async () => socket, useMultiFileAuthState: async () => ({ state: {}, saveCreds: async () => {} }) },
-    '../../lib/prisma': { prisma: db }, '../../server/utils/getWaMessage': {}, '../../services/phone': { getPhoneById: async () => phone },
+    '../../lib/prisma': { prisma: db }, '../../server/utils/getWaMessage': { getWaMesage: messages => ({ messageIn: messages[0].message?.conversation || messages[0].message?.extendedTextMessage?.text || '', quotedMessage: messages[0].message?.extendedTextMessage?.contextInfo?.quotedMessage }) }, '../../services/phone': { getPhoneById: async () => phone },
     '../constant': { WaSockQrTimeout: 60000 }, '../events/connectionUpdate': connection, './pairingIdentity': identity,
-    '../events/handleMessageInEvent': {}, '../events/handleQuotedMessageEvent': {},
+    '../events/handleMessageInEvent': { handleMessageInEvent: async props => { if (props.allowAutoReply !== false) incomingEffects.replies++; } }, '../events/handleQuotedMessageEvent': { handleQuotedMessageEvent: async props => { if (props.allowAutoReply !== false) incomingEffects.replies++; } },
     '../utils/safeLinkPreview': {}, './qrState': { recordQrState() {} }, '../dispatch/receipts': {},
-    '../campaigns/contacts': {}, '../utils/sendDeviceWebhook': {}, '../deviceWebhook/events': { updateDevice },
+    '../campaigns/contacts': {}, '../utils/sendDeviceWebhook': { sendDeviceWebhook: async () => { incomingEffects.webhooks++; } }, '../deviceWebhook/events': { updateDevice },
     './phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired }, './waRecoveryState': { waRecovery: recovery },
-    '../chat/store': { captureChatMessage: async () => {} },
+    '../chat/store': { captureChatMessage: async () => { incomingEffects.saved++; incomingEffects.onCapture?.(); } },
   });
   Object.assign(socketModule, factory);
   const handler = load('src/pages/api/public/[action].ts', {
@@ -98,7 +109,7 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     await handler({ method: 'POST', query: { action }, body }, res);
     return res;
   }
-  return { phone, socket, factory, connection, api, writes, events, recovery, retired, handlers,
+  return { phone, socket, factory, connection, api, writes, events, recovery, retired, handlers, incomingEffects,
     fence: load('src/server/messaging/sendFence.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError } }),
     count: () => ({ transportSends, reservations, ended }), setReserve: fn => { onReserve = fn; }, setTransport: fn => { onTransport = fn; } };
 }
@@ -167,12 +178,112 @@ test('wrong sender cannot trigger automatic replies through incoming events', as
   assert.equal(f.writes.length, 0);
 });
 
+test('append cannot consume a live claim; notify redelivery produces effects once and DB failures send nothing', async () => {
+  const f = fixture(); await f.factory.default('owner', 'phone');
+  f.socket.user = { id: A + '@s.whatsapp.net' };
+  f.phone.webhookUrl = 'https://example.invalid/hook';
+  const incoming = { key: { id: 'inbound-1', remoteJid: B + '@s.whatsapp.net', fromMe: false }, message: { conversation: 'Halo' } };
+  const handle = f.handlers.get('messages.upsert');
+  await handle({ messages: [incoming], type: 'append' });
+  assert.equal(f.incomingEffects.replies, 0); assert.equal(f.incomingEffects.webhooks, 0);
+  await handle({ messages: [incoming], type: 'notify' });
+  await handle({ messages: [incoming], type: 'notify' });
+  assert.equal(f.incomingEffects.replies, 1); assert.equal(f.incomingEffects.webhooks, 1);
+  f.incomingEffects.failClaim = true;
+  const next = { ...incoming, key: { ...incoming.key, id: 'inbound-2' } };
+  await handle({ messages: [next], type: 'notify' });
+  assert.equal(f.incomingEffects.replies, 1); assert.equal(f.incomingEffects.webhooks, 1);
+  f.incomingEffects.failClaim = false;
+  await handle({ messages: [next], type: 'notify' });
+  assert.equal(f.incomingEffects.replies, 2); assert.equal(f.incomingEffects.webhooks, 2);
+  const stop = { ...incoming, key: { ...incoming.key, id: 'stop-history' }, message: { conversation: 'STOP' } };
+  await handle({ messages: [stop], type: 'append' });
+  assert.equal(f.incomingEffects.stops, 0, 'History cannot revoke a later recipient re-consent');
+  await handle({ messages: [stop], type: 'notify' });
+  assert.equal(f.incomingEffects.stops, 1); assert.equal(f.incomingEffects.replies, 2);
+});
+
 test('rechecks identity after asynchronous quota checks', async () => {
   const f = fixture(); await f.factory.default('owner', 'phone');
   f.socket.user = { id: A + '@s.whatsapp.net' };
   f.setReserve(() => { f.socket.user.id = B + '@s.whatsapp.net'; });
   await assert.rejects(f.socket.sendMessage(A + '@s.whatsapp.net', { text: 'fixture' }), /SENDER_NUMBER_MISMATCH/);
   assert.equal(f.count().transportSends, 0);
+});
+
+test('inactive owner cannot create a socket, including deactivation during auth acquisition', async () => {
+  let f = fixture(); f.incomingEffects.ownerActive = false;
+  await assert.rejects(f.factory.default('owner', 'phone'), e => e.code === 'ACCOUNT_INACTIVE');
+  assert.equal(f.handlers.size, 0);
+  f = fixture(); f.incomingEffects.onAuth = () => { f.incomingEffects.ownerActive = false; };
+  await assert.rejects(f.factory.default('owner', 'phone'), e => e.code === 'ACCOUNT_INACTIVE');
+  assert.equal(f.incomingEffects.authClosed, 1); assert.equal(f.handlers.size, 0);
+});
+
+test('owner suspension clears reconnects and retires sockets while retaining auth; assignee suspension is isolated', async () => {
+  const f = fixture(); await f.factory.default('owner', 'phone');
+  f.phone.assignedUserId = 'assignee';
+  await f.factory.suspendOwnedWaSessions('assignee');
+  assert.equal(f.count().ended, 0);
+  const timer = setTimeout(() => { throw Error('Retired owner must not reconnect'); }, 60_000); timer.unref();
+  f.recovery.timers.set('phone', timer);
+  f.incomingEffects.ownerActive = false;
+  await f.factory.suspendOwnedWaSessions('owner');
+  assert.equal(f.count().ended, 1); assert.equal(f.retired.has(f.socket), true);
+  assert.equal(f.factory.getAllSession().has('phone'), false); assert.equal(f.recovery.timers.has('phone'), false);
+  assert.equal(f.recovery.blocked.has('phone'), false, 'Reactivation is not permanently blocked');
+  assert.equal(f.incomingEffects.authClosed, 1, 'Auth lease is released without logout/credential deletion');
+});
+
+test('inactive/unknown owner cannot process inbound, and deactivation during media blocks external effects', async () => {
+  const incoming = { key: { id: 'owner-check', remoteJid: B + '@s.whatsapp.net' }, message: { conversation: 'Halo' } };
+  for (const mode of ['inactive', 'unknown', 'during-storage']) {
+    const f = fixture(); await f.factory.default('owner', 'phone');
+    f.socket.user = { id: A + '@s.whatsapp.net' }; f.phone.webhookUrl = 'https://example.invalid/hook';
+    if (mode === 'inactive') f.incomingEffects.ownerActive = false;
+    if (mode === 'unknown') f.incomingEffects.failOwner = true;
+    if (mode === 'during-storage') f.incomingEffects.onCapture = () => { f.incomingEffects.ownerActive = false; };
+    await f.handlers.get('messages.upsert')({ messages: [incoming], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 0); assert.equal(f.incomingEffects.webhooks, 0);
+    assert.equal(f.incomingEffects.saved, mode === 'during-storage' ? 1 : 0);
+  }
+});
+
+test('age limits only automated replies; history, webhook, STOP and event-arrival timing remain independent', async () => {
+  const f = fixture(); await f.factory.default('owner', 'phone');
+  f.socket.user = { id: A + '@s.whatsapp.net' }; f.phone.webhookUrl = 'https://example.invalid/hook';
+  f.incomingEffects.maxAge = 120;
+  const handle = f.handlers.get('messages.upsert');
+  const originalNow = Date.now;
+  let now = 1_790_000_000_000;
+  Date.now = () => now;
+  const incoming = (id, age, text = 'Halo') => ({ key: { id, remoteJid: B + '@s.whatsapp.net' }, messageTimestamp: now / 1000 - age, message: { conversation: text } });
+  try {
+    const old = incoming('old', 121);
+    await handle({ messages: [old], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 0); assert.equal(f.incomingEffects.webhooks, 1); assert.equal(f.incomingEffects.saved, 1);
+    await handle({ messages: [incoming('boundary', 120)], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 1);
+    f.incomingEffects.onCapture = () => { now += 300_000; };
+    await handle({ messages: [incoming('slow-media', 0)], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 2, 'Media processing time must not age a fresh event');
+    f.incomingEffects.onCapture = undefined;
+    await handle({ messages: [incoming('old-stop', 3600, 'STOP')], type: 'notify' });
+    assert.equal(f.incomingEffects.stops, 1); assert.equal(f.incomingEffects.replies, 2);
+    f.incomingEffects.failAge = true;
+    await handle({ messages: [incoming('config-failure', 0)], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 2); assert.equal(f.incomingEffects.webhooks, 5); assert.equal(f.incomingEffects.saved, 5);
+    f.incomingEffects.failAge = false; f.incomingEffects.maxAge = 0;
+    await handle({ messages: [old], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 2, 'Changing age settings cannot replay an already claimed event');
+    await handle({ messages: [incoming('disabled-limit', 3600)], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 3);
+    f.incomingEffects.maxAge = 120;
+    const quote = incoming('old-quote', 3600);
+    quote.message = { extendedTextMessage: { text: 'Jawab', contextInfo: { quotedMessage: { conversation: 'menu' } } } };
+    await handle({ messages: [quote], type: 'notify' });
+    assert.equal(f.incomingEffects.replies, 3, 'Quoted replies follow the same age policy');
+  } finally { Date.now = originalNow; }
 });
 
 test('correct sender still sends normally and retired socket cannot send', async () => {

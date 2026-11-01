@@ -17,13 +17,16 @@ function load(file, dependencies = {}) {
 (async () => {
   const settings = load('src/lib/trafficSettings.ts');
   const traffic = load('src/server/messaging/trafficGuard.ts', { '../dispatch/settings': { getTrafficPolicy: async () => settings.DEFAULT_TRAFFIC_POLICY }, '../../lib/trafficSettings': settings });
-  const fence = load('src/server/messaging/sendFence.ts');
-  assert.equal(settings.DEFAULT_TRAFFIC_POLICY.enabled, false, 'Guard is disabled until an administrator enables it');
+  const fence = load('src/server/messaging/sendFence.ts', { './safety': { SendGuardError: GuardError } });
+  const transport = load('src/server/messaging/transportSafety.ts', { './safety': { SendGuardError: GuardError }, '@whiskeysockets/baileys': { generateMessageIDV2: () => 'fixture' } });
+  assert.equal(settings.DEFAULT_TRAFFIC_POLICY.enabled, true, 'Traffic protection defaults to enabled');
   assert.deepEqual(settings.parseTrafficPolicy('{}'), settings.DEFAULT_TRAFFIC_POLICY, 'Missing fields fall back to defaults');
   assert.equal(settings.parseTrafficPolicy('{"enabled":true,"maxPerMinute":20}').maxPerMinute, 20);
   for (const bad of ['', 'bad', '[]', '{"maxPerMinute":0}', '{"maxPerMinute":61}', '{"maxPerMinute":8.5}', '{"identicalPerHour":101}', '{"enabled":"yes"}',
     '{"jitterMinMs":5000,"jitterMaxMs":1000}', '{"rampFirstMinute":12,"rampSecondMinute":10}', '{"maxPerMinute":4,"rampFirstMinute":5}', '{"reconnectCooldownSeconds":601}']) assert.equal(settings.parseTrafficPolicy(bad), null, bad);
-  const policy = { ...settings.DEFAULT_TRAFFIC_POLICY, enabled: true }, now = 10_000_000;
+  // Explicit fixture budgets test the math independently of administrator/default tuning.
+  const policy = { ...settings.DEFAULT_TRAFFIC_POLICY, enabled: true, maxPerMinute: 15, identicalPerHour: 4,
+    jitterMinMs: 1000, jitterMaxMs: 2000, reconnectCooldownSeconds: 30, rampFirstMinute: 5, rampSecondMinute: 10 }, now = 10_000_000;
   const custom = { ...policy, maxPerMinute: 20, identicalPerHour: 2, reconnectCooldownSeconds: 10, rampFirstMinute: 4, rampSecondMinute: 8, jitterMinMs: 0, jitterMaxMs: 500 };
   const emptySnapshot = { minuteAttempts: 0, oldestMinuteAt: null, sameContent: [], connectedAt: null };
   assert.equal(traffic.evaluateTraffic(custom, { ...emptySnapshot, connectedAt: now - 5000 }, 'x', now, 0).retryAt, now + 5000, 'Cooldown follows the setting');
@@ -49,10 +52,7 @@ function load(file, dependencies = {}) {
   assert.notEqual(hash({ image: { url: new URL('https://example.com/a') } }), hash({ image: { url: new URL('https://example.com/b') } }));
   assert.throws(() => hash({ image: { pipe() {} } }), /STREAM_NEEDS/);
   const cycle = {}; cycle.self = cycle; assert.throws(() => hash(cycle), /CYCLE/);
-  assert.deepEqual(Array.from({ length: 7 }, (_, day) => traffic.sevenDayWarmupLimit(new Date(0), 1000, day * 86400000)), [20, 36, 65, 117, 210, 378, 680]);
-  assert.equal(traffic.sevenDayWarmupLimit(new Date(0), 50, 6 * 86400000), 50);
-  assert.equal(traffic.sevenDayWarmupLimit(null, 50), 50);
-  console.log('PASS disabled-by-default, configuration, rolling rate window, jitter floor, reconnect ramp, identical cap/retry identity, safe content hashing, clamped 7-day policy');
+  console.log('PASS enabled-by-default, configuration, rolling rate window, jitter floor, reconnect ramp, identical cap/retry identity and safe content hashing');
 
   let ledger = [], chain = Promise.resolve();
   const tx = {
@@ -85,20 +85,20 @@ function load(file, dependencies = {}) {
   console.log('PASS concurrent admission using a transaction fixture, rate counting of retries, hourly content cap, quota rollback; real MySQL adapter remains an activation check');
 
   let release, secondStarted = false;
-  const first = traffic.serializePhoneSend('serial', () => new Promise(resolve => { release = resolve; }));
+  const first = transport.serializeTransport('serial', () => new Promise(resolve => { release = resolve; }));
   await Promise.resolve();
   await assert.rejects(Promise.race([first, Promise.reject(Error('caller timed out'))]));
-  const second = traffic.serializePhoneSend('serial', async () => { secondStarted = true; return 2; });
+  const second = transport.serializeTransport('serial', async () => { secondStarted = true; return 2; });
   await Promise.resolve(); assert.equal(secondStarted, false, 'Caller timeout does not release real transport lock');
-  assert.equal(await traffic.serializePhoneSend('independent', async () => 3), 3, 'Different devices remain independent');
+  assert.equal(await transport.serializeTransport('independent', async () => 3), 3, 'Different devices remain independent');
   release(1); assert.equal(await first, 1); assert.equal(await second, 2);
   const order = [];
-  await Promise.allSettled([traffic.serializePhoneSend('fifo', async () => { order.push(1); throw Error('first failed'); }), traffic.serializePhoneSend('fifo', async () => order.push(2)), traffic.serializePhoneSend('fifo', async () => order.push(3))]);
+  await Promise.allSettled([transport.serializeTransport('fifo', async () => { order.push(1); throw Error('first failed'); }), transport.serializeTransport('fifo', async () => order.push(2)), transport.serializeTransport('fifo', async () => order.push(3))]);
   assert.deepEqual(order, [1, 2, 3]);
   let free;
-  const occupied = traffic.serializePhoneSend('bounded', () => new Promise(resolve => { free = resolve; }), 1);
+  const occupied = transport.serializeTransport('bounded', () => new Promise(resolve => { free = resolve; }), 1);
   await Promise.resolve();
-  await assert.rejects(traffic.serializePhoneSend('bounded', async () => 0, 1), e => e.code === 'DEVICE_THROTTLED');
+  await assert.rejects(transport.serializeTransport('bounded', async () => 0, 1), e => e.code === 'DEVICE_THROTTLED');
   free(); await occupied;
   console.log('PASS FIFO physical transport serialization, failure recovery, bounded waiters, real-promise ownership after caller timeout');
 

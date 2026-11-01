@@ -5,6 +5,7 @@ import { isSuperAdmin } from "@/lib/access";
 import apiSuperAdminMiddleware from "@/middleware/apiSuperAdminMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { getSocketIO } from "@/server/libs/socket";
+import { suspendOwnedWaSessions } from "@/server/libs/makeWASocket";
 
 async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -27,6 +28,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (!parsed.data.isActive) {
     getSocketIO.to(id).emit("account:disabled");
     getSocketIO.in(id).disconnectSockets(true);
+    await suspendOwnedWaSessions(id).catch(() => console.error("WA_ACCOUNT_SUSPEND_FAILED", id));
   }
   return res.json({ message: parsed.data.isActive ? "Pengguna diaktifkan. Login tetap memerlukan persetujuan admin." : "Pengguna dinonaktifkan dan seluruh sesi login diakhiri." });
 }

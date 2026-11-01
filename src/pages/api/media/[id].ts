@@ -1,6 +1,7 @@
 import { ownerScope } from "@/lib/access";
 import type { NextApiResponse } from "next";
 import fs from "node:fs/promises";
+import { streamFile } from "@/server/utils/streamFile";
 import apiAuthMiddleware from "@/middleware/apiAuthMiddleware";
 import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
@@ -25,12 +26,13 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     await fs.unlink(assetPath(asset.filename)).catch(() => {});
     return res.json({ result: true });
   }
-  if (req.method !== "GET") return res.status(405).end();
+  if (req.method !== "GET" && req.method !== "HEAD") return res.status(405).end();
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Type", asset.mime);
   const inline = /^(image|video|audio)\//.test(asset.mime);
   res.setHeader("Content-Disposition", `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(asset.originalName || asset.name)}`);
-  return res.send(await fs.readFile(assetPath(asset.filename)));
+  await streamFile(assetPath(asset.filename), res, req.headers.range, req.method === "HEAD");
 }
+export const config = { api: { responseLimit: false } };
 export default apiAuthMiddleware(handler);

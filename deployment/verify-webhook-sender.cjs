@@ -30,8 +30,9 @@ function load(file, stubs = {}) {
   assert.equal(key.remoteJid, '278313914388723@lid', 'Chat identity must remain unchanged');
   await assert.rejects(helper.webhookSender(key, {signalRepository:{lidMapping:{getPNForLID:async()=>null}}}), /UNRESOLVED/);
   const rule = {id:78,type:'webhook',reply:null,type_keyword:'Any',keyword:'',url:'https://dorun.id/api/check_user_by_phone',type_request:'GET',is_save_inbox:true,param_1:'phone',isi_param_1:'Recipient',param_2:'code',isi_param_2:'Message'};
-  let request, saved;
+  let request, saved, sends = 0, aiCalls = 0, rules = [rule];
   const stubs = {
+    '../messaging/recipientPolicy': { ownerCanSend: async () => true },
     '../utils/mediaUrl':{mediaUrl:()=>''},
     '../utils/webhookSender':helper,
     '../../server/utils':{
@@ -41,11 +42,12 @@ function load(file, stubs = {}) {
       CekValueParam:(_item, field, data)=>field === 'isi_param_1' ? data.recipient : data.message,
       runFetchGetResponse:async args=>{request=args;return {result:{result:true,message:'No Event Data',data:[]}};},
     },
-    '../../services/autoReply':{getAutoReplyByPhoneId:async()=>[rule]},
+    '../../services/autoReply':{getAutoReplyByPhoneId:async()=>rules},
     '../../services/group':{saveToGrup:async()=>{}},
     '../../services/inboxMessage':{insertWebhookToInboxMessage:async data=>{saved=data;}},
     '../libs/toBase64':{},
-    '../campaigns/autoReply':{sendAutoReply:async()=>{throw Error('Unexpected outbound message');}},
+    '../campaigns/autoReply':{sendAutoReply:async()=>{sends++;}},
+    '../ai/service':{sendAiAutoReply:async()=>{aiCalls++;}},
   };
   const phone = {id:'device',number:'6281217357535',autoReplyEnabled:true};
   await load('src/server/events/handleMessageInEvent.ts',stubs).handleMessageInEvent({phone,_waSocket:socket,messageIn:'home',messages:[{key}],userId:'owner'});
@@ -60,4 +62,12 @@ function load(file, stubs = {}) {
   assert.equal(request.params.code,'home');
   assert.equal(saved.sender,'6285231194683');
   console.log('WEBHOOK_SENDER_OK: PN, alternate PN, LID mapping, unresolved rejection, normal and quoted webhook payloads');
+  rules = [{ ...rule, id: 79, type: 'text', reply: { text: 'reply' } }, { ...rule, id: 80, type: 'ai' }, rule];
+  request = null;
+  await load('src/server/events/handleMessageInEvent.ts',stubs).handleMessageInEvent({phone,_waSocket:socket,messageIn:'home',messages:[{key}],userId:'owner',allowAi:true,allowAutoReply:false});
+  assert(request, 'Expired messages must still reach rule webhooks'); assert.equal(sends, 0); assert.equal(aiCalls, 0);
+  request = null;
+  await load('src/server/events/handleQuotedMessageEvent.ts',stubs).handleQuotedMessageEvent({phone,waSocket:socket,messages:[{key,message:{extendedTextMessage:{text:'home',contextInfo:{participant:'6281217357535@s.whatsapp.net'}}}}],quotedMessage:{conversation:'menu'},userId:'owner',messageType:'extendedTextMessage',allowAi:true,allowAutoReply:false});
+  assert(request, 'Quoted rule webhook is independent of age'); assert.equal(sends, 0); assert.equal(aiCalls, 0);
+  console.log('AUTO_REPLY_AGE_WEBHOOK_ISOLATION_OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});

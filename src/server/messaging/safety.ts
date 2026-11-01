@@ -12,6 +12,7 @@ import { getQuotaReset } from "../dispatch/settings";
 import { reserveTraffic, type TrafficAdmission } from "./trafficGuard";
 import { SendGuardError } from "./sendGuardError";
 import { ownerCanSend } from "./recipientPolicy";
+import { claimIncoming, type IncomingKey } from "./incomingDedupe";
 import { addSendHour, wibHour } from "./sendHours";
 
 export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
@@ -33,12 +34,14 @@ export { SendGuardError };
 export async function recipientBlocked(userId: string, number: string) {
   return !!await prisma.recipientSuppression.findUnique({ where: { userId_number: { userId, number } } });
 }
-export async function captureStop(userId: string, jid: string, text: string) {
+export async function captureStop(userId: string, jid: string, text: string, inbound?: { phoneId: string; key: IncomingKey }) {
   if (!/^\s*(STOP|BERHENTI|UNSUBSCRIBE)[.!\s]*$/i.test(text) || !jid.endsWith("@s.whatsapp.net")) return false;
   // Honouring a recipient's request to stop is mandatory for every account; the old switch no longer disables it.
   const number = normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`);
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+    // Commit the STOP marker and suppression together so a failed transaction can be retried.
+    if (inbound?.key.id && inbound.key.remoteJid && !await claimIncoming(inbound.phoneId, inbound.key, "STOP", tx)) return;
     const now = new Date();
     await tx.recipientSuppression.upsert({ where: { userId_number: { userId, number } },
       create: { userId, number, source: "STOP", reason: "Permintaan berhenti dari penerima" }, update: { createdAt: now } });

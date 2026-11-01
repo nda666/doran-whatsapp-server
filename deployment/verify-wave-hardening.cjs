@@ -25,12 +25,7 @@ function load(relative, stubs = {}) {
   assert.equal(fetchHelper.buildResponse({ status: 200, body: 'nope' }).error, 'INVALID_WEBHOOK_JSON');
   assert.match(fetchHelper.buildResponse({ status: 500, body: '' }).error, /500/);
 
-  const dedupe = load('src/server/messaging/incomingDedupe.ts');
-  assert.equal(dedupe.alreadyProcessed('p', 'm1', 1000), false);
-  assert.equal(dedupe.alreadyProcessed('p', 'm1', 2000), true);
-  assert.equal(dedupe.alreadyProcessed('q', 'm1', 2000), false);
-  assert.equal(dedupe.alreadyProcessed('p', 'm1', 1000 + 3_600_001), false);
-  assert.equal(dedupe.alreadyProcessed('p', undefined), false);
+  // Durable dedupe/restart/history behavior is covered by verify-inbound-media-retention.cjs.
 
   process.env.DISPATCH_API_RATE_LIMIT_PER_MINUTE = '3';
   const auth = load('src/server/dispatchAuth.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/access': { isApproved: () => true } });
