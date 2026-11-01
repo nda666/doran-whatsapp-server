@@ -45,7 +45,7 @@ const { warmupLimit } = load('src/server/messaging/safety.ts', {
   '../../lib/warmupSettings': settings, '../../lib/dispatchPresentation': {}, '../dispatchWebhook/events': {},
   '../../lib/prisma': {}, '../../utils/normalizePhoneRecipient': {}, '../../lib/deviceQuota': {},
   '../dispatch/settings': {}, '../dispatch/timing': {}, '../../lib/deviceSendInterval': {}, '../../lib/quotaReset': {}, '../../lib/operatingHours': {},
-  './trafficGuard': {}, './sendGuardError': {},
+  './recipientPolicy': { ownerCanSend: async () => true }, './sendHours': { addSendHour: () => ({}), wibHour: () => 0 }, './trafficGuard': {}, './sendGuardError': {},
 });
 async function request(body, method = 'PATCH') {
   const res = { code: 200, setHeader() {}, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; }, end() {} };

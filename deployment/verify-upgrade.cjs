@@ -55,10 +55,10 @@ async function main() {
   try {
     process.env.WHATSAPP_ENABLED = 'true';
     await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
-    assert.equal(timers[0].delay, 2000);
+    assert((timers[0].delay >= 2000) && (timers[0].delay <= 2800)); // base delay plus up to 40% jitter
     await onUpdate(pairedSocket(), 'test-user', 'test-phone', close(baileys.DisconnectReason.timedOut));
     assert.equal(timers[0].cancelled, true);
-    assert.equal(timers[1].delay, 4000);
+    assert((timers[1].delay >= 4000) && (timers[1].delay <= 5600)); // base delay plus up to 40% jitter
     await onUpdate(pairedSocket(), 'test-user', 'test-phone', { connection: 'open' });
     assert.equal(timers[1].cancelled, true);
     const count = timers.length;

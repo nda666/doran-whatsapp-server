@@ -9,7 +9,7 @@ const settings=load('src/server/dispatch/settings.ts',{'../../lib/prisma':{prism
 const api=load('src/pages/api/admin/global-settings.ts',{'@/lib/prisma':{prisma},'@/lib/globalSettings':crypto,'@/lib/dispatchSettings':constants,'@/middleware/apiSuperAdminMiddleware':fn=>fn}).default;
 async function request(value){const res={code:200,setHeader(){},status(code){this.code=code;return this},json(body){this.body=body;return this}};await api({method:'PATCH',body:{id:row.id,label:row.label,value}},res);return res;}
 (async()=>{
- assert.deepEqual(await settings.getDispatchDelayRange(),{minSeconds:2,maxSeconds:5});
+ assert.deepEqual(await settings.getDispatchDelayRange(),{minSeconds:8,maxSeconds:20});
  row={id:'22222222-2222-4222-8222-222222222222',key:constants.DISPATCH_DELAY_KEY,label:constants.DISPATCH_DELAY_LABEL,value:crypto.encryptSetting(JSON.stringify({minSeconds:2,maxSeconds:5}))};
  for(const value of ['bad','null','[]','{"minSeconds":0,"maxSeconds":5}','{"minSeconds":5,"maxSeconds":2}','{"minSeconds":2.5,"maxSeconds":5}','{"minSeconds":"2","maxSeconds":5}','{"minSeconds":1}']){
   assert.equal(constants.parseDispatchDelayRange(value),null);assert.equal((await request(value)).code,400);

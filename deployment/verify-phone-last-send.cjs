@@ -45,6 +45,7 @@ function load(file, mocks) {
     '../../lib/deviceQuota': { deviceDailyQuota: p => p.dailyLimit },
     '../dispatch/settings': { getQuotaReset: async () => reset, getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 0, maxSeconds: 0 }), getWarmupDailyLimits: async () => [25] },
     '../dispatch/timing': { randomDispatchDelay: () => 0 }, '../../lib/deviceSendInterval': {},
+    './recipientPolicy': { ownerCanSend: async () => true }, './sendHours': { addSendHour: () => ({}), wibHour: () => 0 },
     './trafficGuard': {}, './sendGuardError': load('src/server/messaging/sendGuardError.ts', { '../../lib/dispatchPresentation': { dispatchErrorLabels: {} } }),
   });
   const send = () => safety.reserveSend('owner', 'phone', '628123@s.whatsapp.net');

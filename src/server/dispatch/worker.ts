@@ -17,7 +17,8 @@ import { dispatchDeadline, getDispatchAgeCutoff, getDispatchQueueOrder, getDispa
 import { DEFAULT_OPERATING_HOURS } from "../../lib/operatingHours";
 import { pollStaleAfter, senderClaimDue } from "./health";
 import { withSendFence } from "../messaging/sendFence";
-import { randomDispatchDelay } from "./timing";
+import { randomDispatchDelay, typingDelayMs } from "./timing";
+import { spin } from "../../lib/spintax";
 import { ACK_TIMEOUT_MS, acknowledgementFailure, retryEligible } from "./retry";
 import { recordDispatchReceipt } from "./receipts";
 import { waitForDispatchAcknowledgement, AckObservation } from "./acknowledgement";
@@ -26,6 +27,8 @@ import { selectDispatchSender } from "./senderRouting";
 import { isTelegramDevice } from "../../lib/messagingChannel";
 import { prepareTelegramDispatch, sendTelegramDispatch, telegramDispatchOutcome } from "../telegram/dispatch";
 import { telegramEnabled } from "../telegram/availability";
+import { recipientVerdict } from "../messaging/recipientPolicy";
+import { getTrafficPolicy } from "./settings";
 
 const runnable = () => ({ OR: [{ campaignId: null }, { campaign: { status: { in: ["WAITING", "PROCESSING"] as ("WAITING" | "PROCESSING")[] }, scheduledAt: { lte: new Date() } } }] });
 // A future campaign must not expire merely because its queue rows were created early.
@@ -157,6 +160,17 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
       await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: { status: "SUPPRESSED", lastError: "RECIPIENT_OPTED_OUT" } });
       return;
     }
+    if (!telegram) {
+      const verdict = await recipientVerdict(job.userId, job.recipient, await getTrafficPolicy());
+      if (verdict) {
+        const terminal = verdict.code === "CONSENT_REQUIRED" || verdict.code === "INVALID_NUMBER";
+        await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: terminal
+          ? { status: "SUPPRESSED", lastError: verdict.code }
+          : { lastError: verdict.code, nextAttemptAt: verdict.retryAt } });
+        sendGap = 1000;
+        return;
+      }
+    }
     let image: Buffer | undefined;
     let content: AnyMessageContent | undefined;
     let telegramPrepared: Awaited<ReturnType<typeof prepareTelegramDispatch>> | undefined;
@@ -167,7 +181,7 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
         if (!job.media || job.media.userId !== job.userId || job.media.mime !== "image/webp") throw new Error("INVALID_STICKER");
         content = { sticker: await fs.readFile(assetPath(job.media.filename)) };
       } else if (payload) content = payloadContent(payload);
-      else if (job.media) content = await loadAssetContent(job.media, job.userId, job.message);
+      else if (job.media) content = await loadAssetContent(job.media, job.userId, spin(job.message, job.id));
       else if (job.image) image = await loadDispatchImage(job.image);
     }
     catch (error) {
@@ -239,11 +253,15 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
           observation => { ackObservation = observation; },
         );
         void acknowledgement.catch(() => {});
-        if (phone.showTyping) await socket.sendPresenceUpdate("composing", `${job.recipient}@s.whatsapp.net`);
+        if (phone.showTyping) {
+          await socket.sendPresenceUpdate("composing", `${job.recipient}@s.whatsapp.net`);
+          // Sending at once would make the typing indicator meaningless and the cadence machine-like.
+          await new Promise(resolve => setTimeout(resolve, typingDelayMs(job.message.length)));
+        }
         // A late receipt may have cancelled this retry after the claim/typing.
         const current = await prisma.waDispatch.findUnique({ where: { id: job.id }, select: { status: true } });
         if (current?.status !== "PROCESSING") return null;
-        const result = await socket.sendMessage(`${job.recipient}@s.whatsapp.net`, content || (image ? { image, caption: job.message } : { text: job.message }), { messageId });
+        const result = await socket.sendMessage(`${job.recipient}@s.whatsapp.net`, content || (image ? { image, caption: spin(job.message, job.id) } : { text: spin(job.message, job.id) }), { messageId });
         if (!result?.key?.id) throw new Error("NO_MESSAGE_ID");
         const ack = await acknowledgement;
         if (ack.attrs?.error === "463") throw new Error("WA_ACK_463");
@@ -339,7 +357,8 @@ export function startDispatchWorker() {
   progress.startedAt = Date.now();
   let stopping = false, polling = false;
   let timer: NodeJS.Timeout | undefined;
-  let pollRange = DEFAULT_DISPATCH_DELAY;
+  // Polling only looks for due work; each number's own gap is enforced by its lease and send policy.
+  const pollRange = { minSeconds: 1, maxSeconds: 2 };
   const schedulePoll = () => {
     if (!stopping) timer = setTimeout(() => { void tick(); }, randomDispatchDelay(pollRange));
   };
@@ -357,8 +376,6 @@ export function startDispatchWorker() {
     const startedAt = Date.now();
     try {
       const [cutoff, order, range] = await Promise.all([getDispatchAgeCutoff(), getDispatchQueueOrder(), getDispatchDelayRange()]);
-      pollRange = range;
-      healthPollMaximum = range.maxSeconds;
       const senderOrder = order === "newest" ? Prisma.sql`MAX(d.createdAt) DESC` : Prisma.sql`MIN(d.createdAt) ASC`;
       // Group/limit in MySQL rather than loading every pending row for client-side distinct.
       const candidates = await prisma.$queryRaw<Array<{ phoneId: string; senderPhoneId: string | null; assignedOnly: number | bigint }>>`
@@ -424,7 +441,7 @@ export function startDispatchWorker() {
   const watchdogTimer = setInterval(watchdog, 10_000);
   recover();
   sample();
-  const initialized = getDispatchDelayRange().then(range => { pollRange = range; healthPollMaximum = range.maxSeconds; }).catch(error => logFailure("DISPATCH_DELAY_SETTING_FAILED", error, progress.startedAt)).finally(schedulePoll);
+  const initialized = getDispatchDelayRange().then(() => { healthPollMaximum = pollRange.maxSeconds; }).catch(error => logFailure("DISPATCH_DELAY_SETTING_FAILED", error, progress.startedAt)).finally(schedulePoll);
   console.info("DISPATCH_WORKER_STARTED", JSON.stringify({ at: new Date().toISOString(), concurrency, delaySetting: "dispatch-random-delay" }));
   return async () => { stopping = true; progress.running = false; if (timer) clearTimeout(timer); clearInterval(recoveryTimer); clearInterval(sampleTimer); clearInterval(watchdogTimer); await initialized; while (polling) await new Promise(resolve => setTimeout(resolve, 50)); await Promise.allSettled([...Array.from(active.values()), ...(recovery ? [recovery] : []), ...(sampling ? [sampling] : [])]); };
 }

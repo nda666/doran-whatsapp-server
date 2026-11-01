@@ -57,7 +57,8 @@ const stubs = {
   'src/lib/prisma.ts': { prisma },
   'src/server/dispatchWebhook/events.ts': { updateDispatches: update },
   'src/server/libs/makeWASocket.ts': { session: new Map([['phone', socket], ['backup', socket]]) },
-  'src/server/dispatch/settings.ts': { getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getDispatchAgeCutoff: async () => new Clock(0), getDispatchQueueOrder: async () => 'oldest', getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 1 }), dispatchDeadline: () => ({}) },
+  'src/server/messaging/recipientPolicy.ts': { recipientVerdict: async () => null },
+  'src/server/dispatch/settings.ts': { getTrafficPolicy: async () => ({ enabled: false, requireConsent: false }), getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getDispatchAgeCutoff: async () => new Clock(0), getDispatchQueueOrder: async () => 'oldest', getDispatchDelayRange: async () => ({ minSeconds: 1, maxSeconds: 1 }), dispatchDeadline: () => ({}) },
   'src/server/dispatch/media.ts': {}, 'src/server/campaigns/media.ts': {}, 'src/server/campaigns/content.ts': {},
 };
 const cache = {};
@@ -74,7 +75,7 @@ function load(name) {
   };
   new Function('require', 'module', 'exports', 'Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', code)(
     req, module, module.exports, Clock,
-    (fn, ms) => { const timer = { fn, ms }; timers.add(timer); return timer; }, timer => timers.delete(timer), () => 1, () => {});
+    (fn, ms) => { const timer = { fn, ms }; if (ms < 10000) { fn(); return timer; } /* simulated typing pauses */ timers.add(timer); return timer; }, timer => timers.delete(timer), () => 1, () => {});
   cache[name] = module.exports; return module.exports;
 }
 timers = new Set();

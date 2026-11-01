@@ -30,6 +30,7 @@ export type DevicePolicy = {
   effectiveQuotaReset: QuotaReset;
   quotaResetAt: string | null;
   lastSendProcessedAt?: string | null;
+  engagement?: { replies: number; replyRate: number | null; quietHourShare: number | null; sendHours: Record<string, number> };
   effectiveLimit: number;
   minIntervalSeconds: number | null;
   maxIntervalSeconds: number | null;
@@ -62,6 +63,10 @@ export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string)
         {policy.restriction?.newChatCap?.total_quota != null && <Typography.Text type="secondary" style={detailStyle}>Percakapan baru WA: {policy.restriction.newChatCap.used_quota ?? "?"} / {policy.restriction.newChatCap.total_quota}</Typography.Text>}
         {policy.health.score === null ? <Typography.Text>{uiText("Data belum cukup")}</Typography.Text> : <Progress percent={policy.health.score} status={policy.health.stop ? "exception" : "normal"} style={{ margin: 0 }} />}
         <Typography.Text type="secondary" style={{ ...detailStyle, overflowWrap: "anywhere" }}>{description}</Typography.Text>
+        {policy.engagement && <Typography.Text type="secondary" style={detailStyle}>
+          {uiText("Balasan hari ini:")} {policy.engagement.replies}{policy.engagement.replyRate === null ? "" : ` (${Math.round(policy.engagement.replyRate * 100)}%)`}
+          {policy.engagement.quietHourShare !== null && policy.engagement.quietHourShare > 0.2 ? ` · ${uiText("Kirim malam")} ${Math.round(policy.engagement.quietHourShare * 100)}%` : ""}
+        </Typography.Text>}
         <Tag color={stopped ? "red" : policy.operatingHoursState.open ? "green" : "gold"} style={{ alignSelf: "flex-start", whiteSpace: "normal" }}>
           {policy.restriction?.active ? "Dihentikan: pembatasan WhatsApp" : policy.paused ? policy.pauseReason ? uiText("Dihentikan: pembatasan WhatsApp") : uiText("Dijeda admin") : stopped ? uiText("Dihentikan otomatis") : policy.operatingHoursState.open ? uiText("Siap mengirim") : uiText("Di luar jam operasional")}
         </Tag>

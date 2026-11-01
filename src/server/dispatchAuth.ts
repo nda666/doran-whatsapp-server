@@ -36,8 +36,19 @@ export async function resolveIntegrationIdentity(req: Pick<NextApiRequest, "head
   return { device: null, user: userToken, deviceId, token, mode: "user" as const };
 }
 
+// A leaked token must not be able to flood the queue: fixed one-minute window per token.
+const apiWindows = new Map<string, { count: number; resetAt: number }>();
+export function apiRateAllowed(token: string, now = Date.now(), limit = Math.max(1, Number(process.env.DISPATCH_API_RATE_LIMIT_PER_MINUTE) || 300)) {
+  apiWindows.forEach((state, key) => { if (state.resetAt <= now) apiWindows.delete(key); });
+  const window = apiWindows.get(token) || { count: 0, resetAt: now + 60_000 };
+  window.count++;
+  apiWindows.set(token, window);
+  return window.count <= limit;
+}
+
 export async function resolveDispatchDevice(req: Pick<NextApiRequest, "headers" | "query">, input: any) {
   const identity = await resolveIntegrationIdentity(req, input);
+  if (!apiRateAllowed(identity.token)) throw new DispatchAuthError(429, "Terlalu banyak permintaan. Kurangi frekuensi atau gunakan antrean dengan job_id.");
   const checkChannel = (phone: { channel?: string }) => {
     if (input?.channel !== undefined && input.channel !== (phone.channel || "whatsapp")) throw new DispatchAuthError(400, "channel tidak cocok dengan perangkat. Pilih token/device_id dari kanal yang dimaksud.");
   };

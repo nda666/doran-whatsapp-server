@@ -4,7 +4,7 @@ export const MAX_DISPATCH_MAX_AGE_DAYS = 3650;
 export const DISPATCH_MAX_AGE_LABEL = "Maksimal usia data antrean (hari)";
 export const DISPATCH_DELAY_KEY = "dispatch-random-delay";
 export const DISPATCH_DELAY_LABEL = "Jeda acak pengiriman (detik)";
-export const DEFAULT_DISPATCH_DELAY = { minSeconds: 2, maxSeconds: 5 };
+export const DEFAULT_DISPATCH_DELAY = { minSeconds: 8, maxSeconds: 20 };
 export type DispatchDelayRange = typeof DEFAULT_DISPATCH_DELAY;
 export function parseDispatchDelayRange(value: string): DispatchDelayRange | null {
   try {

@@ -155,6 +155,10 @@ model DeviceDailyUsage {
   day      String @db.VarChar(10)
   attempts Int    @default(0)
   failures Int    @default(0)
+  // Inbound 1:1 messages from people this number messaged in the previous 7 days.
+  replies  Int    @default(0)
+  // Admitted sends per WIB hour of the day, e.g. {"9": 12, "10": 7}.
+  sendHours Json?
 
   @@id([phoneId, day])
   @@map("device_daily_usage")

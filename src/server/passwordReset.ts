@@ -10,7 +10,7 @@ export const newResetToken = () => randomBytes(32).toString("hex");
 export const escapeEmailHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!));
 
 export function requestIp(req: NextApiRequest) {
-  const forwarded = req.headers["x-forwarded-for"];
+  const forwarded = req.headers?.["x-forwarded-for"];
   if (process.env.AUTH_TRUST_PROXY === "true" && typeof forwarded === "string") return forwarded.split(",")[0].trim().slice(0, 128);
   return req.socket?.remoteAddress || "unknown";
 }

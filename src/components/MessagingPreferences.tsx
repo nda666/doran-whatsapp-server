@@ -18,7 +18,7 @@ export default function MessagingPreferences() {
 {settings.error && <Alert type="error" message={uiText(settings.error)} />}
     <Card title={uiText("Pengaturan pesan dan notifikasi")} loading={!settings.data}>
       {settings.data && <Form key={settings.data.updatedAt || "initial"} form={form} layout="vertical" initialValues={settings.data} onFinish={save}>
-        <Form.Item name="optOutEnabled" label={uiText("Deteksi balasan STOP")} valuePropName="checked" extra={uiText("Berlaku untuk seluruh perangkat akun Anda, tanpa perlu mengaktifkan balasan otomatis. Mematikan deteksi tidak menghapus daftar blokir yang sudah ada.")}><Switch checkedChildren={"ON"} unCheckedChildren={"OFF"} /></Form.Item>
+        <Form.Item name="optOutEnabled" label={uiText("Deteksi balasan STOP")} valuePropName="checked" extra={uiText("Selalu aktif untuk seluruh perangkat akun Anda dan tidak dapat dimatikan, agar permintaan berhenti dari penerima selalu dihormati.")}><Switch disabled checkedChildren={"ON"} unCheckedChildren={"OFF"} /></Form.Item>
         <Form.Item name="offlineAlertsEnabled" label={uiText("Notifikasi perangkat terputus dan tersambung kembali")} valuePropName="checked"><Switch checkedChildren={"ON"} unCheckedChildren={"OFF"} /></Form.Item>
         <Form.Item name="alertEmail" label={uiText("Email admin")} rules={[{ type: "email" }]} extra={uiText("Email dikirim menggunakan integrasi Postmark Jeblast yang sudah tersedia.")}><Input maxLength={254} /></Form.Item>
         <Form.Item name="offlineDelaySeconds" label={uiText("Kirim alert setelah terputus (detik)")} extra={uiText("Pemulihan dikonfirmasi setelah 30 detik. Alert perangkat yang sama dibatasi maksimal satu kali setiap 30 menit.")}><InputNumber min={30} max={3600} /></Form.Item>

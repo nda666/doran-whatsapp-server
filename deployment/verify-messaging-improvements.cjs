@@ -29,6 +29,7 @@ async function safetyTests() {
   const policy = { dailyLimit: 3, useGlobalQuota: false, minIntervalSeconds: 0, adaptiveEnabled: true, paused: false, warmupStartedAt: null, nextAllowedAt: new Date(0) };
   const usage = { attempts: 0, failures: 0 }; let chain = Promise.resolve();
   const db = {
+    user: { findUnique: async () => ({ approvalStatus: 'APPROVED', isActive: true }) },
     recipientConsent: { updateMany: async () => ({ count: 0 }) },
     recipientConsentEvent: { create: async () => ({}) },
     messagingPreference: { findUnique: async () => ({ optOutEnabled: enabled }) },
@@ -43,12 +44,13 @@ async function safetyTests() {
   let globalSeconds = 0, globalQuota = 200;
   const load = loader({ 'src/lib/prisma.ts': { prisma: db }, 'src/server/dispatch/settings.ts': { getQuotaReset: async () => ({ mode: 'midnight', hours: 24 }), getWarmupDailyLimits: async () => [25, 50, 100, 200, 400, 800], getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => globalQuota, getDispatchDelayRange: async () => ({ minSeconds: globalSeconds, maxSeconds: globalSeconds }) }, 'src/server/dispatchWebhook/events.ts': { updateDispatches: async () => { updates++; } } });
   const safety = load('src/server/messaging/safety.ts');
-  assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'STOP'), false);
+  // Honouring STOP is mandatory: the legacy per-account switch no longer disables it.
+  assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'STOP'), true);
   enabled = true;
   assert.equal(await safety.captureStop('a', '6281234567890@g.us', 'STOP'), false);
   assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', 'jangan stop pesanan'), false);
   assert.equal(await safety.captureStop('a', '6281234567890@s.whatsapp.net', ' stop! '), true);
-  assert.equal(updates, 1);
+  assert.equal(updates, 2);
   assert.equal(await safety.recipientBlocked('a', '6281234567890'), true);
   assert.equal(await safety.recipientBlocked('b', '6281234567890'), false);
   enabled = false;
@@ -254,9 +256,10 @@ async function sharedCooldownTests() {
     'src/server/libs/makeWASocket.ts': { session: new Map([['p', { ws: { isOpen: true }, user: { id: 'synthetic-user' }, sendMessage: async () => ({ key: { id: 'synthetic-message' } }), waitForMessage() {} }]]) },
     'src/server/libs/phoneMaintenance.ts': { phoneMaintenance: new Set() },
     'src/server/dispatch/media.ts': {}, 'src/server/campaigns/media.ts': {}, 'src/server/campaigns/content.ts': {},
-    'src/server/dispatch/settings.ts': { getDispatchAgeCutoff: async () => new Date(0), getDispatchQueueOrder: async () => 'oldest', getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 30, maxSeconds: 30 }), dispatchDeadline: () => ({}) },
+    'src/server/dispatch/settings.ts': { getTrafficPolicy: async () => ({ enabled: false, requireConsent: false }), getDispatchAgeCutoff: async () => new Date(0), getDispatchQueueOrder: async () => 'oldest', getGlobalOperatingHours: async () => ({ enabled: false, start: '08:00', end: '20:00' }), getGlobalDeviceQuota: async () => 200, getDispatchDelayRange: async () => ({ minSeconds: 30, maxSeconds: 30 }), dispatchDeadline: () => ({}) },
     'src/server/dispatch/receipts.ts': { recordDispatchReceipt: async () => {} },
     'src/server/dispatch/acknowledgement.ts': { waitForDispatchAcknowledgement: async () => ({ attrs: {} }) },
+    'src/server/messaging/recipientPolicy.ts': { recipientVerdict: async () => null },
   };
   const worker = loader(stubs)('src/server/dispatch/worker.ts');
   await worker.processPhone('p');

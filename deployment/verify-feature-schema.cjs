@@ -5,6 +5,8 @@ const helper = require('./cd-feature-schema.cjs');
 const ops = helper.operations();
 assert.deepEqual(ops.filter(op => op.kind === 'table').map(op => op.table), ['wa_send_traffic', 'wa_send_recovery', 'wa_auth_sessions', 'wa_auth_keys', 'wa_restrictions', 'wa_protocol_messages', 'recipient_consents', 'recipient_consent_events', 'device_quota_windows', 'sender_groups', 'wa_dispatch_attempts']);
 assert(ops.some(op => op.kind === 'column' && op.name === 'operatingHours'));
+assert(ops.some(op => op.kind === 'column' && op.table === 'device_daily_usage' && op.name === 'replies'));
+assert(ops.some(op => op.kind === 'column' && op.table === 'device_daily_usage' && op.name === 'sendHours'));
 assert(ops.some(op => op.kind === 'constraint' && op.name === 'wa_dispatch_attempts_dispatchId_fkey'));
 assert(ops.some(op => op.kind === 'column' && op.name === 'quotaReset'));
 assert(ops.some(op => op.kind === 'column' && op.table === 'phones' && op.name === 'channel'));

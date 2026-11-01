@@ -11,6 +11,8 @@ import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { getQuotaReset } from "../dispatch/settings";
 import { reserveTraffic, type TrafficAdmission } from "./trafficGuard";
 import { SendGuardError } from "./sendGuardError";
+import { ownerCanSend } from "./recipientPolicy";
+import { addSendHour, wibHour } from "./sendHours";
 
 export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
   return Math.max(globalDelayMs, (minimumSeconds ?? 0) * 1000) * multiplier;
@@ -33,8 +35,7 @@ export async function recipientBlocked(userId: string, number: string) {
 }
 export async function captureStop(userId: string, jid: string, text: string) {
   if (!/^\s*(STOP|BERHENTI|UNSUBSCRIBE)[.!\s]*$/i.test(text) || !jid.endsWith("@s.whatsapp.net")) return false;
-  const preference = await prisma.messagingPreference.findUnique({ where: { userId } });
-  if (preference?.optOutEnabled === false) return false;
+  // Honouring a recipient's request to stop is mandatory for every account; the old switch no longer disables it.
   const number = normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`);
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
@@ -52,6 +53,8 @@ export async function captureStop(userId: string, jid: string, text: string) {
 export async function reserveSend(userId: string, phoneId: string, jid: string, traffic?: TrafficAdmission) {
   const number = jid.startsWith("+") ? normalizePhoneRecipient(jid) : jid.endsWith("@s.whatsapp.net") ? normalizePhoneRecipient(`+${jid.split("@")[0].split(":")[0]}`) : null;
   if (number && await recipientBlocked(userId, number)) throw new SendGuardError("RECIPIENT_OPTED_OUT");
+  // Disabling an account must also stop work that was already queued or running.
+  if (!await ownerCanSend(userId)) throw new SendGuardError("ACCOUNT_INACTIVE", new Date(Date.now() + 300_000));
   const globalQuota = await getGlobalDeviceQuota();
   const globalRange = await getDispatchDelayRange();
   const warmupLimits = await getWarmupDailyLimits();
@@ -75,7 +78,7 @@ export async function reserveSend(userId: string, phoneId: string, jid: string, 
     if (policy.nextAllowedAt > new Date()) throw new SendGuardError("DEVICE_THROTTLED", policy.nextAllowedAt);
     // Only the WhatsApp sender supplies a traffic admission; Telegram reservations never carry one.
     const trafficInterval = traffic ? await reserveTraffic(tx, phoneId, traffic, traffic.policy, now) : 0;
-    await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 } } });
+    await tx.deviceDailyUsage.update({ where: { phoneId_day: { phoneId, day } }, data: { attempts: { increment: 1 }, sendHours: addSendHour((usage as { sendHours?: unknown }).sendHours, wibHour(now)) } });
     const quotaData = { attempts: quota.used + 1, startedAt: quota.startedAt, lastAttemptAt: now,
       reachedAt: quota.used + 1 >= limit ? quota.reachedAt ?? now : null };
     await tx.deviceQuotaWindow.upsert({ where: { phoneId }, create: { phoneId, ...quotaData }, update: quotaData });

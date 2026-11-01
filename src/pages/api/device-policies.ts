@@ -9,6 +9,7 @@ import { AuthNextApiRequest } from "@/types/global";
 import { prisma } from "@/lib/prisma";
 import { phoneScope as ownerScope } from "@/lib/access";
 import { healthAssessment, usageDay, warmupLimit } from "@/server/messaging/safety";
+import { engagementSummary } from "@/server/messaging/sendHours";
 import { DEFAULT_DEVICE_DAILY_QUOTA, deviceDailyQuota } from "@/lib/deviceQuota";
 import { getGlobalDeviceQuota, getDispatchDelayRange, getWarmupDailyLimits, getGlobalOperatingHours } from "@/server/dispatch/settings";
 const input = z.object({ phoneId: z.string().uuid(), useGlobalQuota: z.boolean(), dailyLimit: z.number().int().min(1).max(100000), minIntervalSeconds: z.number().int().min(1).max(3600).nullable().default(null), maxIntervalSeconds: z.number().int().min(1).max(30).nullable().default(null), adaptiveEnabled: z.boolean(), paused: z.boolean(), operatingHours: operatingHoursInput.nullable().optional(), quotaReset: quotaResetInput.nullable().optional(), warmupAction: z.enum(["start", "stop"]).optional() }).refine(value => value.maxIntervalSeconds === null || (value.minIntervalSeconds !== null && value.maxIntervalSeconds >= value.minIntervalSeconds), "Hingga harus sama atau lebih besar dari Mulai.");
@@ -48,7 +49,7 @@ export default apiAuthMiddleware(async (req: AuthNextApiRequest, res: NextApiRes
       const reset = effectiveQuotaReset(quotaReset, policy.quotaReset);
       const quota = quotaWindowState(windowMap.get(phone.id), used?.attempts || 0, effectiveLimit, reset);
       const effectiveHours = effectiveOperatingHours(globalOperatingHours, policy.operatingHours);
-      return { ...policy, ...phone, restriction: restrictions.find(item => item.phoneId === phone.id) || null, globalInterval, globalQuota, globalOperatingHours, effectiveOperatingHours: effectiveHours, operatingHoursState: operatingHoursState(effectiveHours), globalQuotaReset: quotaReset, effectiveQuotaReset: reset, quotaResetAt: quota.resetAt, used: quota.used, effectiveLimit, health: healthAssessment(used?.attempts || 0, used?.failures || 0) };
+      return { ...policy, ...phone, restriction: restrictions.find(item => item.phoneId === phone.id) || null, globalInterval, globalQuota, globalOperatingHours, effectiveOperatingHours: effectiveHours, operatingHoursState: operatingHoursState(effectiveHours), globalQuotaReset: quotaReset, effectiveQuotaReset: reset, quotaResetAt: quota.resetAt, used: quota.used, effectiveLimit, health: healthAssessment(used?.attempts || 0, used?.failures || 0), engagement: engagementSummary(used?.attempts || 0, used?.replies || 0, used?.sendHours) };
     }));
   }
   if (req.method !== "PUT") return res.status(405).end();

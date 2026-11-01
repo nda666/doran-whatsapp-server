@@ -25,7 +25,7 @@ const handler = load('src/pages/api/device-policies.ts', {
   '@/lib/operatingHours': { operatingHoursInput: require('zod').z.any() },
   '@/middleware/apiAuthMiddleware': { __esModule: true, default: fn => fn },
   '@/lib/prisma': { prisma: db }, '@/lib/access': { phoneScope: user => ({ userId: user.id }) },
-  '@/server/messaging/safety': {}, '@/lib/deviceQuota': {},
+  '@/server/messaging/safety': {}, '@/server/messaging/sendHours': {}, '@/lib/deviceQuota': {},
 }).default;
 async function request(extra) {
   const res = { code: 200, setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; }, end() { return this; } };

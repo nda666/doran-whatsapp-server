@@ -31,6 +31,9 @@ import { waRecovery } from "./waRecoveryState";
 import { captureChatMessage, recordChatReceipt } from "../chat/store";
 import { createDatabaseAuthState, closeDatabaseAuth } from "./waAuthState";
 import { groupMetadataCache, getProtocolMessage, storeProtocolMessage } from "./waMessageStore";
+import { alreadyProcessed } from "../messaging/incomingDedupe";
+import { recordReply } from "../messaging/engagement";
+import { usageDay } from "../messaging/safety";
 import { recordRestriction, refreshRestrictions, requireUnrestricted } from "../messaging/restrictions";
 
 const shared = globalThis as typeof globalThis & {
@@ -238,6 +241,12 @@ const createWASocket = async (
       }
       for (const incoming of batch) {
       if (incoming.key.fromMe) continue;
+      // The same inbound message must not trigger webhooks or automatic replies twice.
+      if (alreadyProcessed(phoneId, incoming.key.id)) continue;
+      if (type === "notify" && !incoming.key.remoteJid?.endsWith("@g.us")) {
+        const replyJid = incoming.key.remoteJid?.endsWith("@lid") ? incoming.key.remoteJidAlt : incoming.key.remoteJid;
+        recordReply(phoneId, replyJid, usageDay()).catch(() => console.error("REPLY_COUNT_FAILED", phoneId));
+      }
       const messages = [incoming];
       try {
       const { messageIn, messageType, quotedMessage } = getWaMesage(messages);
@@ -252,6 +261,8 @@ const createWASocket = async (
             await prisma.inboxMessage.create({ data: { userId, sender: messages[0].key.remoteJid?.split("@")[0] || "", recipient: getPhone.number || "", message: messageIn || "", url, type_request: "POST", status: 0, respons: "WEBHOOK_FAILED" } });
           }).catch(() => console.error("WEBHOOK_LOG_FAILED"));
       }
+      // Offline sync/history ("append") must never produce read receipts or automatic replies.
+      if (type !== "notify") continue;
       if (getPhone?.readReceipt && !messages[0].key.fromMe) await _waSocket.readMessages(messages.map(m => m.key));
       if (optedOutMessages.has(incoming)) continue;
       if (messageIn && !quotedMessage && getPhone) {

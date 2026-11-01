@@ -42,7 +42,7 @@ const response = () => ({ code: 200, setHeader() {}, status(n) { this.code=n;ret
   const signin=load('src/pages/api/signin.ts', { '@/lib/prisma': {prisma:db}, '@/lib/access':access, bcrypt: defaults({compare:async()=>true}) }).default;
   res=response();await signin({method:'POST',body:{email:user.email,password:'fixture'}},res);assert.equal(res.code,403);assert(res.body.message.includes('tidak aktif'));
   user.isActive=true;res=response();await signin({method:'POST',body:{email:user.email,password:'fixture'}},res);assert.equal(res.code,200);assert.equal(res.body.sessionVersion,1);
-  const config=load('src/pages/api/auth/[...nextauth].ts', { 'next-auth':defaults(options=>options), '@/lib/prismaAdapter':{PrismaAdapter:()=>({})}, '@prisma/client':{PrismaClient:class {user=db.user;}}, '@/lib/access':access }).default;
+  const config=load('src/pages/api/auth/[...nextauth].ts', { 'next-auth':defaults(options=>options), '@/lib/prismaAdapter':{PrismaAdapter:()=>({})}, '@/lib/prisma':{prisma:db}, '@/lib/access':access }).default;
   assert.equal((await config.callbacks.session({session:{user:{}},token:{id:user.id,sessionVersion:0}})).user,undefined);
   assert.equal((await config.callbacks.session({session:{user:{}},token:{id:user.id,sessionVersion:1}})).user.isActive,true);
   user.isActive=false;assert.equal((await config.callbacks.session({session:{user:{}},token:{id:user.id,sessionVersion:1}})).user,undefined);

@@ -160,7 +160,8 @@ export default async function connectionUpdate(
     if (!waSock.authState?.creds.me?.id && status !== DisconnectReason.restartRequired) return;
     const attempts = (reconnectAttempts.get(phoneId) || 0) + 1;
     reconnectAttempts.set(phoneId, attempts);
-    const delay = status === DisconnectReason.restartRequired ? 500 : Math.min(60_000, 2_000 * 2 ** Math.min(attempts - 1, 5));
+    // Jitter keeps many numbers from reconnecting in lockstep after a shared outage.
+    const delay = status === DisconnectReason.restartRequired ? 500 : Math.round(Math.min(60_000, 2_000 * 2 ** Math.min(attempts - 1, 5)) * (1 + Math.random() * 0.4));
     const timer = setTimeout(() => {
       reconnectTimers.delete(phoneId);
       if (process.env.WHATSAPP_ENABLED === "false" || process.env.DORAN_SHUTTING_DOWN === "true") return;

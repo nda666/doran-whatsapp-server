@@ -26,7 +26,7 @@ const tests = [
   'verify-warmup-restart.cjs',
   'verify-quota-recovery.cjs', 'verify-device-quota-reset.cjs',
   'verify-operating-hours.cjs', 'verify-dispatch-ack-retry.cjs',
-  'verify-feature-schema.cjs',
+  'verify-feature-schema.cjs', 'verify-wave-hardening.cjs',
 ];
 for (const test of tests) {
   console.log('TEST', test);

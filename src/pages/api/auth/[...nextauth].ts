@@ -5,10 +5,8 @@ import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { PrismaAdapter } from "@/lib/prismaAdapter";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { isApproved, isCurrentSession } from "@/lib/access";
-
-const prisma = new PrismaClient();
 
 export default NextAuth({
   pages: {
@@ -80,9 +78,12 @@ export default NextAuth({
       },
       async authorize(credentials, req) {
         try {
+          // Hand the real client address to the sign-in limiter instead of this server's own.
+          const forwarded = req?.headers?.["x-forwarded-for"];
           const result = await axios.post(
             process.env.NEXT_PUBLIC_APP_URL + "/api/signin",
-            credentials
+            credentials,
+            process.env.AUTH_TRUST_PROXY === "true" && typeof forwarded === "string" ? { headers: { "x-forwarded-for": forwarded.split(",")[0].trim() } } : undefined
           );
           if (result.status == 200) {
             return result.data;

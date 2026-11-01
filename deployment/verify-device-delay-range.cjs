@@ -85,6 +85,7 @@ async function main() {
   const policy = { ...base, nextAllowedAt: new Date(0), warmupStartedAt: null };
   const usage = { attempts: 0, failures: 0 };
   const db = {
+    user: { findUnique: async () => ({ approvalStatus: 'APPROVED', isActive: true }) },
     deviceSendPolicy: { createMany: async () => {}, findUniqueOrThrow: async () => policy, update: async ({ data }) => Object.assign(policy, data) },
     deviceQuotaWindow: { findUnique: async () => null, upsert: async () => ({}) },
     deviceDailyUsage: { upsert: async () => usage, update: async () => { usage.attempts++; } },

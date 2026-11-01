@@ -1,3 +1,5 @@
+import { safeHttpRequest } from "./safeHttpRequest";
+
 type BaseRequest = {
   url: string;
   method?: "GET" | "POST";
@@ -19,35 +21,34 @@ export const runFetchGetResponse = async (args: BaseRequest) => {
     const { detail, ...remainingParams } = args.params;
     args.params = remainingParams; // Update args.params without the 'detail' key
   }
-  // let result: BaseJson | undefined = undefined;
   const query = args.params ? "?" + serialize(args.params) : "";
   try {
-    const res = await fetch(`${args.url}${query && query}`, {
-      mode: "cors",
-      method: args.method,
+    // Auto-reply webhook URLs are user supplied: never reach private addresses or follow redirects.
+    const res = await safeHttpRequest(`${args.url}${query && query}`, {
+      method: args.method === "POST" ? "POST" : "GET",
       ...(args.method == "POST" ? { body: JSON.stringify(args.body) } : {}),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...args.headers,
+        ...(args.headers as Record<string, string> | undefined),
       },
     });
-    return await buildResponse(res);
+    return buildResponse(res);
   } catch (e: any) {
     return { result: undefined, error: e.message };
   }
 };
 
-export const buildResponse = async (response: Response) => {
+export const buildResponse = (response: { status: number; body: string }) => {
   let result: BaseJson | undefined = undefined;
-  if (response.ok) {
-    result = await response.json();
+  if (response.status >= 200 && response.status < 300) {
+    try { result = JSON.parse(response.body); }
+    catch { return { result: undefined, error: "INVALID_WEBHOOK_JSON" }; }
     return {
       result,
       error: undefined,
     };
   } else {
-    // const errorJson = await res.json();
     return {
       result: undefined,
       error: `HTTP error! Status: ${response.status}`,

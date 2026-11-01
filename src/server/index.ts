@@ -1,5 +1,6 @@
 import { startMessagingAlerts } from "./messaging/alerts";
 import { startDailyWarmup } from "./messaging/dailyWarmup";
+import { pruneTrafficLedger } from "./messaging/trafficGuard";
 import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
@@ -28,6 +29,7 @@ let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
 let stopDispatchWorker: (() => Promise<void>) | undefined;
 let httpServer: Server | undefined;
 let reconnectInterval: NodeJS.Timeout | undefined;
+let pruneInterval: NodeJS.Timeout | undefined;
 
 const hostname = process.env.HOST || "127.0.0.1";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -107,6 +109,12 @@ nextApp.prepare().then(async () => {
     }
   });
 
+  // The traffic ledger only needs two hours of history; trim it hourly so it cannot grow without bound.
+  const prune = () => pruneTrafficLedger().catch(error => console.error("TRAFFIC_LEDGER_PRUNE_FAILED", error instanceof Error ? error.message : "Unknown error"));
+  pruneInterval = setInterval(prune, 3_600_000);
+  pruneInterval.unref();
+  setTimeout(prune, 120_000).unref();
+
   let intervalConnectRun = false;
   reconnectInterval = setInterval(() => {
     if (process.env.WHATSAPP_ENABLED === "false" || intervalConnectRun) {
@@ -132,6 +140,7 @@ const shutdown = createGracefulShutdown({
   stopIntake: () => {
     process.env.DORAN_SHUTTING_DOWN = "true";
     if (reconnectInterval) clearInterval(reconnectInterval);
+    if (pruneInterval) clearInterval(pruneInterval);
     stopReconnectTimers();
   },
   drain: [() => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],

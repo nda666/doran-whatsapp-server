@@ -352,6 +352,9 @@ async function main() {
 
   // Operating hours use the real clock; construct windows safely away from now.
   process.env.SETTINGS_ENCRYPTION_KEY = 'isolated-operating-hours-test-only';
+  // These scenarios send many messages to one recipient; the traffic guard has its own tests.
+  const trafficOff = load('src/lib/globalSettings.ts').encryptSetting(JSON.stringify({ enabled: false }));
+  await prisma.globalSetting.upsert({ where: { key: 'wa-traffic-guard' }, create: { key: 'wa-traffic-guard', label: 'Traffic guard (test)', value: trafficOff }, update: { value: trafficOff } });
   const globalApi = load('src/pages/api/admin/global-settings.ts').default;
   const policyApi = load('src/pages/api/device-policies.ts').default;
   const hoursUtil = load('src/lib/operatingHours.ts');
