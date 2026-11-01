@@ -1,7 +1,7 @@
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { SendGuardError } from "./safety";
+import { SendGuardError } from "./sendGuardError";
 
 import { getTrafficPolicy } from "../dispatch/settings";
 import { validTrafficPolicy, type TrafficPolicy } from "../../lib/trafficSettings";

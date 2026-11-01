@@ -8,7 +8,7 @@ function load(file, dependencies = {}) {
   new Function('require', 'module', 'exports', code)(name => {
     if (Object.hasOwn(dependencies, name)) return dependencies[name];
     if (name.startsWith('node:')) return require(name);
-    if (name === './safety') return { SendGuardError: GuardError };
+    if (name === './sendGuardError') return { SendGuardError: GuardError };
     if (name === '../../lib/prisma') return { prisma: {} };
     throw Error('Unexpected dependency: ' + name);
   }, module, module.exports);

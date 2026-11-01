@@ -24,6 +24,7 @@ function load(name, mocks) {
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery },
     '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
+    '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   }).default;
   let socket = { authState: { creds: {} } }; sessions.set('phone', socket);
   for (const update of [{ qr: 'private-qr' }, { connection: 'connecting' }]) await handler(socket, 'owner', 'phone', update);

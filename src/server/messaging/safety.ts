@@ -1,5 +1,4 @@
 import { DEFAULT_WARMUP_DAILY_LIMITS } from "../../lib/warmupSettings";
-import { dispatchErrorLabels } from "../../lib/dispatchPresentation";
 import { updateDispatches } from "../dispatchWebhook/events";
 import { prisma } from "../../lib/prisma";
 import { normalizePhoneRecipient } from "../../utils/normalizePhoneRecipient";
@@ -11,6 +10,7 @@ import { deviceSendIntervalRange } from "../../lib/deviceSendInterval";
 import { effectiveQuotaReset, quotaWindowState } from "../../lib/quotaReset";
 import { getQuotaReset } from "../dispatch/settings";
 import { reserveTraffic, type TrafficAdmission } from "./trafficGuard";
+import { SendGuardError } from "./sendGuardError";
 
 export function effectiveSendInterval(globalDelayMs: number, minimumSeconds: number | null, multiplier: number) {
   return Math.max(globalDelayMs, (minimumSeconds ?? 0) * 1000) * multiplier;
@@ -27,9 +27,7 @@ export function healthAssessment(attempts: number, failures: number) {
   const rate = failures / attempts;
   return { score: Math.max(0, Math.round(100 - rate * 100)), reason: `${failures} dari ${attempts} percobaan mengalami kesalahan transport atau konfirmasi hari ini`, multiplier: rate >= .1 ? 3 : 1, stop: rate >= .3 };
 }
-export class SendGuardError extends Error {
-  constructor(public code: string, public retryAt?: Date) { super(dispatchErrorLabels[code] || code); }
-}
+export { SendGuardError };
 export async function recipientBlocked(userId: string, number: string) {
   return !!await prisma.recipientSuppression.findUnique({ where: { userId_number: { userId, number } } });
 }

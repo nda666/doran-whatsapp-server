@@ -60,12 +60,14 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': { updateDevice }, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     '../libs/waRecoveryState': { waRecovery: recovery }, '../libs/pairingIdentity': identity,
+    '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   });
   const factory = load('src/server/libs/makeWASocket.ts', {
     './waAuthState': { closeDatabaseAuth: async () => {}, createDatabaseAuthState: async () => ({ state: {}, saveCreds: async () => {}, close: async () => {}, assertOwned: async () => {} }) },
     './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }), getProtocolMessage: async () => undefined, storeProtocolMessage: async () => {} },
     '../messaging/transportSafety': load('src/server/messaging/transportSafety.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError }, '@whiskeysockets/baileys': { generateMessageIDV2: () => 'legacy-id' } }),
     '../messaging/sendFence': load('src/server/messaging/sendFence.ts', { 'node:async_hooks': require('node:async_hooks'), './safety': { SendGuardError } }),
+    '../messaging/trafficGuard': { trafficContentHash: () => 'hash' }, '../dispatch/settings': { getTrafficPolicy: async () => ({ enabled: false }) },
     '../messaging/restrictions': { recordRestriction: async () => {}, refreshRestrictions: async () => {}, requireUnrestricted: async () => {} },
     'pino-pretty': {}, pino: () => ({}),
     '../messaging/safety': { SendGuardError, reserveSend: async () => { reservations++; await onReserve?.(); return 'day'; }, recipientBlocked: async () => false },

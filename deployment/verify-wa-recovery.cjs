@@ -57,6 +57,7 @@ async function main() {
     '../libs/socket': { emitDeviceEvent: async () => {} }, '../libs/pairingState': { recordPairingProgress: () => undefined },
     '../deviceWebhook/events': {}, '../libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired }, '../libs/waRecoveryState': { waRecovery: state },
     '../libs/pairingIdentity': { acceptsPairingIdentity: () => true, rejectedPairings: new Set() },
+    '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   }, { setTimeout: (callback, delay) => { const timer = { callback, delay, unref() {} }; timers.push(timer); return timer; }, clearTimeout() {} });
   const close = code => ({ connection: 'close', lastDisconnect: { error: { output: { statusCode: code } } } });
   await connection.default(connected, 'owner', 'db-failure', close(408));
