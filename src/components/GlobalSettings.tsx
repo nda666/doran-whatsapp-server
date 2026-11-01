@@ -57,6 +57,7 @@ export default function GlobalSettings() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Setting>();
   const [busy, setBusy] = useState(false);
+  const [tablePage, setTablePage] = useState({ current: 1, pageSize: 10 });
   const selectedFields = Form.useWatch("visibleFields", form) || [];
   const formKey = Form.useWatch("key", form);
   const warmupSetting = (editing?.key || formKey) === WARMUP_DAILY_LIMITS_KEY;
@@ -91,7 +92,7 @@ export default function GlobalSettings() {
   return <Space direction="vertical" size="middle" style={{ width: "100%" }}>
     {api.error && <Alert type="error" message={uiText(api.error)} action={<Button onClick={api.reload}>{uiText("Coba lagi")}</Button>} />}
     <Space size={8}><Button type="primary" icon={<PlusOutlined />} onClick={() => show()}>{uiText("Tambah setting")}</Button><SettingInfo label={uiText("Pengaturan global")} help={generalHelp(uiText)} /></Space>
-    <Table<Setting> rowKey="id" loading={!api.data && !api.error} dataSource={api.data || []} scroll={{ x: 720 }} pagination={{ pageSize: 10, showSizeChanger: true }} columns={[
+    <Table<Setting> rowKey="id" loading={!api.data && !api.error} dataSource={api.data || []} scroll={{ x: 720 }} pagination={{ ...tablePage, showSizeChanger: true, onChange: (current, pageSize) => setTablePage({ current: pageSize === tablePage.pageSize ? current : 1, pageSize }) }} columns={[
       { title: uiText("Label"), dataIndex: "label", render: (label: string, row) => <Space size={4}><span>{label}</span><SettingInfo label={label} help={settingHelp(uiText)[row.key] || generalHelp(uiText)} /></Space> },
       { title: uiText("Key"), dataIndex: "key", render: (value: string) => <code>{value}</code> },
       { title: uiText("Value"), dataIndex: "value", width: 320, render: (value: string, row) => row.secret
