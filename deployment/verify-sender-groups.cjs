@@ -107,7 +107,7 @@ async function main() {
   const upgrade = await schemaUpgrade.apply(prisma, approvedSql, testBackup);
   assert.deepEqual(upgrade.created_tables.sort(), [
     'device_quota_windows', 'recipient_consent_events', 'recipient_consents', 'sender_groups',
-    'wa_auth_keys', 'wa_auth_sessions', 'wa_dispatch_attempts', 'wa_protocol_messages', 'wa_restrictions',
+    'wa_auth_keys', 'wa_auth_sessions', 'wa_dispatch_attempts', 'wa_protocol_messages', 'wa_restrictions', 'wa_send_recovery', 'wa_send_traffic',
   ]);
   assert.equal(upgrade.created_table_counts.device_quota_windows, '0', 'No usage exists in the empty baseline');
   assert.equal(upgrade.history_updated, false);
