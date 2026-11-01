@@ -11,9 +11,9 @@ export const SigninValidation = (data: any, res: NextApiResponse) => {
       .string()
       .email(i18n?.t("email", { field: "Email", ns: "form" }).toString()),
     password: z.string({
-      required_error: i18n
-        ?.t("required", { field: passwordField, ns: "form" })
-        .toString(),
+      error: issue => issue.input === undefined
+        ? i18n?.t("required", { field: passwordField, ns: "form" }).toString()
+        : undefined,
     }),
   });
 

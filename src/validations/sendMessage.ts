@@ -10,12 +10,12 @@ export const SendMessageValidation = async (data: any) => {
   const validation = z
     .object({
       number: z.string({
-        required_error: "Field to is required",
+        error: issue => issue.input === undefined ? "Field to is required" : undefined,
       }),
       phoneCountry: z.string().optional(),
       phoneCode: z.string().optional(),
       message: z.string({
-        required_error: "Field text is required",
+        error: issue => issue.input === undefined ? "Field text is required" : undefined,
       }),
     })
     .required({

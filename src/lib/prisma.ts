@@ -1,11 +1,10 @@
 import chalk from 'chalk';
 
-import { PrismaClient } from '@prisma/client';
-import { PrismaClientOptions } from '@prisma/client/runtime';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as {
   prisma: PrismaClient<
-    PrismaClientOptions,
+    Prisma.PrismaClientOptions,
     "info" | "warn" | "query" | "error"
   >;
 };

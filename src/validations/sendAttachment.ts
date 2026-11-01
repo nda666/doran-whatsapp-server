@@ -6,10 +6,10 @@ export const SendAttachmentValidation = async (data: any) => {
   const validation = z
     .object({
       number: z.string({
-        required_error: "Field to is required",
+        error: issue => issue.input === undefined ? "Field to is required" : undefined,
       }),
       api_key: z.string({
-        required_error: "Field to is required",
+        error: issue => issue.input === undefined ? "Field to is required" : undefined,
       }),
       phoneCountry: z.string().optional(),
       phoneCode: z.string().optional().default("ID"),

@@ -31,7 +31,7 @@
     "@ant-design/icons": "^5.1.4",
     "@auth/core": "0.41.3",
     "@bull-board/express": "^6.12.0",
-    "@prisma/client": "^4.16.2",
+    "@prisma/client": "6.19.3",
     "@types/formidable": "^3.4.4",
     "@types/pdfkit": "^0.17.6",
     "@whiskeysockets/baileys": "7.0.0-rc14",
@@ -39,7 +39,7 @@
     "antd-phone-input": "^0.3.9",
     "axios": "1.20.0",
     "bcrypt": "6.0.0",
-    "body-parser": "1.20.8",
+    "body-parser": "1.20.9",
     "bull": "^4.16.5",
     "bullmq": "^5.56.7",
     "chalk": "^4.1.2",
@@ -54,7 +54,7 @@
     "libphonenumber-js": "^1.11.12",
     "link-preview-js": "4.0.4",
     "moment": "2.31.0",
-    "next": "15.5.27",
+    "next": "15.5.28",
     "next-auth": "4.24.15",
     "next-i18next": "15.4.3",
     "nextjs-progressbar": "^0.0.16",
@@ -76,7 +76,7 @@
     "socket.io": "4.8.4",
     "socket.io-client": "4.8.4",
     "world_countries_lists": "^2.8.1",
-    "zod": "^3.21.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -90,9 +90,9 @@
     "@types/ws": "^8.5.5",
     "chokidar": "4.0.3",
     "eslint": "8.57.1",
-    "eslint-config-next": "15.5.27",
+    "eslint-config-next": "15.5.28",
     "pino-tee": "^0.3.0",
-    "prisma": "^4.15.0",
+    "prisma": "6.19.3",
     "ts-node": "^10.9.1",
     "tsconfig-paths": "^4.2.0",
     "typescript": "5.5.4"
