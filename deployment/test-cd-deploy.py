@@ -234,6 +234,8 @@ class DeploymentGuards(unittest.TestCase):
         before = {'counts': {'phones': '20', '_prisma_migrations': '5'}, 'migrations': [{'checksum': 'original'}]}
         after = {'counts': dict(before['counts'], sender_groups='0', wa_dispatch_attempts='0'), 'migrations': before['migrations']}
         deploy.compare_counts(before, after, ['sender_groups', 'wa_dispatch_attempts'])
+        traffic = {'counts': dict(before['counts'], wa_send_traffic='0', wa_send_recovery='0'), 'migrations': before['migrations']}
+        deploy.compare_counts(before, traffic, ['wa_send_traffic', 'wa_send_recovery'])
         for table in ['users', 'unexpected']:
             with self.assertRaises(RuntimeError):
                 deploy.compare_counts(before, after, [table])
