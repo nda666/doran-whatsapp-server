@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "../lib/prisma";
 import type { PhoneCleanupOptions } from "../lib/phoneCleanup";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { session, waitForAuthSave, waitForPendingSocket } from "./libs/makeWASocket";
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { clearPhoneReconnect } from "./events/connectionUpdate";
@@ -38,7 +38,19 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
   let suspended = false;
   const cleanupLease = randomUUID();
   let leaseAcquired = false;
-  const chatFiles: string[] = [];
+  const renewLease = async () => {
+    const renewed = await prisma.waSenderLease.updateMany({ where: { phoneId: id, leaseToken: cleanupLease, leaseUntil: { gt: new Date() } },
+      data: { leaseUntil: new Date(Date.now() + 300_000) } });
+    if (renewed.count !== 1) throw new PhoneCleanupError("Kunci pembersihan berakhir. Ulangi pembersihan perangkat.");
+  };
+  const batch = async <T,>(work: (tx: Prisma.TransactionClient) => Promise<T>) => {
+    await renewLease();
+    return prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM phones WHERE id = ${id} FOR UPDATE`;
+      if (!await tx.phone.findFirst({ where: { id, ...scope } })) throw new PhoneCleanupError("Data tidak ditemukan.", 404);
+      return work(tx);
+    }, { maxWait: 10_000, timeout: 120_000 });
+  };
   try {
     const authTarget = options.clearAuth ? await authFolderTarget(phone.userId, id) : undefined;
     // Do not remove records while an already claimed message is being sent.
@@ -47,7 +59,7 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
       OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] },
       data: { leaseToken: cleanupLease, leaseUntil: new Date(Date.now() + 300_000) } });
     leaseAcquired = acquired.count === 1;
-    if (!leaseAcquired || await prisma.waDispatch.count({ where: { phoneId: id, status: "PROCESSING" } }) || await prisma.chatMessage.count({ where: { conversation: { phoneId: id }, status: "SENDING", createdAt: { gt: new Date(Date.now() - 60000) } } })) {
+    if (!leaseAcquired || await prisma.waDispatch.count({ where: { OR: [{ phoneId: id }, { senderPhoneId: id }], status: "PROCESSING" } }) || await prisma.chatMessage.count({ where: { conversation: { phoneId: id }, status: "SENDING", createdAt: { gt: new Date(Date.now() - 60000) } } })) {
       throw new PhoneCleanupError("Masih ada pengiriman yang diproses. Tunggu selesai lalu coba kembali.");
     }
     await prisma.phone.update({ where: { id }, data: { active: 0 } });
@@ -73,36 +85,68 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
           if (timer) clearTimeout(timer);
           socket.end(new Error("DEVICE_CLEANUP"));
           session.delete(id);
-          await waitForAuthSave(socket);
-          await closeDatabaseAuth(id);
+          try { await waitForAuthSave(socket); }
+          catch (error) { if (!options.clearAuth) throw error; }
+          try { await closeDatabaseAuth(id); }
+          catch (error) { if (!options.clearAuth) throw error; }
           socket.ev.removeAllListeners("creds.update");
         }
       }
       clearPairingProgress(id);
     }
-    if (options.clearAuth || options.deleteRecord) await clearDatabaseAuth(id);
+    if (options.clearAuth || options.deleteRecord) await clearDatabaseAuth(id, renewLease);
     if (authTarget) await fs.rm(authTarget, { recursive: true, force: true });
+    // Commit bounded batches before taking the global device-webhook lock.
+    // An interrupted cleanup leaves this device inactive and can be retried.
+    if (options.clearContacts) while (await batch(async tx => {
+      const rows = await tx.deviceContact.findMany({ where: { phoneId: id, userId: phone.userId }, select: { id: true }, take: 200 });
+      if (rows.length) await tx.deviceContact.deleteMany({ where: { phoneId: id, userId: phone.userId, id: { in: rows.map(row => row.id) } } });
+      return rows.length;
+    })) {}
+    if (options.clearHistory) while (await batch(async tx => {
+      const rows = await tx.waDispatch.findMany({ where: { phoneId: id, userId: phone.userId }, select: { id: true }, orderBy: { id: "asc" }, take: 50 });
+      if (!rows.length) return 0;
+      const ids = rows.map(row => row.id);
+      // Status writers lock each job before emitting its outbox entry. Lock
+      // these same jobs in PK order so a late receipt cannot orphan an event,
+      // without waiting on the global webhook configuration mutex.
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM wa_dispatches WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`);
+      await tx.dispatchWebhookEvent.deleteMany({ where: { dispatchId: { in: ids } } });
+      await tx.waDispatch.deleteMany({ where: { phoneId: id, userId: phone.userId, id: { in: ids } } });
+      return rows.length;
+    })) {}
+    if (options.clearAutoReplies) while (await batch(async tx => {
+      const rows = await tx.autoReply.findMany({ where: { phoneId: id, userId: phone.userId }, select: { id: true }, take: 200 });
+      if (rows.length) await tx.autoReply.deleteMany({ where: { phoneId: id, userId: phone.userId, id: { in: rows.map(row => row.id) } } });
+      return rows.length;
+    })) {}
+    if (options.clearHistory || options.deleteRecord) {
+      while (await batch(async tx => {
+        const rows = await tx.waProtocolMessage.findMany({ where: { phoneId: id }, select: { keyHash: true }, take: 200 });
+        if (rows.length) await tx.waProtocolMessage.deleteMany({ where: { phoneId: id, keyHash: { in: rows.map(row => row.keyHash) } } });
+        return rows.length;
+      })) {}
+      while (true) {
+        const rows = await batch(async tx => {
+          const messages = await tx.chatMessage.findMany({ where: { conversation: { phoneId: id, userId: phone.userId } }, select: { id: true, mediaPath: true }, take: 200 });
+          if (messages.length) await tx.chatMessage.deleteMany({ where: { id: { in: messages.map(row => row.id) }, conversation: { phoneId: id, userId: phone.userId } } });
+          return messages;
+        });
+        if (!rows.length) break;
+        await Promise.all(rows.map(row => row.mediaPath ? fs.unlink(chatMediaPath(row.mediaPath)).catch(() => {}) : undefined));
+      }
+      while (await batch(async tx => {
+        const rows = await tx.chatConversation.findMany({ where: { phoneId: id, userId: phone.userId }, select: { id: true }, take: 200 });
+        if (rows.length) await tx.chatConversation.deleteMany({ where: { phoneId: id, userId: phone.userId, id: { in: rows.map(row => row.id) } } });
+        return rows.length;
+      })) {}
+    }
+    await renewLease();
     await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM device_webhook_settings WHERE id = 1 FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM phones WHERE id = ${id} FOR UPDATE`;
       const current = await tx.phone.findFirst({ where: { id, ...scope } });
       if (!current) throw new PhoneCleanupError("Data tidak ditemukan.", 404);
-      if (options.clearContacts) await tx.deviceContact.deleteMany({ where: { phoneId: id, userId: phone.userId } });
-      if (options.clearHistory) {
-        await tx.$queryRaw`SELECT id FROM dispatch_webhook_settings WHERE id = 1 FOR UPDATE`;
-        await tx.$executeRaw`DELETE events FROM dispatch_webhook_events events
-          INNER JOIN wa_dispatches jobs ON jobs.id = events.dispatchId
-          WHERE jobs.phoneId = ${id} AND jobs.userId = ${phone.userId}`;
-        await tx.waDispatch.deleteMany({ where: { phoneId: id, userId: phone.userId } });
-        await tx.waSenderLease.deleteMany({ where: { phoneId: id } });
-      }
-      if (options.clearAutoReplies) await tx.autoReply.deleteMany({ where: { phoneId: id, userId: phone.userId } });
-      if (options.clearHistory || options.deleteRecord) {
-        await tx.waProtocolMessage.deleteMany({ where: { phoneId: id } });
-        const media = await tx.chatMessage.findMany({ where: { conversation: { phoneId: id, userId: phone.userId }, mediaPath: { not: null } }, select: { mediaPath: true } });
-        chatFiles.push(...media.flatMap(row => row.mediaPath ? [row.mediaPath] : []));
-        await tx.chatConversation.deleteMany({ where: { phoneId: id, userId: phone.userId } });
-      }
       if (options.deleteRecord) {
         await tx.phone.delete({ where: { id } });
         await enqueueDeviceEvent(tx, "device.deleted", current);
@@ -120,8 +164,8 @@ export async function cleanupPhone(id: string, scope: Prisma.PhoneWhereInput, op
         } });
         await enqueueDeviceEvent(tx, "device.updated", updated);
       }
-    });
-    await Promise.all(chatFiles.map(file => fs.unlink(chatMediaPath(file)).catch(() => {})));
+      if (options.clearHistory || options.deleteRecord) await tx.waSenderLease.deleteMany({ where: { phoneId: id, leaseToken: cleanupLease } });
+    }, { maxWait: 10_000, timeout: 60_000 });
     return { result: true, deleted: options.deleteRecord };
   } catch (error) {
     // A partial cleanup must not reconnect with credentials that may be gone.

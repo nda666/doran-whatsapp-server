@@ -73,6 +73,7 @@ jobs:
           npx --no-install prisma migrate status
           npx --no-install prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code
       - run: npm run build
+      - run: node deployment/verify-send-guard-build.cjs
       - name: Offline regression suite
         run: node deployment/ci-tests.cjs
       - name: Encrypted WhatsApp auth storage integration

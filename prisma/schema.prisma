@@ -750,6 +750,7 @@ model DispatchWebhookEvent {
 
   @@index([status, nextAttemptAt])
   @@index([createdAt])
+  @@index([dispatchId])
   @@map("dispatch_webhook_events")
 }
 

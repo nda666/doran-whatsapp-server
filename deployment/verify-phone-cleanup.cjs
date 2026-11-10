@@ -18,9 +18,9 @@ assert.equal(phoneCleanupSchema.safeParse({ ...empty, clearAuth: true }).success
 assert.equal(phoneCleanupSchema.safeParse({ ...empty, deleteRecord: true }).success, false);
 assert.equal(phoneCleanupSchema.safeParse(defaultCleanupOptions).success, true);
 
-async function scenario(options, { missing = false, busy = false, logoutFail = false, scopeOwner = 'owner', unsafeAuth = false } = {}) {
+async function scenario(options, { missing = false, busy = false, logoutFail = false, authSaveFail = false, scopeOwner = 'owner', unsafeAuth = false, bigContacts = 3, failContactBatch = 0 } = {}) {
   let phone = missing ? null : { id: 'phone', userId: 'owner', name: 'Kasir', active: 1, token: 'old-token', number: '628123', account_name: 'Old', webhookUrl: 'https://example.com' };
-  let contacts = 3, replies = 2, history = 4, ended = false, loggedOut = false, removed = false;
+  let contacts = bigContacts, replies = 2, history = 4, ended = false, loggedOut = false, removed = false, contactBatches = 0;
   let leaseToken = null;
   const events = [];
   const socket = { user: { id: '628123' }, ws: { isOpen: true }, ev: { removeAllListeners() {} },
@@ -32,18 +32,21 @@ async function scenario(options, { missing = false, busy = false, logoutFail = f
       delete: async () => { phone = null; } },
     waSenderLease: { upsert: async () => {}, updateMany: async ({ where, data }) => {
       if (where.OR) { if (busy) return { count: 0 }; leaseToken = data.leaseToken; return { count: 1 }; }
-      if (where.leaseToken === leaseToken) leaseToken = null; return { count: 1 };
+      if (where.leaseToken === leaseToken && data.leaseToken === null) leaseToken = null; return { count: 1 };
     }, deleteMany: async () => { leaseToken = null; } },
     chatMessage: { count: async () => 0, findMany: async () => [] },
-    chatConversation: { deleteMany: async () => {} },
-    waDispatch: { count: async () => 0, deleteMany: async () => { history = 0; } },
-    deviceContact: { deleteMany: async () => { contacts = 0; } }, autoReply: { deleteMany: async () => { replies = 0; } },
-    $queryRaw: async () => [], $executeRaw: async () => 0, $transaction: async callback => callback(p),
+    chatConversation: { findMany: async () => [], deleteMany: async () => {} },
+    waProtocolMessage: { findMany: async () => [], deleteMany: async () => {} },
+    waDispatch: { count: async () => 0, findMany: async () => history ? [{id:'job'}] : [], deleteMany: async () => { history = 0; } },
+    dispatchWebhookEvent: { deleteMany: async () => {} },
+    deviceContact: { findMany: async ({where,take}) => { assert.equal(where.phoneId,'phone');assert.equal(where.userId,'owner');assert.ok(take<=200);return Array.from({length:Math.min(contacts,take)},(_,i)=>({id:'contact'+i})); }, deleteMany: async ({where}) => { assert.ok(where.id.in.length<=200);if(++contactBatches===failContactBatch)throw Error('BATCH_FAILED');contacts-=where.id.in.length; } }, autoReply: { findMany: async () => replies ? [{id:'reply'}] : [], deleteMany: async () => { replies = 0; } },
+    $queryRaw: async query => {assert.ok(!String(query).includes('dispatch_webhook_settings'),'device cleanup must not take the global dispatch-webhook mutex');return [];}, $executeRaw: async () => 0, $transaction: async callback => callback(p),
   };
   const service = load('src/server/cleanupPhone.ts', {
-    '../lib/prisma': { prisma: p }, './libs/makeWASocket': { session: sessions, waitForAuthSave: async () => {}, waitForPendingSocket: async () => {} },
+    '../lib/prisma': { prisma: p }, './libs/makeWASocket': { session: sessions, waitForAuthSave: async () => { if(authSaveFail)throw Error('WA_AUTH_LEASE_LOST'); }, waitForPendingSocket: async () => {} },
     './libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     './events/connectionUpdate': { clearPhoneReconnect() {} }, './libs/pairingState': { clearPairingProgress() {} },
+    './libs/waAuthState': { clearDatabaseAuth: async () => {}, closeDatabaseAuth: async () => {} },
     './chat/media': { chatMediaPath: name => name },
     './deviceWebhook/events': { enqueueDeviceEvent: async (_, event) => events.push(event) },
     'node:fs/promises': { lstat: async () => { if (unsafeAuth) return { isSymbolicLink: () => true, isDirectory: () => true }; const error = new Error(); error.code = 'ENOENT'; throw error; }, realpath: async value => value,
@@ -54,15 +57,16 @@ async function scenario(options, { missing = false, busy = false, logoutFail = f
   try { await service.cleanupPhone('phone', { userId: scopeOwner }, options); } catch (e) { error = e; }
   assert.equal(maintenance.size, 0, 'maintenance lock released even on failure');
   assert.equal(leaseToken, null, 'cleanup sender lease released');
-  return { phone, contacts, replies, history, ended, loggedOut, removed, events, error };
+  return { phone, contacts, replies, history, ended, loggedOut, removed, events, error, contactBatches };
 }
 (async () => {
   const calls = [];
   const handler = load('src/pages/api/phones/[id].ts', {
-    '@/lib/access': { ownerScope: user => ({ userId: user.id }) },
+    '@/lib/access': { phoneScope: user => ({ userId: user.id }) },
     '@/middleware/apiAuthMiddleware': fn => fn,
     '@/lib/phoneCleanup': load('src/lib/phoneCleanup.ts', {}),
     '@/server/cleanupPhone': { PhoneCleanupError: class extends Error {}, cleanupPhone: async (...args) => { calls.push(args); return { result: true }; } },
+    '@/server/phoneCleanupJobs': {},
   }).default;
   const request = (method, body) => ({ method, body, query: { id: '11111111-1111-4111-8111-111111111111' }, user: { id: 'owner' } });
   const response = () => ({ code: 200, setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; }, end() { return this; } });
@@ -131,5 +135,9 @@ async function scenario(options, { missing = false, busy = false, logoutFail = f
   const unsafe = await scenario(defaultCleanupOptions, { unsafeAuth: true }); assert.equal(unsafe.error.status, 400); assert.equal(unsafe.removed, false);
   const busy = await scenario(defaultCleanupOptions, { busy: true }); assert.equal(busy.error.status, 409); assert.equal(busy.phone.active, 1); assert.equal(busy.removed, false);
   const failed = await scenario(defaultCleanupOptions, { logoutFail: true }); assert.ok(failed.error); assert.equal(failed.phone.active, 0); assert.equal(failed.removed, false); assert.equal(failed.history, 4);
+  const staleSave = await scenario(defaultCleanupOptions, {authSaveFail:true});assert.equal(staleSave.error,undefined);assert.equal(staleSave.contacts+staleSave.history,0);
+  const keepFailedAuth = await scenario({...empty,disconnect:true}, {authSaveFail:true});assert.equal(keepFailedAuth.error.message,'WA_AUTH_LEASE_LOST');assert.equal(keepFailedAuth.removed,false);
+  const large = await scenario(defaultCleanupOptions, {bigContacts:8286});assert.equal(large.error,undefined);assert.equal(large.contacts,0);assert.equal(large.contactBatches,42);
+  const interrupted = await scenario(defaultCleanupOptions, {bigContacts:8286,failContactBatch:2});assert.equal(interrupted.error.message,'BATCH_FAILED');assert.equal(interrupted.contacts,8086);assert.equal(interrupted.phone.active,0);assert.equal(interrupted.phone.token,'old-token');assert.deepEqual(interrupted.events,[]);
   console.log('PHONE_CLEANUP_OK: modal choices, second confirmation, full reset, delete, selective cleanup, access denial, safe paths, busy sender, logout failure, lock release');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -45,8 +45,13 @@ async function persistence() {
 }
 
 async function sending() {
-  let saved, sends=0, online=true, enabled=true, scopeOwner='owner', sendFails=false, flagChanges=false, serial=Promise.resolve();
+  const guardMocks = { '../../lib/dispatchPresentation': load('src/lib/dispatchPresentation.ts', {}) };
+  const serverGuard = load('src/server/messaging/sendGuardError.ts', guardMocks);
+  const socketGuard = load('src/server/messaging/sendGuardError.ts', guardMocks);
+  assert.notEqual(serverGuard.SendGuardError, socketGuard.SendGuardError);
+  let saved, sends=0, online=true, enabled=true, scopeOwner='owner', sendFails=false, guardFailure, flagChanges=false, serial=Promise.resolve();
   const socket={ user:{id:'628999@s.whatsapp.net'}, ws:{get isOpen(){return online;}}, sendMessage:async(jid,body,options)=>{
+    if (guardFailure) throw guardFailure;
     sends++; assert.equal(jid,'628123@s.whatsapp.net'); assert.equal(options.messageId,saved.waMessageId); assert.equal(body.text,input.text,'Unicode emoji must reach WhatsApp transport unchanged'); if(sendFails)throw Error('NETWORK'); return {key:{id:options.messageId}};
   }};
   const db={
@@ -57,7 +62,7 @@ async function sending() {
     $transaction:fn=>{const task=serial.then(()=>fn(db));serial=task.catch(()=>{});return task;},
   };
   const sender=load('src/server/chat/send.ts',{
-    '../messaging/safety': { SendGuardError: class extends Error {} },
+    '../messaging/sendGuardError': serverGuard,
     '../messaging/sendFence': { withSendFence: (_fence, task) => task() },
     '../../lib/prisma':{prisma:db},'../libs/makeWASocket':{session:new Map([['phone',socket]])},'../libs/phoneMaintenance':{phoneMaintenance:new Set()},
     '../campaigns/media':{},'./media':media,'./content':content,'@whiskeysockets/baileys':{generateMessageIDV2:()=>crypto.randomUUID()},
@@ -72,6 +77,10 @@ async function sending() {
   await assert.rejects(()=>sender.sendChatReply('chat',{userId:'owner'},{...input,text:'Different'}),e=>e.status===409);
   saved=undefined;online=true;sendFails=true;await sender.sendChatReply('chat',{userId:'owner'},{...input,requestId:crypto.randomUUID()});assert.equal(saved.status,'UNCERTAIN');assert.equal(sends,2);
   await sender.sendChatReply('chat',{userId:'owner'},{...input,requestId:saved.clientRequestId});assert.equal(sends,2,'Ambiguous send never automatically resent');
+  saved=undefined;sendFails=false;guardFailure=new socketGuard.SendGuardError('DEVICE_DAILY_LIMIT',new Date(Date.now()+60000));
+  await sender.sendChatReply('chat',{userId:'owner'},{...input,requestId:crypto.randomUUID()});
+  assert.equal(saved.status,'FAILED','Cross-bundle pre-transport guard is a known unsent chat reply');assert.equal(sends,2);
+  guardFailure=undefined;
   saved=undefined;sendFails=false;flagChanges=true;await assert.rejects(()=>sender.sendChatReply('chat',{userId:'owner'},{...input,requestId:crypto.randomUUID()}),e=>e.status===409);assert.equal(saved,undefined);
 }
 

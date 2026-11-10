@@ -48,33 +48,46 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
       ...(typeof sender_group === "string" && sender_group ? { senderGroupId: sender_group === "none" ? null : sender_group } : {}) };
     if (quota_status === "fulfilled" || quota_status === "available") where = await phoneQuotaWhere(where, quota_status);
     const { page, limit, skip, orderBy } = tableQuery(req.query, ["name", "number", "account_name", "senderGroup.name", "token", "isOnline", "is_save_group", "active", "createdAt", "lastQrScanAt", "lastOfflineAt", "lastSendProcessedAt", ...(admin ? ["user.name"] : [])], "createdAt", "desc");
-    const policyPage = isPhonePolicySort(req.query.sort)
+    const today = usageDay();
+    const loadPendingCounts = async (ids: string[]) => {
+      const pendingBySender = new Map<string, number>();
+      if (!ids.length) return pendingBySender;
+      const pending = await prisma.waDispatch.groupBy({ by: ["phoneId", "senderPhoneId"],
+        where: { ...phoneRecordScope(req.user!), status: "QUEUED", createdAt: dispatchDateFilter(today, today),
+          OR: [{ senderPhoneId: { in: ids } }, { senderPhoneId: null, phoneId: { in: ids } }] }, _count: { _all: true } });
+      for (const row of pending) {
+        const id = row.senderPhoneId || row.phoneId;
+        pendingBySender.set(id, (pendingBySender.get(id) || 0) + row._count._all);
+      }
+      return pendingBySender;
+    };
+    let pendingBySender: Map<string, number> | undefined;
+    let computedPage = isPhonePolicySort(req.query.sort)
       ? await phonePolicyPage(where, req.query.sort, req.query.order === "asc" ? "asc" : "desc", skip, limit)
       : undefined;
+    if (req.query.sort === "pendingToday") {
+      const phones = await prisma.phone.findMany({ where, select: { id: true } });
+      pendingBySender = await loadPendingCounts(phones.map(phone => phone.id));
+      const countsBySender = pendingBySender;
+      const direction = req.query.order === "asc" ? 1 : -1;
+      phones.sort((a, b) => ((countsBySender.get(a.id) || 0) - (countsBySender.get(b.id) || 0)) * direction || a.id.localeCompare(b.id));
+      computedPage = { ids: phones.slice(skip, skip + limit).map(phone => phone.id), total: phones.length };
+    }
     const [data, total, online] = await Promise.all([prisma.phone.findMany({
-      where: policyPage ? { ...where, id: { in: policyPage.ids } } : where,
-      ...(!policyPage ? { take: limit, skip, orderBy } : {}),
+      where: computedPage ? { ...where, id: { in: computedPage.ids } } : where,
+      ...(!computedPage ? { take: limit, skip, orderBy } : {}),
       include: { senderGroup: { select: { id: true, name: true, enabled: true } }, ...(admin ? { user: { select: { id: true, name: true, email: true } } } : {}) },
-    }), policyPage ? Promise.resolve(policyPage.total) : prisma.phone.count({ where }),
+    }), computedPage ? Promise.resolve(computedPage.total) : prisma.phone.count({ where }),
     req.query.page ? prisma.phone.count({ where: { AND: [where, { isOnline: true }] } }) : Promise.resolve(0)]);
-    if (policyPage) {
-      const positions = new Map(policyPage.ids.map((id, position) => [id, position]));
+    if (computedPage) {
+      const positions = new Map(computedPage.ids.map((id, position) => [id, position]));
       data.sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
     }
     const window = await getDispatchDisplayWindow();
     const counts = await prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...phoneRecordScope(req.user!), createdAt: window.createdAt, phoneId: { in: data.map(p => p.id) }, status: { in: ["SENT", "DELIVERED", "READ"] } }, _count: { _all: true } });
-    const today = usageDay();
-    const ids = data.map(p => p.id);
-    const pending = await prisma.waDispatch.groupBy({ by: ["phoneId", "senderPhoneId"],
-      where: { ...phoneRecordScope(req.user!), status: "QUEUED", createdAt: dispatchDateFilter(today, today),
-        OR: [{ senderPhoneId: { in: ids } }, { senderPhoneId: null, phoneId: { in: ids } }] }, _count: { _all: true } });
-    const pendingBySender = new Map<string, number>();
-    for (const row of pending) {
-      const id = row.senderPhoneId || row.phoneId;
-      pendingBySender.set(id, (pendingBySender.get(id) || 0) + row._count._all);
-    }
+    const pendingCounts = pendingBySender ?? await loadPendingCounts(data.map(p => p.id));
     const assignees = admin ? await prisma.user.findMany({ where: { id: { in: data.flatMap(p => p.assignedUserId ? [p.assignedUserId] : []) } }, select: { id: true, name: true, email: true } }) : [];
-    const rows = await Promise.all(data.map(async p => ({ ...p, ...(admin ? { assignee: assignees.find(user => user.id === p.assignedUserId) || null } : {}), pendingToday: pendingBySender.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
+    const rows = await Promise.all(data.map(async p => ({ ...p, ...(admin ? { assignee: assignees.find(user => user.id === p.assignedUserId) || null } : {}), pendingToday: pendingCounts.get(p.id) || 0, connection: await getPhoneConnectionInfo(p), sentCountDays: window.days, sentCount: counts.find(c => c.phoneId === p.id)?._count._all || 0 })));
     // Preserve array shape for integrations that don't request pagination.
     return res.json(req.query.page ? { data: rows, total, page, pageSize: limit, online, offline: total - online } : rows);
   }

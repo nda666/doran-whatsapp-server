@@ -4,7 +4,7 @@ process.env.WHATSAPP_ENABLED = 'true';
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
-let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead, beforeClaim, blockSenderTurn, groupMode = false;
+let now = Date.now(), row, sends, mode, timers, pendingAck, beforeRead, beforeClaim, blockSenderTurn, guardToThrow, groupMode = false;
 class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
 function matches(item, where = {}) {
   return Object.entries(where).every(([key, val]) => {
@@ -17,7 +17,7 @@ function matches(item, where = {}) {
     return actual === val;
   });
 }
-const transitions = [];
+const transitions = [], attemptHistory = [];
 async function update({ where, data }) {
   if (!row || !matches(row, where)) return { count: 0 };
   for (const [key, value] of Object.entries(data)) row[key] = value?.increment ? row[key] + value.increment : value;
@@ -30,7 +30,7 @@ const prisma = {
   deviceSendPolicy: { findUnique: async () => null, updateMany: async () => ({ count: 1 }) },
   waRestriction: { findUnique: async () => null },
   deviceDailyUsage: { updateMany: async () => ({ count: 1 }) },
-  waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async () => ({ count: 1 }) },
+  waDispatchAttempt: { create: async () => ({ id: 'attempt' }), updateMany: async ({ data }) => { attemptHistory.push(data); return { count: 1 }; } },
   waDispatch: {
     findFirst: async ({ where, select }) => select?.id && blockSenderTurn ? { id: 'earlier-job-on-actual-sender' } : matches(row, where) ? { ...row } : null,
     findUnique: async () => { if (beforeRead) { const fn = beforeRead; beforeRead = null; await fn(); } return { ...row }; },
@@ -44,6 +44,7 @@ const socket = {
   ws: { isOpen: true }, user: { id: 'mock' }, sendPresenceUpdate: async () => {},
   waitForMessage: () => new Promise(resolve => { pendingAck = resolve; }),
   sendMessage: async (_, content, options) => {
+    if (guardToThrow) throw guardToThrow; // The wrapped socket rejects before physical transport.
     sends.push(options.messageId);
     if (mode === 'error') throw new Error('NETWORK_ERROR');
     if (mode === 'ack') pendingAck({ tag: 'ack', attrs: {} });
@@ -86,10 +87,14 @@ stubs['src/server/dispatch/senderRouting.ts'] = { selectDispatchSender: async (.
   : routing.selectDispatchSender(...args) };
 const worker = load('src/server/dispatch/worker.ts');
 const receipts = load('src/server/dispatch/receipts.ts');
+const workerGuard = load('src/server/messaging/sendGuardError.ts');
+delete cache['src/server/messaging/sendGuardError.ts'];
+const bundledGuard = load('src/server/messaging/sendGuardError.ts');
+assert.notEqual(workerGuard.SendGuardError, bundledGuard.SendGuardError, 'simulate separately compiled Next.js and worker modules');
 function reset() {
   row = { id: 'dispatch', phoneId: 'phone', senderPhoneId: null, senderGroupId: null, source: 'API', status: 'QUEUED', messageId: null, sentAt: null, deliveredAt: null, readAt: null,
     attempts: 0, nextAttemptAt: new Clock(0), createdAt: new Clock(now - 1000), lastError: null, recipient: 'mock', message: 'test', campaignId: null };
-  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null; beforeClaim = null; blockSenderTurn = false; groupMode = false;
+  sends = []; mode = 'timeout'; timers.clear(); beforeRead = null; beforeClaim = null; blockSenderTurn = false; groupMode = false; guardToThrow = null; attemptHistory.length = 0;
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function timeoutAttempt() {
@@ -98,6 +103,43 @@ async function timeoutAttempt() {
   now += 40000; timeout.fn(); await running;
 }
 (async () => {
+  for (const code of ['DEVICE_DAILY_LIMIT', 'DEVICE_THROTTLED', 'WA_ACCOUNT_RESTRICTED', 'WA_RESTRICTION_UNKNOWN']) {
+    for (const retrying of [false, true]) {
+      reset();
+      if (retrying) { row.messageId = 'previous-ack-retry'; row.lastError = retry.ACK_RETRY_ERROR; row.attempts = 2; row.senderPhoneId = 'phone'; }
+      const original = { messageId: row.messageId, attempts: row.attempts, senderPhoneId: row.senderPhoneId };
+      const retryAt = new Clock(now + 120000);
+      guardToThrow = new bundledGuard.SendGuardError(code, retryAt);
+      assert.equal(guardToThrow instanceof workerGuard.SendGuardError, false);
+      await worker.processPhone('phone');
+      assert.equal(row.status, 'QUEUED', 'foreign bundle guard must requeue instead of UNCERTAIN');
+      assert.equal(row.lastError, code);
+      assert.equal(row.nextAttemptAt.getTime(), retryAt.getTime());
+      for (const [key, value] of Object.entries(original)) assert.equal(row[key], value, 'guard preserves original ' + key);
+      assert.equal(sends.length, 0, 'pre-transport guard sends nothing');
+      assert.equal(attemptHistory.at(-1).status, 'SKIPPED');
+      assert.equal(attemptHistory.at(-1).error, code);
+      guardToThrow = null; mode = 'ack';
+      await worker.processPhone('phone'); assert.equal(sends.length, 0, 'guard retry must wait until eligible');
+      now = retryAt.getTime(); await worker.processPhone('phone');
+      assert.equal(row.status, 'SENT'); assert.equal(sends.length, 1);
+      if (retrying) assert.equal(sends[0], original.messageId, 'preserve identity for late receipts on existing ACK retry');
+    }
+  }
+  reset(); groupMode = true; guardToThrow = new bundledGuard.SendGuardError('DEVICE_DAILY_LIMIT', new Clock(now + 120000));
+  await worker.processPhone('phone');
+  assert.equal(row.status, 'QUEUED'); assert.equal(row.senderPhoneId, null); assert.equal(row.messageId, null);
+  assert.equal(row.attempts, 0); assert.equal(row.nextAttemptAt.getTime(), now + 1000, 'preserve existing grouped scheduling');
+  reset(); guardToThrow = new bundledGuard.SendGuardError('RECIPIENT_OPTED_OUT');
+  await worker.processPhone('phone'); assert.equal(row.status, 'SUPPRESSED'); assert.equal(row.lastError, 'RECIPIENT_OPTED_OUT'); assert.equal(sends.length, 0);
+  for (const error of [Object.assign(new Error('transport failed'), { code: 'DEVICE_THROTTLED' }),
+    new bundledGuard.SendGuardError('UNKNOWN_PROVIDER_ERROR'),
+    new bundledGuard.SendGuardError('DEVICE_THROTTLED', new Clock(NaN)),
+    { code: 'DEVICE_DAILY_LIMIT', retryAt: new Clock(now + 1000) }]) {
+    assert.equal(workerGuard.isSendGuardError(error), false, 'do not turn unrelated or malformed errors into safe retries');
+    reset(); guardToThrow = error; await worker.processPhone('phone');
+    assert.equal(row.status, 'UNCERTAIN'); assert.equal(row.lastError, 'ACK_UNKNOWN_CHECK_RECIPIENT');
+  }
   reset();
   for (let attempt = 1; attempt <= 5; attempt++) {
     await timeoutAttempt(); assert.equal(row.attempts, attempt);
@@ -170,5 +212,5 @@ async function timeoutAttempt() {
   assert.equal(sends.length, 0, 'Reassigned job respects the actual sender queue order');
   assert.equal(row.attempts, 0); assert.equal(row.status, 'QUEUED');
   assert.equal(timers.size, 0);
-  console.log('ACK_RETRY_TESTS_PASSED: 40s timeout, 1/2/4/8m schedule, five-attempt cap, stable IDs, no premature retry, late ACK/receipts, race cancellation, invalid/temporary ACKs, permanent 463 rejection, normal success, early errors and old UNCERTAIN preserved');
+  console.log('ACK_RETRY_TESTS_PASSED: cross-bundle guards requeue without consuming attempts, skipped history, opt-out suppression, malformed errors remain uncertain, 40s timeout, 1/2/4/8m schedule, five-attempt cap, stable IDs, no premature retry, late ACK/receipts, race cancellation, permanent 463 rejection, normal success and old UNCERTAIN preserved');
 })().catch(error => { console.error(error); process.exitCode = 1; });

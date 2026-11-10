@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),vm=require('node:vm');
+function load(file,deps,shared={}){const module={exports:{}};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;vm.runInNewContext(code,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),globalThis:shared,console,setInterval,clearInterval});return module.exports;}
+const rows=new Map(),session={phoneId:'phone',migratedAt:new Date(),leaseToken:null,leaseUntil:null};let deleted=0,failAt=0;
+for(let i=0;i<39242;i++)rows.set('key'+i,{phoneId:'phone',keyHash:'key'+i});rows.set('creds.json',{phoneId:'phone',keyHash:'creds.json'});rows.set('other',{phoneId:'other',keyHash:'other'});
+function match(row,w){return Object.entries(w).every(([k,v])=>k==='OR'?v.some(item=>match(row,item)):v&&typeof v==='object'&&!(v instanceof Date)?Object.entries(v).every(([op,value])=>op==='in'?value.includes(row[k]):op==='lte'?row[k]<=value:op==='gt'?row[k]>value:false):row[k]===v);}
+const db={waAuthSession:{upsert:async()=>session,findUniqueOrThrow:async()=>({...session}),update:async({data})=>Object.assign(session,data),updateMany:async({where,data})=>{if(!match(session,where))return{count:0};Object.assign(session,data);return{count:1};},createMany:async()=>{}},
+waAuthKey:{findMany:async({where,take,select})=>{assert.equal(take,200);assert.deepEqual(Object.keys(select),['keyHash']);return [...rows.values()].filter(r=>match(r,where)).slice(0,take);},deleteMany:async({where})=>{if(typeof where.keyHash==='object'){assert.ok(where.keyHash.in.length<=200);if(++deleted===failAt)throw Error('DISK_FAILURE');}let n=0;for(const[k,v]of rows)if(match(v,where)){rows.delete(k);n++;}return{count:n};}},$queryRaw:async()=>[],
+$transaction:async(fn,options)=>{assert.equal(options.timeout,60000);const before={...session},keys=new Map(rows);try{return await fn(db);}catch(e){Object.assign(session,before);rows.clear();for(const[k,v]of keys)rows.set(k,v);throw e;}}};
+const auth=load('src/server/libs/waAuthState.ts',{'../../lib/prisma':{prisma:db},'@whiskeysockets/baileys':{},'./waStorage':{storageHash:v=>v},'./authKeyMaintenance':{}});
+(async()=>{
+failAt=2;await assert.rejects(auth.clearDatabaseAuth('phone'),/DISK_FAILURE/);assert.equal(rows.size,39043);assert.equal(session.migratedAt.getTime(),0);assert.equal(session.leaseToken,null);assert.ok(!rows.has('creds.json'));
+await assert.rejects(auth.createDatabaseAuthState('phone','unused',()=>{}),/WA_AUTH_RESET_INCOMPLETE/);
+failAt=0;await auth.clearDatabaseAuth('phone');assert.equal(rows.size,1);assert.ok(rows.has('other'));assert.notEqual(session.migratedAt.getTime(),0);assert.equal(session.leaseToken,null);
+session.leaseToken='another-process';session.leaseUntil=new Date(Date.now()+120000);await assert.rejects(auth.clearDatabaseAuth('phone'),/WA_AUTH_IN_USE/);assert.equal(session.leaseToken,'another-process');
+class CleanupError extends Error{constructor(message,status=409){super(message);this.status=status;}}let resolve,reject,calls=0;
+const jobs=load('src/server/phoneCleanupJobs.ts',{'./cleanupPhone':{PhoneCleanupError:CleanupError,cleanupPhone:()=>{calls++;return new Promise((a,b)=>{resolve=a;reject=b;});}}});
+const job=jobs.startPhoneCleanup('phone','owner',{},{});assert.equal(job.pending,true);assert.equal(jobs.startPhoneCleanup('phone','owner',{},{}).id,job.id);assert.equal(calls,1);assert.equal(jobs.phoneCleanupJob(job.id,'phone','other'),undefined);assert.equal(jobs.phoneCleanupJob(job.id,'other','owner'),undefined);assert.throws(()=>jobs.startPhoneCleanup('phone','other',{},{}),/sedang dibersihkan/);
+resolve({result:true,deleted:true});await new Promise(setImmediate);assert.equal(job.pending,false);assert.equal(jobs.phoneCleanupJob(job.id,'phone','owner').result.deleted,true);
+const failed=jobs.startPhoneCleanup('phone','owner',{},{});reject(new CleanupError('busy'));await new Promise(setImmediate);assert.equal(failed.pending,false);assert.equal(failed.error.status,409);
+console.log('PHONE_CLEANUP_BATCH_JOBS_OK: 39k keys, bounded deletes, rollback/resume, other-device isolation, incomplete-reset marker, lease competition, job deduplication/access/deletion/failure');
+})().catch(e=>{console.error(e);process.exitCode=1;});

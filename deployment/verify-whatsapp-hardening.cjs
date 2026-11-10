@@ -22,7 +22,10 @@ function matches(row, where = {}) {
 }
 function memoryDb() {
   const tables = {}; let serial = Promise.resolve();
-  const db = { tables, $queryRaw: async () => [], $transaction: fn => {
+  const db = { tables, $queryRaw: async () => [], $executeRaw: async sql => {
+    assert.ok(sql.strings.join('?').includes('INSERT INTO wa_auth_keys'));assert.equal(sql.values.length%4,0);
+    for(let i=0;i<sql.values.length;i+=4){const[phoneId,keyHash,keyName,value]=sql.values.slice(i,i+4);await db.waAuthKey.upsert({where:{phoneId_keyHash:{phoneId,keyHash}},create:{phoneId,keyHash,keyName,value},update:{keyName,value}});}return sql.values.length/4;
+  }, $transaction: fn => {
     const next = serial.then(async () => { const before = structuredClone(tables); try { return await fn(db); } catch (error) { for (const key of Object.keys(tables)) tables[key] = before[key] || []; throw error; } });
     serial = next.catch(() => {}); return next;
   } };
@@ -53,7 +56,8 @@ function memoryDb() {
   assert.throws(() => storage.openWa(sealed, 'other:key'));
   assert.throws(() => storage.openWa(sealed.slice(0, -4) + 'AAAA', 'phone:key'));
   const db = memoryDb();
-  const authDeps = { '@whiskeysockets/baileys': baileys, '../../lib/prisma': { prisma: db }, './waStorage': storage };
+  const maintenance=load('src/server/libs/authKeyMaintenance.ts',{'@whiskeysockets/baileys':baileys,'@prisma/client':require('@prisma/client'),'./waStorage':storage});
+  const authDeps = { '@whiskeysockets/baileys': baileys, '../../lib/prisma': { prisma: db }, './waStorage': storage, './authKeyMaintenance':maintenance };
   const auth = load('src/server/libs/waAuthState.ts', authDeps);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-hardening-'));
   try {

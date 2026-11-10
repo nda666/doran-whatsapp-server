@@ -82,8 +82,10 @@ export function phonePolicyColumns(uiText: UiTranslator, getPolicy: (id: string)
     } },
     { title: uiText("Kuota pengiriman"), key: "quota", ...sorting("quota"), width: 160, render: (_, phone) => {
       const policy = getPolicy(phone.id);
+      const quotaFulfilled = policy != null && policy.used >= policy.effectiveLimit;
       return policy ? <Space direction="vertical" size={4} style={{ minWidth: 130 }}>
-        <Typography.Text>{policy.used} / {policy.effectiveLimit}</Typography.Text>
+        <Typography.Text type={quotaFulfilled ? "danger" : undefined} strong={quotaFulfilled}>{policy.used} / {policy.effectiveLimit}</Typography.Text>
+        {quotaFulfilled && <Tag color="red">{uiText("Kuota terpenuhi")}</Tag>}
         <Typography.Text type="secondary" style={detailStyle}>{policy.effectiveQuotaReset.mode === "midnight" ? uiText("Reset pukul 00.00 WIB") : policy.quotaResetAt ? `${uiText("Reset:")} ${uiText.date(policy.quotaResetAt)} WIB` : uiText("Reset 00.00 WIB / jeda {{v0}} jam", { v0: policy.effectiveQuotaReset.hours })}</Typography.Text>
         <Tag>{policy.useGlobalQuota ? uiText("Global: {{v0}}", { v0: policy.globalQuota }) : uiText("Custom: {{v0}}", { v0: policy.dailyLimit })}</Tag>
       </Space> : <Typography.Text type="secondary">{uiText("Belum tersedia")}</Typography.Text>;

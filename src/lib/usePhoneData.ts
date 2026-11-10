@@ -108,12 +108,17 @@ export default function usePhoneData(
       data: undefined,
     };
     try {
-      const resp = await axios.post(`/api/phones/${phoneId}`, options, {
+      let resp = await axios.post(`/api/phones/${phoneId}?background=1`, options, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      result.success = true;
+      while (resp.data.pending && typeof resp.data.jobId === "string") {
+        const jobId = resp.data.jobId;
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        resp = await axios.get(`/api/phones/${phoneId}`, { params: { jobId }, headers: { Authorization: `Bearer ${token}` } });
+      }
+      result.success = resp.data.result === true;
       result.data = resp.data;
       setRunRefetchPhone(v => v + 1);
     } catch (e) {

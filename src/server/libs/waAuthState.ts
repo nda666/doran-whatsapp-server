@@ -6,14 +6,17 @@ import type { AuthenticationState, SignalDataTypeMap } from "@whiskeysockets/bai
 import { prisma } from "../../lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { openWa, sealWa, storageHash } from "./waStorage";
+import { pruneAuthTokens, writeAuthKeys } from "./authKeyMaintenance";
 
 const LEASE_MS = 120_000;
-const shared = globalThis as typeof globalThis & { doranDbAuth?: Map<string, { close: () => Promise<void> }> };
+type AuthOwner = { close: () => Promise<void>; maintain?: (cursor: string, offset: number) => Promise<Awaited<ReturnType<typeof pruneAuthTokens>> | undefined> };
+const shared = globalThis as typeof globalThis & { doranDbAuth?: Map<string, AuthOwner> };
 const owners = shared.doranDbAuth || (shared.doranDbAuth = new Map());
 const filename = (value: string) => value.replace(/\//g, "__").replace(/:/g, "-");
 const keyId = (value: string) => storageHash(filename(value));
 
 export const closeDatabaseAuth = (phoneId: string) => owners.get(phoneId)?.close() || Promise.resolve();
+export const maintainDatabaseAuth = (phoneId: string, cursor: string, offset: number) => owners.get(phoneId)?.maintain?.(cursor, offset);
 
 export async function readDatabaseCreds(phoneId: string) {
   const session = await prisma.waAuthSession.findUnique({ where: { phoneId } });
@@ -23,17 +26,46 @@ export async function readDatabaseCreds(phoneId: string) {
   return { migrated: true, creds: row ? JSON.parse(openWa(row.value, `${phoneId}:${hash}`), BufferJSON.reviver) : null };
 }
 
-export async function clearDatabaseAuth(phoneId: string) {
-  await owners.get(phoneId)?.close();
+export async function clearDatabaseAuth(phoneId: string, beforeBatch: () => Promise<void> = async () => {}) {
+  // Failed pending writes must not prevent an explicitly requested auth reset.
+  // close() releases its lease in finally; the transaction below still fences
+  // a different live owner, including when that release itself failed.
+  await owners.get(phoneId)?.close().catch(() => {});
+  const token = randomUUID();
+  let acquired = false;
+  await beforeBatch();
   await prisma.$transaction(async tx => {
     await tx.waAuthSession.upsert({ where: { phoneId }, create: { phoneId, migratedAt: new Date() }, update: {} });
     await tx.$queryRaw`SELECT phoneId FROM wa_auth_sessions WHERE phoneId = ${phoneId} FOR UPDATE`;
     const owner = await tx.waAuthSession.findUniqueOrThrow({ where: { phoneId } });
     if (owner.leaseToken && owner.leaseUntil && owner.leaseUntil > new Date()) throw new Error("WA_AUTH_IN_USE");
-    await tx.waAuthKey.deleteMany({ where: { phoneId } });
-    // A tombstone prevents a logged-out session being reimported from old files.
-    await tx.waAuthSession.update({ where: { phoneId }, data: { migratedAt: new Date(), leaseToken: null, leaseUntil: null } });
-  });
+    // Epoch marks an interrupted reset persistently. Neither old files nor
+    // leftover Signal keys may be used until all batches have committed.
+    await tx.waAuthSession.update({ where: { phoneId }, data: { migratedAt: new Date(0), leaseToken: token, leaseUntil: new Date(Date.now() + LEASE_MS) } });
+    await tx.waAuthKey.deleteMany({ where: { phoneId, keyHash: keyId("creds.json") } });
+  }, { maxWait: 10_000, timeout: 60_000 });
+  acquired = true;
+  try {
+    while (true) {
+      await beforeBatch();
+      const remaining = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT phoneId FROM wa_auth_sessions WHERE phoneId = ${phoneId} FOR UPDATE`;
+        const owner = await tx.waAuthSession.findUniqueOrThrow({ where: { phoneId } });
+        if (owner.leaseToken !== token || !owner.leaseUntil || owner.leaseUntil <= new Date()) throw new Error("WA_AUTH_LEASE_LOST");
+        const keys = await tx.waAuthKey.findMany({ where: { phoneId }, select: { keyHash: true }, take: 200 });
+        if (!keys.length) {
+          await tx.waAuthSession.update({ where: { phoneId }, data: { migratedAt: new Date(), leaseToken: null, leaseUntil: null } });
+          return false;
+        }
+        await tx.waAuthKey.deleteMany({ where: { phoneId, keyHash: { in: keys.map(key => key.keyHash) } } });
+        await tx.waAuthSession.update({ where: { phoneId }, data: { leaseUntil: new Date(Date.now() + LEASE_MS) } });
+        return true;
+      }, { maxWait: 10_000, timeout: 60_000 });
+      if (!remaining) break;
+    }
+  } finally {
+    if (acquired) await prisma.waAuthSession.updateMany({ where: { phoneId, leaseToken: token }, data: { leaseToken: null, leaseUntil: null } });
+  }
 }
 
 /** Encrypted DB auth. Imported batches stay invisible until the migration marker commits. */
@@ -62,7 +94,7 @@ export async function createDatabaseAuthState(phoneId: string, folder: string, o
         const owner = await tx.waAuthSession.findUniqueOrThrow({ where: { phoneId } });
         if (owner.leaseToken !== token || !owner.leaseUntil || owner.leaseUntil <= new Date()) throw new Error("WA_AUTH_LEASE_LOST");
         await fn(tx);
-      }, { timeout: 30_000 });
+      }, { timeout: 60_000 });
     });
     writes = next;
     next.catch(() => { if (!lost) { lost = true; onLeaseLost(); } });
@@ -88,9 +120,17 @@ export async function createDatabaseAuthState(phoneId: string, folder: string, o
       if (owners.get(phoneId)?.close === close) owners.delete(phoneId);
     }
   })());
-  owners.set(phoneId, { close });
+  owners.set(phoneId, { close, maintain: (cursor: string, offset: number) => prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT phoneId FROM wa_auth_sessions WHERE phoneId = ${phoneId} FOR UPDATE`;
+    const owner = await tx.waAuthSession.findUniqueOrThrow({ where: { phoneId } });
+    if (closed || lost || owner.leaseToken !== token || !owner.leaseUntil || owner.leaseUntil <= new Date() || !owner.migratedAt || owner.migratedAt.getTime() === 0) return undefined;
+    // The owner-row lock serializes maintenance with normal writes. Maintenance
+    // failures do not poison the Signal write queue or disconnect the socket.
+    return pruneAuthTokens(tx, phoneId, cursor, offset);
+  }, { maxWait: 2_000, timeout: 20_000 }) });
   try {
     const session = await prisma.waAuthSession.findUniqueOrThrow({ where: { phoneId } });
+    if (session.migratedAt?.getTime() === 0) throw new Error("WA_AUTH_RESET_INCOMPLETE");
     if (!session.migratedAt) {
       const entries: { phoneId: string; keyHash: string; keyName: string; value: string }[] = [];
       let batchBytes = 0;
@@ -140,13 +180,7 @@ export async function createDatabaseAuthState(phoneId: string, folder: string, o
         const hash = keyId(item.name);
         return { hash, keyName: filename(item.name), value: item.value == null ? null : sealWa(JSON.stringify(item.value, BufferJSON.replacer), `${phoneId}:${hash}`) };
       });
-      return mutate(async tx => {
-        for (const row of rows) {
-          const where = { phoneId_keyHash: { phoneId, keyHash: row.hash } };
-          if (row.value === null) await tx.waAuthKey.deleteMany({ where: { phoneId, keyHash: row.hash } });
-          else await tx.waAuthKey.upsert({ where, create: { phoneId, keyHash: row.hash, keyName: row.keyName, value: row.value }, update: { keyName: row.keyName, value: row.value } });
-        }
-      });
+      return mutate(tx => writeAuthKeys(tx, phoneId, rows));
     };
     const state: AuthenticationState = { creds, keys: {
       get: async <T extends keyof SignalDataTypeMap>(type: T, ids: string[]) => {

@@ -272,6 +272,7 @@ def main():
     run(['npx', '--no-install', 'prisma', 'generate'])
     run(['npx', '--no-install', 'prisma', 'validate'])
     run(['npm', 'run', 'build'])
+    run(['node', 'deployment/verify-send-guard-build.cjs'])
     run(['node', 'deployment/ci-tests.cjs'])
     before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
     (backup / 'migration-inventory.json').write_text(json.dumps(migration_inventory(before, stage)))

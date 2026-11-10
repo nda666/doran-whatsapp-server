@@ -1,4 +1,4 @@
-import { SendGuardError } from "../messaging/safety";
+import { isSendGuardError } from "../messaging/sendGuardError";
 import { withSendFence } from "../messaging/sendFence";
 import type { Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
@@ -95,7 +95,7 @@ export async function sendChatReply(conversationId: string, scope: Prisma.ChatCo
     }
   } catch (error) {
     // Never blindly retry a message whose transport result might have been lost.
-    await prisma.chatMessage.updateMany({ where: { id: row.id, status: "SENDING" }, data: { status: error instanceof SendGuardError ? "FAILED" : "UNCERTAIN" } });
+    await prisma.chatMessage.updateMany({ where: { id: row.id, status: "SENDING" }, data: { status: isSendGuardError(error) ? "FAILED" : "UNCERTAIN" } });
   } finally {
     if (timer) clearTimeout(timer);
     if (phone.showTyping) await socket.sendPresenceUpdate("paused", conversation.jid).catch(() => {});

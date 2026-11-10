@@ -1,4 +1,5 @@
-import { SendGuardError, recipientBlocked, usageDay } from "../messaging/safety";
+import { recipientBlocked, usageDay } from "../messaging/safety";
+import { isSendGuardError } from "../messaging/sendGuardError";
 import { updateDispatches } from "../dispatchWebhook/events";
 import { randomUUID } from "node:crypto";
 import { generateMessageIDV2 } from "@whiskeysockets/baileys";
@@ -281,7 +282,7 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
       await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token },
         data: { status: "SENT", sentAt: new Date(), leaseToken: null, leaseUntil: null, lastError: null } });
     } catch (error) {
-      if (error instanceof SendGuardError) {
+      if (isSendGuardError(error)) {
         const restrictionGuard = ["WA_ACCOUNT_RESTRICTED", "WA_RESTRICTION_UNKNOWN"].includes(error.code);
         attemptResult = { status: "SKIPPED", error: error.code };
         await updateDispatches({ where: { id: job.id, status: "PROCESSING", leaseToken: token }, data: {

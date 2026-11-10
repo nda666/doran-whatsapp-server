@@ -216,6 +216,9 @@ const PhonePage = () => {
     {
       title: uiText("Menunggu pengiriman hari ini"),
       key: "pendingToday",
+      dataIndex: "pendingToday",
+      sorter: true,
+      sortOrder: table.sort === "pendingToday" ? table.order === "asc" ? "ascend" : "descend" : null,
       render: (_value: unknown, phone: PhoneRow) => <Tag color={phone.pendingToday ? "gold" : "default"}>{phone.pendingToday ?? "—"}</Tag>,
     },
     ...policies.columns.filter(column => column.key === "lastSendProcessedAt"),

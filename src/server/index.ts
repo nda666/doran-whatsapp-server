@@ -2,6 +2,7 @@ import { startMessagingAlerts } from "./messaging/alerts";
 import { startDailyWarmup } from "./messaging/dailyWarmup";
 import { pruneTrafficLedger } from "./messaging/trafficGuard";
 import { startMediaMaintenance } from "./chat/retention";
+import { startAuthMaintenance, authMaintenanceHealth } from "./authMaintenance";
 import compression from "compression";
 import express from "express";
 import { createServer, Server } from "http";
@@ -26,6 +27,7 @@ import { queueAccess } from "./queueAccess";
 let stopMessagingAlerts: (() => Promise<void>) | undefined;
 let stopDailyWarmup: (() => Promise<void>) | undefined;
 let stopMediaMaintenance: (() => Promise<void>) | undefined;
+let stopAuthMaintenance: (() => Promise<void>) | undefined;
 let stopDispatchWebhookWorker: (() => Promise<void>) | undefined;
 let stopDeviceWebhookWorker: (() => Promise<void>) | undefined;
 let stopDispatchWorker: (() => Promise<void>) | undefined;
@@ -72,6 +74,11 @@ app.get("/health/dispatch", queueAccess, (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.status(health.healthy ? 200 : 503).json(health);
 });
+app.get("/health/auth-storage", queueAccess, (_req, res) => {
+  const health = authMaintenanceHealth();
+  res.setHeader("Cache-Control", "no-store");
+  res.status(health.healthy ? 200 : 503).json(health);
+});
 
 nextApp.prepare().then(async () => {
   const appLogger = logger(`${process.env.WEBSITE_LOG}/website.log`);
@@ -98,6 +105,7 @@ nextApp.prepare().then(async () => {
     stopMessagingAlerts = startMessagingAlerts();
     stopDailyWarmup = startDailyWarmup();
     stopMediaMaintenance = startMediaMaintenance();
+    stopAuthMaintenance = startAuthMaintenance();
     stopDispatchWebhookWorker = startDispatchWebhookWorker();
     if (process.env.DISPATCH_QUEUE_ENABLED === "true" && (process.env.WHATSAPP_ENABLED !== "false" || process.env.TELEGRAM_ENABLED === "true")) stopDispatchWorker = startDispatchWorker();
     if (process.env.NODE_ENV !== "production") {
@@ -146,7 +154,7 @@ const shutdown = createGracefulShutdown({
     if (pruneInterval) clearInterval(pruneInterval);
     stopReconnectTimers();
   },
-  drain: [() => stopMediaMaintenance?.(), () => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
+  drain: [() => stopAuthMaintenance?.(), () => stopMediaMaintenance?.(), () => stopDailyWarmup?.(), () => stopMessagingAlerts?.(), () => stopDispatchWebhookWorker?.(), () => stopDeviceWebhookWorker?.(), () => stopDispatchWorker?.()],
   close: [
     closeWaSessions,
     async () => { if (io.engine) await io.close(); else io.disconnectSockets(true); },
