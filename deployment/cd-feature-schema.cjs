@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const approved = {
+  '20261109090000_dispatch_webhook_dispatch_index': '54bc85b5926f9eb2d42d499a552677eb5b3faadf2819fcd6980e9b053937bc56',
   '20261101030000_inbound_dedupe_media_indexes': '0264c907433235d98d2c96d0f907f614b24b8c57d62354bdb7c8edd65baba8a8',
   '20261101020000_reply_ratio_send_hours': '07d36dc503affceb751e66a531adcbff809c572e153fd31c5f0f414daff9b714',
   '20261101010000_wa_traffic_guard': '445bfd3c95f589948bb9d9c57f318ef0863e4cebab97ca9d2b527692d11fdf8d',
@@ -50,10 +51,10 @@ function operations(root = path.resolve(__dirname, '..')) {
         table.seedSql = sql;
         continue;
       }
-      const index = /^CREATE INDEX `([a-zA-Z0-9_]+)` ON `([a-zA-Z0-9_]+)`\s*(\([\s\S]+\))$/.exec(sql);
+      const index = /^CREATE INDEX `([a-zA-Z0-9_]+)` ON `([a-zA-Z0-9_]+)`\s*(\([\s\S]+\))( ALGORITHM=INPLACE LOCK=NONE)?$/.exec(sql);
       if (index) {
         const action = `ADD INDEX \`${index[1]}\` ${index[3]}`;
-        result.push({ kind: 'index', table: index[2], name: index[1], action, sql: `ALTER TABLE \`${index[2]}\` ${action}` });
+        result.push({ kind: 'index', table: index[2], name: index[1], action, sql: `ALTER TABLE \`${index[2]}\` ${action}`, ...(index[4] ? { onlineSql: sql } : {}) });
         continue;
       }
       const alter = /^ALTER TABLE `([a-zA-Z0-9_]+)`\s+([\s\S]+)$/.exec(sql);
@@ -131,7 +132,7 @@ async function apply(db, diff, backup) {
   for (const op of pending) {
     // Check each addition again, supporting safe restart after partial additive DDL.
     if (await exists(db, op)) continue;
-    await db.$executeRawUnsafe(op.sql);
+    await db.$executeRawUnsafe(op.onlineSql || op.sql);
     result.executed.push(`${op.table}.${op.name}`);
     if (op.kind === 'table') {
       result.created_tables.push(op.table);
