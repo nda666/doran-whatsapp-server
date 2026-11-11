@@ -2,7 +2,7 @@ import { useUiTranslation } from "@/lib/uiTranslation";
 import Table from "@/components/DashboardTable";
 import SummaryCards from "@/components/SummaryCards";
 import { useDashboardApi } from "@/lib/useDashboardApi";
-import { MobileOutlined, WifiOutlined, DisconnectOutlined, CheckCircleOutlined, StopOutlined } from "@ant-design/icons";
+import { MobileOutlined, WifiOutlined, DisconnectOutlined, CheckCircleOutlined, StopOutlined, WhatsAppOutlined } from "@ant-design/icons";
 import { useTableState } from "@/lib/useTableState";
 import { phoneSearchQuery, readPhoneSearchState } from "@/lib/phoneSearchState";
 import {
@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 
-import { Alert, Button, Flex, Modal, notification, Space, Switch, Tag, theme } from "antd";
+import { Alert, Button, Flex, Modal, notification, Space, Switch, Tag, Tooltip, theme } from "antd";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useSession } from "next-auth/react";
@@ -180,7 +180,16 @@ const PhonePage = () => {
   }, [socketOption, state.openForm, state.openQrModal]);
 
   const dataColumn: ColumnsType<PhoneRow> = [
-    { title: uiText("Kanal"), key: "channel", dataIndex: "channel", render: value => <Tag color={value === "telegram" ? "blue" : "green"}>{value === "telegram" ? "Telegram" : "WhatsApp"}</Tag> },
+    { title: uiText("Kanal"), key: "channel", dataIndex: "channel", width: 64, align: "center", render: value => (
+      <Tooltip title={value === "telegram" ? "Telegram" : "WhatsApp"}>
+        <span role="img" aria-label={value === "telegram" ? "Telegram" : "WhatsApp"} style={{ display: "inline-flex", verticalAlign: "middle" }}>
+          {value === "telegram" ? <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="12" fill="#26A5E4" />
+            <path fill="#fff" d="M5.2 11.6 18 6.7c.6-.2 1.1.1.9.9l-2.2 10.3c-.2.7-.6.9-1.2.5l-3.3-2.4-1.6 1.5c-.2.2-.3.3-.6.3l.2-3.4 6.2-5.6c.3-.2-.1-.4-.4-.2l-7.7 4.8-3.3-1c-.7-.2-.7-.6.2-.8Z" />
+          </svg> : <WhatsAppOutlined aria-hidden="true" style={{ fontSize: 22, color: "#25D366" }} />}
+        </span>
+      </Tooltip>
+    ) },
     {
       title: t("number"),
       key: "number",

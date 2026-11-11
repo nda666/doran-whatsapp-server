@@ -32,7 +32,7 @@ const matches = (row, where = {}) => Object.entries(where).every(([key, value]) 
 let senderLease = null;
 const db = {
   phone: { findFirst: async ({ where }) => phones.find(p => matches(p, where)), findMany: async ({ where }) => phones.filter(p => matches(p, where)), count: async () => phones.length },
-  deviceSendPolicy: { findUnique: async ({ where }) => where.phoneId === sourceId ? sourcePolicy : policy },
+  deviceSendPolicy: { createMany: async () => ({ count: 0 }), findUnique: async ({ where }) => where.phoneId === sourceId ? sourcePolicy : policy },
   deviceDailyUsage: { findUnique: async ({ where }) => where.phoneId_day.phoneId === sourceId ? sourceUsage : usage },
   deviceQuotaWindow: { findUnique: async ({ where }) => where.phoneId === sourceId ? sourceWindow : window },
   waSenderLease: { createMany: async () => ({ count: 1 }), updateMany: async ({ where, data }) => {
@@ -40,7 +40,11 @@ const db = {
     return { count: Number(leaseAvailable) };
   } },
   waDispatch: {
-    findMany: async ({ where }) => jobs.filter(j => matches(j, where)),
+    findMany: async ({ where, orderBy, take }) => {
+      let found = jobs.filter(j => matches(j, where));
+      if (orderBy) found.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+      return take === undefined ? found : found.slice(0, take);
+    },
     count: async ({ where }) => jobs.filter(j => matches(j, where)).length,
     updateMany: async ({ where, data }) => { const found = jobs.filter(j => matches(j, where)); found.forEach(j => Object.assign(j, data)); return { count: found.length }; },
     groupBy: async ({ by, where }) => {
@@ -54,7 +58,11 @@ const db = {
     },
   },
 };
-db.$transaction = async callback => callback(db);
+let beforeTransaction = () => {}, beforeUpdate = () => {};
+db.$queryRaw = async () => [];
+const updateMany = db.waDispatch.updateMany;
+db.waDispatch.updateMany = async query => { beforeUpdate(); return updateMany(query); };
+db.$transaction = async callback => { beforeTransaction(); return callback(db); };
 const stubs = {
   'src/lib/prisma.ts': { prisma: db },
   'src/middleware/apiAuthMiddleware.ts': { default: handler => handler, __esModule: true },
@@ -275,5 +283,60 @@ async function request(method, body, id = sourceId, userId = 'owner', fn = handl
   assert.equal(jobs[0].nextAttemptAt, quotaBackoff, 'Today-only does not clear quota sleep on previous days');
   assert.equal(jobs[1].senderPhoneId, targetId);
   assert.ok(jobs[1].nextAttemptAt <= new Date(), 'Selected quota backlog wakes normally');
-  console.log('MANUAL_REASSIGNMENT_OK: API scope, validation, healthy quota/warmup, all-date backlog, safe exclusions, idempotence, assignment routing, leases, ACK pinning, and per-sender WIB counts.');
+  // A limited transfer must bound both update paths together and preserve the
+  // original sender/backoff of every row outside the selected oldest-first set.
+  jobs = [
+    { ...base, id: 'newest', createdAt: new Date(midnight.getTime() + 2), lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff },
+    { ...base, id: 'oldest', createdAt: new Date(midnight.getTime() - 1), lastError: null },
+    { ...base, id: 'tie-b', createdAt: midnight, lastError: 'DEVICE_THROTTLED', nextAttemptAt: quotaBackoff },
+    { ...base, id: 'tie-a', createdAt: midnight, lastError: 'DEVICE_DAILY_LIMIT', nextAttemptAt: quotaBackoff },
+  ];
+  usage = { attempts: 198, failures: 0 };
+  const untouched = JSON.stringify([jobs[0], jobs[2]]);
+  senderLease = { phoneId: sourceId, nextSendAt: quotaBackoff, leaseUntil: null };
+  assert.equal((await request('GET')).data.options[0].remaining, 2);
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'all' })).data.count, 2);
+  assert.equal(jobs[1].senderPhoneId, targetId, 'Oldest eligible job moves first');
+  assert.equal(jobs[3].senderPhoneId, targetId, 'Equal timestamps use stable ID ordering');
+  assert.ok(jobs[3].nextAttemptAt <= new Date(), 'Selected quota sleep is cleared');
+  assert.equal(JSON.stringify([jobs[0], jobs[2]]), untouched, 'Excess jobs retain sender, errors and backoffs');
+  assert.ok(senderLease.nextSendAt <= new Date());
+
+  jobs = [
+    { ...base, id: 'old', createdAt: new Date(midnight.getTime() - 1) },
+    { ...base, id: 'today-a', createdAt: midnight },
+    { ...base, id: 'today-b', createdAt: midnight },
+  ];
+  usage.attempts = 199;
+  assert.equal((await request('POST', { targetPhoneId: targetId, scope: 'today' })).data.count, 1);
+  assert.equal(jobs[0].senderPhoneId, null, 'Quota cap still respects today-only scope');
+  assert.equal(jobs[1].senderPhoneId, targetId);
+  assert.equal(jobs[2].senderPhoneId, null);
+
+  for (const quotaPolicy of [
+    { useGlobalQuota: false, dailyLimit: 11 },
+    { useGlobalQuota: true, warmupStartedAt: now },
+    { useGlobalQuota: true, quotaReset: { mode: 'after-full', hours: 24 } },
+  ]) {
+    jobs = Array.from({ length: 3 }, (_, i) => ({ ...base, id: `quota-${i}` }));
+    policy = quotaPolicy;
+    usage = { attempts: quotaPolicy.warmupStartedAt ? 24 : 10, failures: 0 };
+    window = quotaPolicy.quotaReset ? { attempts: 199, startedAt: now, lastAttemptAt: now, reachedAt: null } : null;
+    assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 1, 'Cap uses custom, warmup and current-cycle remaining quota');
+    assert.equal(jobs.filter(job => job.senderPhoneId === null).length, 2);
+  }
+  policy = null; window = null;
+  jobs = [{ ...base }];
+  usage.attempts = 198;
+  beforeTransaction = () => { usage.attempts = 200; };
+  assert.equal((await request('POST', { targetPhoneId: targetId })).code, 409, 'Save rechecks quota inside the transaction');
+  assert.equal(jobs[0].senderPhoneId, null);
+  beforeTransaction = () => {};
+  usage.attempts = 199;
+  jobs = [{ ...base, id: 'claimed' }, { ...base, id: 'untouched' }];
+  beforeUpdate = () => { jobs[0].status = 'PROCESSING'; };
+  assert.equal((await request('POST', { targetPhoneId: targetId })).data.count, 0, 'Concurrent worker claim is not overwritten');
+  assert.ok(jobs.every(job => job.senderPhoneId === null), 'No unselected job is used to refill a raced selection');
+  beforeUpdate = () => {};
+  console.log('MANUAL_REASSIGNMENT_OK: bounded remaining quota, oldest-first selection, excess untouched, current quota recheck, scope, safety exclusions, routing and worker races.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

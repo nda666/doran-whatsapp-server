@@ -18,6 +18,8 @@ export default function ReassignSenderModal({ phone, token, onClose, onSaved }: 
   const busy = useRef(false);
   const endpoint = `/api/phones/${phone.id}/reassign-sender`;
   const selectedCount = (scope === "today" ? preview?.todayCount : preview?.count) || 0;
+  const targetQuota = preview?.options.find(option => option.id === target)?.remaining || 0;
+  const transferCount = Math.min(selectedCount, targetQuota);
   useEffect(() => {
     const controller = new AbortController();
     axios.get<Preview>(endpoint, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
@@ -27,7 +29,7 @@ export default function ReassignSenderModal({ phone, token, onClose, onSaved }: 
     return () => controller.abort();
   }, [endpoint, token]);
   const save = async () => {
-    if (!target || !selectedCount || busy.current) return;
+    if (!target || !transferCount || busy.current) return;
     busy.current = true;
     setSaving(true); setError(undefined);
     try {
@@ -39,7 +41,7 @@ export default function ReassignSenderModal({ phone, token, onClose, onSaved }: 
   };
   return <Modal open title={uiText("Ubah nomor pengiriman")} onCancel={onClose} onOk={save}
     okText={uiText("Simpan")} cancelText={uiText("Batal")} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving}
-    cancelButtonProps={{ disabled: saving }} okButtonProps={{ disabled: loading || !target || !selectedCount }}>
+    cancelButtonProps={{ disabled: saving }} okButtonProps={{ disabled: loading || !target || !transferCount }}>
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Text>{phone.name} · {phone.number || "—"}</Typography.Text>
       {error && <Alert type="error" showIcon message={uiText(error)} />}
@@ -60,13 +62,18 @@ export default function ReassignSenderModal({ phone, token, onClose, onSaved }: 
               <Radio value="all">{uiText("Semua, termasuk hari sebelumnya ({{v0}} pesan)", { v0: preview?.count || 0 })}</Radio>
             </Space>
           </Radio.Group>
-          <Typography.Text>{uiText("{{v0}} pesan akan dialihkan ke nomor pengganti.", { v0: selectedCount })}</Typography.Text>
         </Space>
       </>}
       <Select style={{ width: "100%" }} showSearch optionFilterProp="label" loading={loading} disabled={loading || saving}
         aria-label={uiText("Nomor pengganti")} placeholder={uiText("Pilih nomor pengganti")} value={target} onChange={setTarget}
         notFoundContent={uiText("Tidak ada nomor sehat dengan kuota tersedia.")}
         options={preview?.options.map(p => ({ value: p.id, label: `${p.name} · ${p.number || "—"} · ${uiText("Sisa kuota")}: ${p.remaining}` }))} />
+      {target && <Alert type="info" showIcon
+        message={uiText("{{v0}} pesan akan dialihkan ke nomor pengganti.", { v0: transferCount })}
+        description={<Space direction="vertical" size={0}>
+          <Typography.Text>{uiText("{{v0}} pesan tetap pada nomor asal karena batas sisa kuota nomor tujuan.", { v0: selectedCount - transferCount })}</Typography.Text>
+          <Typography.Text type="secondary">{uiText("Jumlah akhir mengikuti sisa kuota dan antrean yang masih memenuhi syarat saat disimpan. Pesan paling lama dipindahkan lebih dahulu.")}</Typography.Text>
+        </Space>} />}
       <Alert type="info" showIcon message={uiText("Pesan tetap mengikuti seluruh aturan pengiriman nomor pengganti.")}
         description={uiText("Termasuk kuota, kesehatan, pemanasan, jam operasional, jeda, urutan antrean, dan batas usia pesan. Nomor ini dipakai untuk antrean yang dialihkan; pengiriman baru tetap memakai pengaturan asal.")} />
     </Space>

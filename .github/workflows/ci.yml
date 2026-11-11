@@ -154,7 +154,8 @@ jobs:
         run: |
           set -euo pipefail
           sha256sum -c source.tar.gz.sha256
-          REMOTE="/home/jeblast/.doran-incoming-$DEPLOY_SHA"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          REMOTE="/home/jeblast/repos/.doran-incoming-$DEPLOY_SHA"
           # Integrity snapshots can be silent for minutes; keep the SSH transport active.
           SSH=(ssh -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=12)
           "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "umask 077; mkdir -p '$REMOTE'"

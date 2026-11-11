@@ -44,19 +44,30 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (!target || isTelegramDevice(source) !== isTelegramDevice(target) || target.id === source.id || (senderNumber(target.number) && senderNumber(target.number) === senderNumber(source.number))) {
     return res.status(400).json({ message: "Nomor pengganti harus berbeda dan berasal dari pemilik yang sama." });
   }
-  if (!await replacementQuota(target)) return res.status(409).json({ message: "Nomor pengganti sudah tidak tersedia, tidak sehat, atau kuotanya habis. Muat ulang daftar nomor." });
   // Conditional updates race safely with worker claims: processing rows and
   // rows whose assignment changed are never overwritten. Only the old sender's
   // quota sleep is cleared; message age and other backoffs remain unchanged.
   const where = await reassignmentWhere(source);
   if (input.data.scope === "today") where.createdAt = todayRange;
   const data = { senderPhoneId: target.id, senderGroupId: null, lastError: null };
+  await prisma.deviceSendPolicy.createMany({ data: [{ phoneId: target.id }], skipDuplicates: true });
   const count = await prisma.$transaction(async tx => {
-    const quotaWhere = { ...where, lastError: "DEVICE_DAILY_LIMIT" };
+    // Share the transport quota mutex so sends cannot consume quota between
+    // this check and the bounded reassignment. Moving jobs does not consume quota.
+    await tx.$queryRaw`SELECT phoneId FROM device_send_policies WHERE phoneId = ${target.id} FOR UPDATE`;
+    const quota = await replacementQuota(target, tx);
+    if (!quota) return null;
+    const selected = await tx.waDispatch.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: quota.remaining, select: { id: true } });
+    if (!selected.length) return 0;
+    // Keep the eligibility predicates when writing: a worker may have claimed
+    // a selected row since the read. Never refill from outside this bounded set.
+    const selectedWhere = { ...where, id: { in: selected.map(job => job.id) } };
+    const quotaWhere = { ...selectedWhere, lastError: "DEVICE_DAILY_LIMIT" };
     const origins = await tx.waDispatch.findMany({ where: quotaWhere, distinct: ["phoneId"], select: { phoneId: true } });
     const quotaWaiting = await tx.waDispatch.updateMany({ where: quotaWhere,
       data: { ...data, nextAttemptAt: new Date() } });
-    const remaining = await tx.waDispatch.updateMany({ where, data });
+    const remaining = await tx.waDispatch.updateMany({ where: selectedWhere, data });
     if (quotaWaiting.count) {
       // Polling still runs by origin phoneId even when the actual sender changes.
       // Wake idle origins from their quota sleep; never release an active lease.
@@ -67,6 +78,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     }
     return quotaWaiting.count + remaining.count;
   });
+  if (count === null) return res.status(409).json({ message: "Nomor pengganti sudah tidak tersedia, tidak sehat, atau kuotanya habis. Muat ulang daftar nomor." });
   return res.json({ count });
 }
 export default apiAuthMiddleware(handler);

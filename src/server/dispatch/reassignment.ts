@@ -34,11 +34,11 @@ export async function reassignmentWhere(phone: Phone): Promise<Prisma.WaDispatch
   };
 }
 
-async function senderQuota(phone: Phone) {
+async function senderQuota(phone: Phone, db: Prisma.TransactionClient = prisma) {
   const [saved, usage, window, globalQuota, limits, reset] = await Promise.all([
-    prisma.deviceSendPolicy.findUnique({ where: { phoneId: phone.id } }),
-    prisma.deviceDailyUsage.findUnique({ where: { phoneId_day: { phoneId: phone.id, day: usageDay() } } }),
-    prisma.deviceQuotaWindow.findUnique({ where: { phoneId: phone.id } }),
+    db.deviceSendPolicy.findUnique({ where: { phoneId: phone.id } }),
+    db.deviceDailyUsage.findUnique({ where: { phoneId_day: { phoneId: phone.id, day: usageDay() } } }),
+    db.deviceQuotaWindow.findUnique({ where: { phoneId: phone.id } }),
     getGlobalDeviceQuota(), getWarmupDailyLimits(), getQuotaReset(),
   ]);
   const policy = saved || { dailyLimit: DEFAULT_DEVICE_DAILY_QUOTA, useGlobalQuota: true };
@@ -49,10 +49,10 @@ async function senderQuota(phone: Phone) {
 
 // This is a preview, never a reservation. The normal transport guard reserves
 // quota atomically and rechecks hours, pauses, health, warmup and intervals.
-export async function replacementQuota(phone: Phone) {
+export async function replacementQuota(phone: Phone, db: Prisma.TransactionClient = prisma) {
   const socket = session.get(phone.id);
   if (phone.active !== 1 || phoneMaintenance.has(phone.id) || (isTelegramDevice(phone) ? !telegramEnabled() : process.env.WHATSAPP_ENABLED === "false" || !socket?.ws.isOpen || !socket.user)) return null;
-  const { saved, usage, used, limit } = await senderQuota(phone);
+  const { saved, usage, used, limit } = await senderQuota(phone, db);
   if (saved?.paused || healthAssessment(usage?.attempts || 0, usage?.failures || 0).stop) return null;
   return used < limit ? { remaining: limit - used, limit } : null;
 }
