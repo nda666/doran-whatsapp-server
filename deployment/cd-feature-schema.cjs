@@ -96,7 +96,7 @@ async function plan(db, diff) {
   for (const op of ops) if (!await exists(db, op)) pending.push(op);
   return pending;
 }
-function requireBackups(directory, snapshotRoot = '/home/jeblast/backups/private-snapshots') {
+function requireBackups(directory, snapshotRoot = '/home/jeblast/repos/doran-backups/private-snapshots') {
   const regular = file => {
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) throw Error('Completed private database and storage backups required');

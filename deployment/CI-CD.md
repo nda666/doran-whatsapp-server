@@ -68,7 +68,7 @@ Branch rule tidak dibuat otomatis oleh source workflow.
   File cache disalin terpisah agar build tidak menulis ke runtime aktif.
   Cache data/fetch, halaman hasil build dan BUILD_ID tidak digunakan ulang.
   Cache tidak tersedia atau gagal disalin berarti build berjalan tanpa cache.
-  Path staging tetap `.doran-cd-build` karena key internal webpack menyertakan
+  Path staging stabil di `repos/.doran-work-ci-deploy/.doran-cd-build` karena key internal webpack menyertakan
   path absolut instalasi Next.js. Lock deploy tetap berlaku; direktori staging
   yang tertinggal untuk pemulihan membuat deploy baru berhenti, bukan ditimpa.
 - Build dan suite tes tetap dijalankan pada GitHub serta VPS. Artifact GitHub
@@ -104,10 +104,17 @@ Branch rule tidak dibuat otomatis oleh source workflow.
 - `prisma migrate diff` hanya membandingkan schema secara read-only. Schema
   aktual harus sesuai kebutuhan kode atau hanya berbeda pada tambahan yang
   diizinkan helper sebelum aplikasi dihentikan. Perbedaan lain memblokir deploy.
-- Stop hanya `doran-whatsapp` setelah build lulus. Ada jeda layanan selama
-  backup dan promosi; durasinya tergantung ukuran database/storage.
-- Backup database penuh (`mysqldump --single-transaction`), env dan storage
-  ke direktori privat `/home/jeblast/backups/doran-cd-*`.
+- Setelah build lulus, backup database penuh (`mysqldump --single-transaction`)
+  dibuat saat layanan masih aktif. Batas dump satu jam dan job deployment 90 menit
+  menampung database produksi yang telah melebihi 2 GB. Snapshot database mencatat
+  waktu mulai/selesai dan tidak otomatis direstore saat rollback kode.
+- Stop hanya `doran-whatsapp` setelah dump lengkap. Ada jeda layanan selama
+  snapshot file privat, pemeriksaan integritas, dan promosi.
+- Backup baru berada di `repos/doran-backups/doran-cd-*`; env/storage berada di
+  `repos/doran-backups/private-snapshots`. Snapshot lama di luar `repos` hanya
+  menjadi sumber `--link-dest` yang telah lengkap; tidak dipindah atau diubah.
+  Jadwal retensi legacy tetap memakai lokasi lamanya. Direktori temporary
+  build/test berada di staging, dan environment build tidak diwariskan ke PM2.
 - Simpan hitungan record seluruh tabel sebelum/sesudah persiapan deploy.
   Seluruh tabel lama, jumlah record, dan isi catatan `_prisma_migrations` wajib
   tetap sama sebelum aplikasi dijalankan kembali. Hanya tabel baru `sender_groups`
@@ -150,8 +157,21 @@ tetap diperlukan untuk memastikan backup dapat digunakan.
 
 Detail SQL/count/log hanya berada di backup privat VPS, tidak menjadi artifact
 GitHub. Backup CI/CD belum dipangkas otomatis; tentukan retensi setelah jumlah
-dan ukuran backup diamati. File incoming di `/home/jeblast/.doran-incoming-*`
-dapat dibersihkan operator setelah keberhasilan deploy tercatat.
+dan ukuran backup diamati. Setelah deployment dan pemeriksaan HTTPS publik
+berhasil, workflow memanggil helper dari checkout yang baru dideploy dengan
+`--incoming-commit "$DEPLOY_SHA"`, hanya untuk incoming milik commit tersebut.
+Cron server juga menjalankan helper setiap 15 menit, sehingga cleanup tetap aktif
+sebelum perubahan workflow dipush. Incoming di home maupun repos dihapus hanya
+jika checksum cocok dengan bukti deployment sukses, backup tersedia, tidak aktif,
+dan tidak berubah minimal lima menit. Jika deployment gagal, incoming disimpan
+untuk diagnosis dan dapat dipindah dari home ke repos. Backup pemulihan
+di `repos/doran-backups` maupun `/home/jeblast/backups` tidak termasuk penghapusan. Lihat
+[cakupan otomatisasi dan manifest pekerjaan](artifact-maintenance.md).
+
+Paket ZIP/TAR, log sementara, dan script Python sekali pakai untuk pekerjaan
+manual ditempatkan di `/home/jeblast/repos/.doran-work-<id-pekerjaan>/`.
+Jangan membuat file sementara langsung di `/home/jeblast` atau checkout produksi.
+Periksa keamanan dan kebutuhan file sebelum membersihkannya sesuai `AGENTS.md`.
 
 ## Menjalankan ulang dan diagnosis
 

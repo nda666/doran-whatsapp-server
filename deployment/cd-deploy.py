@@ -12,7 +12,7 @@ import time
 import urllib.request
 
 from stage_cleanup import StageCleanup
-from private_snapshot import create_snapshot
+from private_snapshot import create_snapshot, reject_symlink_parents
 
 APP = Path('/home/jeblast/repos/doran-whatsapp-server')
 NODE_BIN = Path('/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/bin')
@@ -228,10 +228,16 @@ def main():
     # Next's webpack cache version includes the absolute node_modules path.
     # Keep the build path stable across deployments so restored packs are usable.
     # mkdir below deliberately refuses a leftover stage (e.g. failed rollback).
-    stage = APP.parent / '.doran-cd-build'
-    backup = Path('/home/jeblast/backups') / ('doran-cd-' + stamp)
+    work = APP.parent / '.doran-work-ci-deploy'
+    backups = APP.parent / 'doran-backups'
+    reject_symlink_parents(work)
+    reject_symlink_parents(backups)
+    work.mkdir(mode=0o700, exist_ok=True)
+    backups.mkdir(mode=0o700, exist_ok=True)
+    stage = work / '.doran-cd-build'
+    backup = backups / ('doran-cd-' + stamp)
     stage.mkdir(mode=0o700)
-    guard = StageCleanup(APP.parent, stage)
+    guard = StageCleanup(work, stage)
     backup.mkdir(mode=0o700)
     (backup / 'commit.txt').write_text(args.sha + '\n')
     archive_digest = hashlib.sha256(args.archive.read_bytes()).hexdigest()
@@ -246,15 +252,17 @@ def main():
             (stage / path.name).chmod(0o600)
     env = dict(os.environ, NODE_ENV='production', WHATSAPP_ENABLED='false',
                QUEUE_ENABLED='false', DISPATCH_QUEUE_ENABLED='false',
-               SSL_CERTBOT_ENABLED='false', NODE_OPTIONS='--max-old-space-size=4096')
+               SSL_CERTBOT_ENABLED='false', NODE_OPTIONS='--max-old-space-size=4096',
+               TMPDIR=str(stage / 'tmp'), PYTHONDONTWRITEBYTECODE='1')
+    (stage / 'tmp').mkdir(mode=0o700, exist_ok=True)
     # npm ci must include build tools even under NODE_ENV=production.
-    def run(command, cwd=stage, capture=False):
+    def run(command, cwd=stage, capture=False, timeout=1800):
         enforce_read_only_prisma(command)
         started = time.monotonic()
         label = ' '.join(str(part) for part in command)
         print('DEPLOY_STEP_STARTED', label, flush=True)
         result = subprocess.run(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=1800)
+                                stderr=subprocess.PIPE, timeout=timeout)
         print('DEPLOY_STEP_FINISHED', label, 'seconds=%.2f' % (time.monotonic() - started),
               'exit=' + str(result.returncode), flush=True)
         if result.returncode:
@@ -291,7 +299,9 @@ def main():
         raise RuntimeError('Another deployment changed the active build')
 
     def pm2(*arguments):
-        return subprocess.check_output([PM2, *arguments], cwd=APP, env=env)
+        # Build/test settings and temporary directories must not leak into PM2.
+        return subprocess.check_output([PM2, *arguments], cwd=APP,
+                                       env=dict(os.environ, PWD=str(APP)))
 
     processes = json.loads(pm2('jlist'))
     target = next((p for p in processes if p['name'] == 'doran-whatsapp'), None)
@@ -305,6 +315,14 @@ def main():
     detached_public, restored_public = [], []
     shared_public = backup / 'shared-public'
     shared_public.mkdir()
+    # A consistent live DB snapshot needs no application downtime. Runtime-only
+    # rollback never restores this database automatically. Private files/counts
+    # are still frozen below before the runtime swap or approved additive DDL.
+    snapshot_started = time.time()
+    run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')], timeout=3700)
+    (backup / 'database-snapshot.json').write_text(json.dumps({
+        'started_at': snapshot_started, 'finished_at': time.time(),
+        'application_online': True, 'automatic_database_restore': False}))
     guard.preserve = True
     stopped = False
     try:
@@ -316,9 +334,9 @@ def main():
         print('AUTH_ENV_BOUNDARY_CHECK_DONE', len(frozen), flush=True)
         before = json.loads(run(['node', 'deployment/cd-database.cjs', 'audit'], capture=True))
         (backup / 'database-before.json').write_text(json.dumps(before))
-        run(['node', 'deployment/cd-database.cjs', 'dump', str(backup / 'database.sql')])
         print('DATABASE_BACKUP_DONE_PRIVATE_SNAPSHOT_STARTED', flush=True)
-        snapshot = create_snapshot(APP, Path('/home/jeblast/backups/private-snapshots'), args.sha)
+        snapshot = create_snapshot(APP, backups / 'private-snapshots', args.sha,
+                                   previous_root=Path('/home/jeblast/backups/private-snapshots'))
         (backup / 'private-snapshot.json').write_text(json.dumps({
             'path': str(snapshot), 'restore': 'Stop application; rsync files/ to application root; see deployment/deploy-backups.md'}))
         # Never replay/resolve historical migrations or mutate existing records.

@@ -50,6 +50,8 @@ jobs:
           persist-credentials: false
           # Integration tests compare against a pinned historical schema.
           fetch-depth: 0
+      - name: Test artifact cleanup safety
+        run: python3 deployment/test-artifact-maintenance.py
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
@@ -118,7 +120,7 @@ jobs:
     needs: checks
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     environment:
       name: production
       url: https://dashboard.jeblast.com
@@ -163,6 +165,10 @@ jobs:
           "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$REMOTE' && sha256sum -c source.tar.gz.sha256 && tar -xzf source.tar.gz deployment/cd-deploy.py deployment/cd-database.cjs deployment/stage_cleanup.py deployment/private_snapshot.py && python3 deployment/cd-deploy.py --archive '$REMOTE/source.tar.gz' --sha '$DEPLOY_SHA'"
       - name: Check public HTTPS
         run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --max-time 20 https://dashboard.jeblast.com/signin -o /dev/null
+      - name: Remove completed deployment upload
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=12 "$DEPLOY_USER@$DEPLOY_HOST" "PYTHONDONTWRITEBYTECODE=1 python3 /home/jeblast/repos/doran-whatsapp-server/deployment/artifact-maintenance.py --incoming-commit '$DEPLOY_SHA'"
       - name: Remove runner SSH credentials
         if: always()
         run: rm -f ~/.ssh/id_ed25519

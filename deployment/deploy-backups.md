@@ -7,13 +7,24 @@ and checks persistent directory identities. It does not hash every Signal key.
 Source archives reject private runtime data and user uploads.
 
 Before promotion, while the application is stopped, `private_snapshot.py`
-creates a complete snapshot under `/home/jeblast/backups/private-snapshots`.
+creates a complete snapshot under `/home/jeblast/repos/doran-backups/private-snapshots`.
 `rsync --link-dest` reuses unchanged files from the preceding **backup**;
 live files are never hardlinked. Every destination starts empty. Nanosecond
 mtime comparisons detect same-size writes within the same second. Files removed
 from live storage are absent from the new snapshot, but remain in old snapshots.
 Any rsync error aborts promotion and keeps the previous completed snapshot pointer.
 Incomplete directories are retained for inspection, never published as complete.
+
+If the new root has no completed snapshot, the first deployment can use the
+completed legacy snapshot in `/home/jeblast/backups/private-snapshots` as its
+read-only `--link-dest` baseline. Legacy files and pointers are never moved.
+The existing retention cron keeps its legacy target; pruning the new root uses
+an explicit `--root` until its schedule is migrated.
+
+The consistent full database dump finishes while the application stays online,
+before stopping it for the file snapshot and runtime swap. Its start/end times
+are recorded in `database-snapshot.json`. A failed dump leaves the app running;
+runtime rollback never automatically restores a database snapshot.
 
 Each deploy backup contains `private-snapshot.json` pointing to its snapshot,
 alongside its own database dump, schema audit and previous runtime. Snapshots

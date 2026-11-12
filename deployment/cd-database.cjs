@@ -16,7 +16,7 @@ async function main() {
         '--single-transaction', '--quick', '--skip-lock-tables', '--hex-blob', '--no-tablespaces',
         `--host=${url.hostname}`, `--port=${url.port || '3306'}`,
         `--user=${decodeURIComponent(url.username)}`, decodeURIComponent(url.pathname.slice(1)),
-      ], { env: { ...process.env, MYSQL_PWD: decodeURIComponent(url.password) }, stdio: ['ignore', fd, 'pipe'], timeout: 600000 });
+      ], { env: { ...process.env, MYSQL_PWD: decodeURIComponent(url.password) }, stdio: ['ignore', fd, 'pipe'], timeout: 3600000 });
       if (result.error || result.status !== 0 || fs.fstatSync(fd).size === 0) throw Error('Database backup failed (details suppressed)');
     } finally { fs.closeSync(fd); }
     return;

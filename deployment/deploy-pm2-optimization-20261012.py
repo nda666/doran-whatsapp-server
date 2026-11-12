@@ -14,7 +14,7 @@ app = Path('/home/jeblast/repos/doran-whatsapp-server')
 stamp = str(int(time.time()))
 stage = app.parent / ('.doran-pm2-optimization-' + stamp)
 backup = Path('/home/jeblast/backups') / ('doran-pm2-optimization-' + stamp)
-incoming = Path('/home/jeblast/pm2-optimization-20261012.zip')
+incoming = Path('/home/jeblast/repos/.doran-work-legacy-20261111/pm2-optimization-20261012.zip')
 node_path = '/home/jeblast/.local/share/doran-node/node-v24.21.0-linux-x64/bin'
 os.environ['PATH'] = node_path + ':' + os.environ['PATH']
 assert app.is_dir() and not stage.exists() and not backup.exists()

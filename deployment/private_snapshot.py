@@ -76,7 +76,7 @@ def seed_from_archive(archive, root):
     return snapshot
 
 
-def create_snapshot(app, root, label):
+def create_snapshot(app, root, label, previous_root=None):
     app, root = Path(app), Path(root)
     reject_symlink_parents(root)
     if root.is_symlink() or app.is_symlink() or root.resolve() == app.resolve() or app.resolve() in root.resolve().parents:
@@ -84,6 +84,10 @@ def create_snapshot(app, root, label):
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     root.chmod(0o700)
     previous = previous_snapshot(root)
+    if previous is None and previous_root is not None:
+        # Reuse only an immutable completed backup, never live data. Historical
+        # snapshots and their retention schedule stay in place during migration.
+        previous = previous_snapshot(Path(previous_root))
     snapshot = root / ('snapshot-' + str(int(time.time() * 1000000)))
     snapshot.mkdir(mode=0o700)
     files = snapshot / 'files'
@@ -151,6 +155,7 @@ if __name__ == '__main__':
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument('--seed-archive', type=Path)
     modes.add_argument('--prune', action='store_true')
+    parser.add_argument('--root', type=Path)
     arguments = parser.parse_args()
     lock = open('/home/jeblast/repos/.doran-cd.lock', 'a')
     try:
@@ -158,7 +163,10 @@ if __name__ == '__main__':
     except BlockingIOError:
         print('PRIVATE_SNAPSHOT_BUSY_SKIP')
         raise SystemExit(0)
-    root = Path('/home/jeblast/backups/private-snapshots')
+    # Preserve the existing cron's legacy retention target. New imports default
+    # to repos; pruning the new root is explicit until its schedule is migrated.
+    root = arguments.root or Path('/home/jeblast/backups/private-snapshots' if arguments.prune
+                                  else '/home/jeblast/repos/doran-backups/private-snapshots')
     if arguments.prune:
         print(json.dumps({'private_snapshots_removed': prune_snapshots(root)}))
     else:

@@ -66,6 +66,20 @@ class PrivateSnapshots(unittest.TestCase):
             self.assertFalse((root / 'latest.json').exists())
             self.assertFalse(any(root.glob('*/COMPLETE.json')))
 
+    @unittest.skipUnless(shutil.which('rsync'), 'Linux rsync integration required')
+    def test_new_root_reuses_completed_legacy_backup_without_moving_it(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            app, auth, legacy = self.fixture(Path(temp))
+            old = snapshots.create_snapshot(app, legacy, 'legacy')
+            new_root = Path(temp) / 'repos/backups'
+            latest = snapshots.create_snapshot(app, new_root, 'current', previous_root=legacy)
+            self.assertEqual((old / 'files/.env').stat().st_ino, (latest / 'files/.env').stat().st_ino)
+            self.assertNotEqual((app / '.env').stat().st_ino, (latest / 'files/.env').stat().st_ino)
+            self.assertEqual(snapshots.previous_snapshot(legacy), old)
+            shutil.rmtree(str(old))
+            self.assertEqual((latest / 'files/.env').read_bytes(), b'fixture-env')
+            self.assertEqual((latest / 'files/storage/whatsapp-auth/device/creds.json').read_bytes(), b'fixture-creds')
+
     def test_rejects_pointer_escape_and_incomplete_previous(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
             root = Path(temp)
