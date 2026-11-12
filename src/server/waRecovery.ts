@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prisma } from "../lib/prisma";
-import makeWASocket, { session, waitForAuthSave, waitForPendingSocket, suspendWaPhone } from "./libs/makeWASocket";
+import makeWASocket, { session, waitForAuthSave, waitForPendingSocket, suspendWaPhone, reconcileWaOffline } from "./libs/makeWASocket";
 import { ownerCanSend } from "./messaging/recipientPolicy";
 import { phoneMaintenance, retiredSockets } from "./libs/phoneMaintenance";
 import { waRecovery } from "./libs/waRecoveryState";
@@ -33,6 +33,9 @@ export async function recoverWaConnections() {
       try {
         // Check before timer/blocked shortcuts so existing inactive-owner sockets are also retired.
         if (!await ownerCanSend(phone.userId)) { await suspendWaPhone(phone.id); continue; }
+        // Retry status persistence after a transient DB outage, even for
+        // blocked/timer-held devices. Status failure must not stop reconnect.
+        await reconcileWaOffline(phone.id).catch(() => console.error("WA_OFFLINE_RECONCILE_FAILED", phone.id));
         if (phoneMaintenance.has(phone.id) || waRecovery.blocked.has(phone.id) || waRecovery.timers.has(phone.id)) continue;
         await waitForPendingSocket(phone.userId, phone.id);
         const socket = session.get(phone.id);

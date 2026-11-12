@@ -28,6 +28,7 @@ import { cacheDeviceContacts } from "../campaigns/contacts";
 import { sendDeviceWebhook } from "../utils/sendDeviceWebhook";
 import { updateDevice } from "../deviceWebhook/events";
 import { phoneMaintenance, retiredSockets } from "./phoneMaintenance";
+import { emitDeviceEvent } from "./socket";
 import { waRecovery } from "./waRecoveryState";
 import { captureChatMessage, recordChatReceipt } from "../chat/store";
 import { createDatabaseAuthState, closeDatabaseAuth } from "./waAuthState";
@@ -49,6 +50,25 @@ export const session = shared.doranWaSessions || (shared.doranWaSessions = new M
 const pendingSockets = shared.doranPendingWaSockets || (shared.doranPendingWaSockets = new Map<string, Promise<WASocket>>());
 const authWrites = shared.doranAuthWrites || (shared.doranAuthWrites = new WeakMap<WASocket, Promise<void>>());
 export const waitForAuthSave = (socket: WASocket) => authWrites.get(socket) || Promise.resolve();
+
+/** Reconcile lost sockets, including closes skipped because the socket retired. */
+export async function reconcileWaOffline(phoneId: string) {
+  const observed = session.get(phoneId);
+  const connected = () => !!observed?.ws.isOpen && !!observed.user && !retiredSockets.has(observed);
+  if (connected()) return;
+  const changed = await prisma.$transaction(async tx => {
+    // Serialize with connectionUpdate's online write, then recheck the socket.
+    // A delayed close must never overwrite a replacement connection's status.
+    await tx.$queryRaw`SELECT id FROM phones WHERE id = ${phoneId} FOR UPDATE`;
+    if (session.get(phoneId) !== observed || connected()) return false;
+    const result = await tx.phone.updateMany({ where: { id: phoneId, isOnline: true },
+      data: { isOnline: false, status: "CLOSE", lastOfflineAt: new Date() } });
+    return result.count > 0;
+  }, { maxWait: 2_000, timeout: 5_000 });
+  if (changed && session.get(phoneId) === observed && !connected()) {
+    await emitDeviceEvent(phoneId, "isOnline", { phoneId, isOnline: false });
+  }
+}
 
 const waSocketLogOption = pino({
   enabled: true,
@@ -93,6 +113,7 @@ const createWASocket = async (
         retiredSockets.add(_waSocket);
         _waSocket.end(new Error("WA_AUTH_LEASE_LOST"));
         if (session.get(phoneId) === _waSocket) session.delete(phoneId);
+        reconcileWaOffline(phoneId).catch(() => console.error("WA_OFFLINE_RECONCILE_FAILED", phoneId));
       }
     });
   const { state, saveCreds } = auth;

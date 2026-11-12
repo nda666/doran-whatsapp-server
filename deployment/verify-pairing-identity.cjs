@@ -71,6 +71,7 @@ function fixture({ dbFailure = false, initialNumber = A } = {}) {
     '../messaging/trafficGuard': { recordTrafficReconnect: async () => {} },
   });
   const factory = load('src/server/libs/makeWASocket.ts', {
+    './socket': { emitDeviceEvent: async (...args) => events.push(args) },
     './waAuthState': { closeDatabaseAuth: async () => { incomingEffects.authClosed++; }, createDatabaseAuthState: async () => { await incomingEffects.onAuth?.(); return { state: {}, saveCreds: async () => {}, close: async () => { incomingEffects.authClosed++; }, assertOwned: async () => {} }; } },
     '../messaging/recipientPolicy': { ownerCanSend: async () => { if (incomingEffects.failOwner) throw Error('DB_UNAVAILABLE'); return incomingEffects.ownerActive; } },
     './waMessageStore': { groupMetadataCache: () => ({ get: async () => undefined, invalidate() {} }), getProtocolMessage: async () => undefined, storeProtocolMessage: async () => {} },

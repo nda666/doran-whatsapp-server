@@ -26,7 +26,7 @@ async function main() {
     'node:path': require('node:path'),
     'node:fs/promises': { readFile: async name => { reads.push(name); if (name.includes('unlinked')) return '{}'; return '{"me":{"id":"linked"}}'; } },
     '../lib/prisma': { prisma: { phone: { findMany: async () => { if (queryFails) throw new Error('DB'); return phones; } } } },
-    './libs/makeWASocket': { suspendWaPhone: async id => { ended.push(id); sessions.delete(id); state.timers.delete(id); }, session: sessions, waitForPendingSocket: async () => {}, waitForAuthSave: async s => saves.push(s), default: async (_, id) => { attempts.push(id); if (id === failDevice) throw new Error('CREATE_FAILED'); socket(id); } },
+    './libs/makeWASocket': { reconcileWaOffline: async () => {}, suspendWaPhone: async id => { ended.push(id); sessions.delete(id); state.timers.delete(id); }, session: sessions, waitForPendingSocket: async () => {}, waitForAuthSave: async s => saves.push(s), default: async (_, id) => { attempts.push(id); if (id === failDevice) throw new Error('CREATE_FAILED'); socket(id); } },
     './libs/phoneMaintenance': { phoneMaintenance: maintenance, retiredSockets: retired },
     './libs/waRecoveryState': { waRecovery: state },
   }, { process: { env } });

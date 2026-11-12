@@ -3,6 +3,7 @@
 const { spawnSync } = require('node:child_process');
 const tests = [
   'verify-auth-maintenance.cjs',
+  'verify-auth-reconnect.cjs',
   'verify-phone-cleanup.cjs', 'verify-phone-cleanup-jobs.cjs', 'verify-phone-cleanup-background.cjs',
   'verify-transport-safety.cjs',
   'verify-whatsapp-hardening.cjs',

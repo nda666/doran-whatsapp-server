@@ -70,7 +70,11 @@ export async function clearDatabaseAuth(phoneId: string, beforeBatch: () => Prom
 
 /** Encrypted DB auth. Imported batches stay invisible until the migration marker commits. */
 export async function createDatabaseAuthState(phoneId: string, folder: string, onLeaseLost: () => void) {
-  await owners.get(phoneId)?.close();
+  // A settled local owner must not poison every future reconnect. The database
+  // acquisition below still fences an unreleased or different live lease.
+  await owners.get(phoneId)?.close().catch(() => {
+    console.error("WA_AUTH_PREVIOUS_CLOSE_FAILED", phoneId);
+  });
   const token = randomUUID();
   await prisma.waAuthSession.createMany({ data: [{ phoneId }], skipDuplicates: true });
   const acquired = await prisma.waAuthSession.updateMany({
@@ -116,8 +120,13 @@ export async function createDatabaseAuthState(phoneId: string, folder: string, o
     try { await writes; }
     finally {
       closed = true;
-      await prisma.waAuthSession.updateMany({ where: { phoneId, leaseToken: token }, data: { leaseToken: null, leaseUntil: null } });
-      if (owners.get(phoneId)?.close === close) owners.delete(phoneId);
+      try {
+        await prisma.waAuthSession.updateMany({ where: { phoneId, leaseToken: token }, data: { leaseToken: null, leaseUntil: null } });
+      } finally {
+        // Even a failed release has finished retiring this local owner. Leave
+        // the DB lease intact on failure; reconnect must acquire it normally.
+        if (owners.get(phoneId)?.close === close) owners.delete(phoneId);
+      }
     }
   })());
   owners.set(phoneId, { close, maintain: (cursor: string, offset: number) => prisma.$transaction(async tx => {
