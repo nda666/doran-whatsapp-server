@@ -48,7 +48,7 @@ export default function Dashboard() {
   ];
   return <div className={styles.dashboard}>
     {api.error && <Alert type="error" message={uiText(api.error)} showIcon action={<Button size="small" onClick={api.reload}>{uiText("Coba lagi")}</Button>} />}
-    <div className={styles.sectionHeading}><div><h2>{uiText("Ringkasan operasional")}</h2><p>{days ? uiText("Pengiriman {{v0}} hari terakhir", { v0: days }) : uiText("Memuat rentang pengiriman…")}  {uiText("· Kondisi perangkat saat ini")}</p></div><span className={styles.live}><span />  {uiText("Pembaruan otomatis · 30 dtk")}</span></div>
+    <div className={styles.sectionHeading}><div><h2>{uiText("Ringkasan operasional")}</h2><p>{days === 0 ? uiText("Hari ini sejak 00.00 WIB") : days ? uiText("Pengiriman {{v0}} hari terakhir", { v0: days }) : uiText("Memuat rentang pengiriman…")}  {uiText("· Kondisi perangkat saat ini")}</p></div><span className={styles.live}><span />  {uiText("Pembaruan otomatis · 30 dtk")}</span></div>
     <div className={styles.metrics}>{metrics.map(m => <article key={m.title} className={styles.metric}>
       <div className={styles.metricTop}><span>{m.title}</span><span className={`${styles.metricIcon} ${styles[m.tone]}`}>{m.icon}</span></div>
       {loading ? <Skeleton.Input active size="small" /> : <strong className={styles.metricValue}>{api.error && !d ? "—" : number(uiText, m.value || 0)}</strong>}
@@ -57,7 +57,7 @@ export default function Dashboard() {
     </article>)}</div>
     {d?.unrestricted === false && <div className={styles.plan}><span>{uiText("Paket")} <strong>{d.plan || "—"}</strong> · {d.devices}/{d.deviceLimit}  {uiText("perangkat · Berakhir")} {d.subscriptionExpiresAt ? dayjs(d.subscriptionExpiresAt).format("DD/MM/YYYY") : uiText("belum ditetapkan")}</span><Link href="/dashboard/profile">{uiText("Lihat akun")} <ArrowRightOutlined /></Link></div>}
     <Row gutter={[20, 20]}>
-      <Col xs={24} xl={16}><Card className={styles.panel} title={uiText("Aktivitas pengiriman")} loading={loading} extra={<Tooltip title={period}><span className={styles.period}>{days ? uiText("{{v0}} hari terakhir", { v0: days }) : uiText("Periode pengiriman")} <InfoCircleOutlined /></span></Tooltip>}>
+      <Col xs={24} xl={16}><Card className={styles.panel} title={uiText("Aktivitas pengiriman")} loading={loading} extra={<Tooltip title={period}><span className={styles.period}>{days === 0 ? uiText("Hari ini sejak 00.00 WIB") : days ? uiText("{{v0}} hari terakhir", { v0: days }) : uiText("Periode pengiriman")} <InfoCircleOutlined /></span></Tooltip>}>
         <div className={styles.chartSummary}><strong>{number(uiText, d?.series.reduce((sum, r) => sum + r.count, 0) || 0)}</strong><span>{uiText("pesan terkirim dalam periode ini")}</span><span className={styles.legend}><i />  {uiText("Terkirim")}</span></div>
         <ActivityChart showValues label={uiText("Grafik pesan terkirim {{v0}} hari (WIB)", { v0: days || "" })} items={(d?.series || []).map(r => ({ label: dayjs(r.day).format("DD/MM"), count: r.count, color: "var(--chart-delivered, #79dfbb)" }))} />
         <p className={styles.caption}>{period}  {uiText("· Berdasarkan tanggal terkirim (WIB).")}</p>

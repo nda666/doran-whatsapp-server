@@ -21,10 +21,10 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
     prisma.phone.count({ where: phoneScope(req.user!) }), prisma.phone.count({ where: { ...phoneScope(req.user!), isOnline: true } }),
     prisma.waDispatch.groupBy({ by: ["status"], where: dispatchScope, _count: { _all: true } }),
     prisma.campaign.count({ where: { ...campaignScope(req.user!), status: { in: ["WAITING", "PROCESSING", "PAUSED"] }, dispatches: { some: { createdAt: window.createdAt } } } }),
-    prisma.$queryRaw<Array<{ day: string; count: bigint }>>`SELECT DATE_FORMAT(DATE_ADD(sentAt, INTERVAL 7 HOUR), '%Y-%m-%d') AS day, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY day ORDER BY day`,
+    prisma.$queryRaw<Array<{ day: string; count: bigint }>>`SELECT DATE_FORMAT(DATE_ADD(sentAt, INTERVAL 7 HOUR), '%Y-%m-%d') AS day, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${window.createdAt.gt} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY day ORDER BY day`,
     prisma.waDispatch.groupBy({ by: ["status"], where: dispatchScope, _count: { _all: true } }),
     prisma.phone.groupBy({ by: ["active", "isOnline"], where: phoneScope(req.user!), _count: { _all: true } }),
-    prisma.$queryRaw<Array<{ hour: number; count: bigint }>>`SELECT HOUR(DATE_ADD(sentAt, INTERVAL 7 HOUR)) AS hour, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${start} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY hour ORDER BY hour`,
+    prisma.$queryRaw<Array<{ hour: number; count: bigint }>>`SELECT HOUR(DATE_ADD(sentAt, INTERVAL 7 HOUR)) AS hour, COUNT(*) AS count FROM wa_dispatches WHERE createdAt > ${window.createdAt.gt} AND sentAt >= ${start} AND sentAt < ${end} ${sqlScope} GROUP BY hour ORDER BY hour`,
     prisma.waDispatch.groupBy({ by: ["phoneId"], where: { ...dispatchScope, sentAt: { gte: start, lt: end } }, _count: { _all: true }, orderBy: { _count: { phoneId: "desc" } }, take: 5 }),
   ]);
   const phones = topDevices.length ? await prisma.phone.findMany({ where: { ...phoneScope(req.user!), id: { in: topDevices.map(r => r.phoneId) } }, select: { id: true, name: true, number: true } }) : [];

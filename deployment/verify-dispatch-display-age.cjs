@@ -27,7 +27,7 @@ const prisma = { phone: { findMany: async () => [] }, waDispatch: {
 const constants = load('src/lib/dispatchSettings.ts', {});
 const dates = load('src/lib/dispatchDateFilter.ts', {});
 const handler = load('src/pages/api/dispatch.ts', {
- '@/lib/tableQuery':load('src/lib/tableQuery.ts',{}), '@/lib/access':{ownerScope:()=>({userId:'owner'})},
+ '@/lib/tableQuery':load('src/lib/tableQuery.ts',{}), '@/lib/access':{phoneRecordScope:()=>({userId:'owner'}),phoneScope:()=>({userId:'owner'})},
  '@/middleware/apiAuthMiddleware':{default:fn=>fn}, '@/lib/prisma':{prisma},
  '@/server/dispatch/queue':{dispatchSummary:job=>({...job, created_at:job.createdAt}),requestJobId:value=>value.job_id,requestJobKey:()=>'',DispatchError:class extends Error{}},
  '@prisma/client':{WaDispatchStatus:Object.fromEntries(statuses.map(value=>[value,value]))},
@@ -56,6 +56,14 @@ async function request(query={}, expectedStatus=200) {
  const range={start_date:'2026-10-12',end_date:'2026-10-14'};
  assert.equal(dates.dispatchDateFilter(range.start_date,range.end_date).gte.toISOString(),'2026-10-11T17:00:00.000Z');
  assert.equal(dates.dispatchDateFilter(range.start_date,range.end_date).lt.toISOString(),'2026-10-14T17:00:00.000Z');
+ days=0;
+ const midnight=constants.dispatchTodayStart(now);
+ jobs.push(...[
+  {id:'today-start',userId:'owner',status:'SENT',createdAt:midnight},
+  {id:'yesterday-end',userId:'owner',status:'SENT',createdAt:new Date(midnight.getTime()-1)},
+ ]);
+ body=await request();assert.equal(body.total,1);assert.equal(body.data[0].id,'today-start');
+ body=await request({start_date:'2020-01-01',end_date:'2099-01-01'});assert.equal(body.total,1);
  days=3650; jobs.splice(0,jobs.length,...[
   ['before','2026-10-11T16:59:59.999Z','owner'],['start','2026-10-11T17:00:00Z','owner'],
   ['end','2026-10-14T16:59:59.999Z','owner'],['after','2026-10-14T17:00:00Z','owner'],

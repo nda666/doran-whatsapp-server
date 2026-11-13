@@ -34,9 +34,16 @@ export function dispatchQueueOrderBy(order: DispatchQueueOrder) {
 export function parseDispatchMaxAgeDays(value: string): number | null {
   if (!/^\d+$/.test(value.trim())) return null;
   const days = Number(value);
-  return Number.isInteger(days) && days >= 1 && days <= MAX_DISPATCH_MAX_AGE_DAYS ? days : null;
+  return Number.isInteger(days) && days >= 0 && days <= MAX_DISPATCH_MAX_AGE_DAYS ? days : null;
 }
 
 export function dispatchAgeCutoff(days: number, now = Date.now()) {
+  // All consumers use an exclusive lower bound (>); include exactly 00:00 WIB.
+  if (days === 0) return new Date(dispatchTodayStart(now).getTime() - 1);
   return new Date(now - days * 86_400_000);
+}
+
+export function dispatchTodayStart(now = Date.now()) {
+  const offset = 7 * 60 * 60 * 1000;
+  return new Date(Math.floor((now + offset) / 86_400_000) * 86_400_000 - offset);
 }

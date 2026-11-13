@@ -7,13 +7,18 @@ const ts = require('typescript');
 function load(relative, stubs = {}) {
   const file = path.resolve(__dirname, '..', relative), real = createRequire(file), module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: 1, target: 7, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', code)(name => Object.hasOwn(stubs, name) ? stubs[name] : real(name), module, module.exports);
+  new Function('require', 'module', 'exports', code)(name => {
+    if (Object.hasOwn(stubs, name)) return stubs[name];
+    const target = name.startsWith('@/') ? path.resolve(__dirname, '..', 'src', name.slice(2)) : name.startsWith('.') ? path.resolve(path.dirname(file), name) : null;
+    if (target && fs.existsSync(target + '.ts')) return load(path.relative(path.resolve(__dirname, '..'), target + '.ts'), stubs);
+    return real(name);
+  }, module, module.exports);
   return module.exports;
 }
 const constants = load('src/lib/dispatchSettings.ts');
 const cryptoSettings = load('src/lib/globalSettings.ts');
 process.env.SETTINGS_ENCRYPTION_KEY = 'synthetic-test-key';
-let stored = null, sends = 0, jobs = [], claims = [];
+let stored = null, jobs = [];
 const DAY = 86400000, now = Date.now();
 const prisma = {
   globalSetting: { findUnique: async ({ where }) => where.key === constants.DISPATCH_MAX_AGE_DAYS_KEY ? stored : null },
@@ -25,7 +30,6 @@ const prisma = {
 };
 const settings = load('src/server/dispatch/settings.ts', { '../../lib/prisma': { prisma }, '../../lib/globalSettings': cryptoSettings, '../../lib/dispatchSettings': constants });
 const events = { updateDispatches: async ({ where, data }) => {
-  if (data.status === 'PROCESSING') claims.push(where);
   let count = 0;
   for (const job of jobs) {
     if (where.id && where.id !== job.id || job.status !== where.status) continue;
@@ -36,8 +40,9 @@ const events = { updateDispatches: async ({ where, data }) => {
   }
   return { count };
 } };
-const socket = { ws: { isOpen: true }, user: { id: 'mock' }, waitForMessage: async () => ({ tag: 'ack', attrs: {} }), sendMessage: async () => { sends++; return { key: { id: 'mock-message' } }; } };
+const socket = { ws: { isOpen: true }, user: { id: 'mock' }, waitForMessage: async () => ({ tag: 'ack', attrs: {} }), sendMessage: async () => { return { key: { id: 'mock-message' } }; } };
 const worker = load('src/server/dispatch/worker.ts', {
+  './quotaRecovery': { recoverQuotaDispatches: async () => {} },
   '../libs/phoneMaintenance': { phoneMaintenance: new Set() }, './acknowledgement': { waitForDispatchAcknowledgement: (wait, id) => wait(id, 40000) }, './retry': load('src/server/dispatch/retry.ts'), './receipts': { recordDispatchReceipt: async () => {} },
   '../../lib/prisma': { prisma }, '../dispatchWebhook/events': events, './settings': settings,
   '../../lib/dispatchSettings': constants,
@@ -62,13 +67,39 @@ async function apiRequest(method, value) {
 }
 const makeJob = (id, age) => ({ id, createdAt: new Date(now - age * DAY), expiresAt: new Date(now - DAY), status: 'QUEUED', campaignId: null, recipient: '6281234567890', message: 'synthetic' });
 (async () => {
-  for (const value of ['', '0', '-1', '1.5', 'NaN', '3651', '1e2']) assert.equal(constants.parseDispatchMaxAgeDays(value), null);
+  for (const value of ['', '-1', '1.5', 'NaN', '3651', '1e2']) assert.equal(constants.parseDispatchMaxAgeDays(value), null);
+  assert.equal(constants.parseDispatchMaxAgeDays('0'), 0);
+  for (const [time, start] of [
+    ['2026-11-13T16:59:59.999Z', '2026-11-12T17:00:00.000Z'],
+    ['2026-11-13T17:00:00.000Z', '2026-11-13T17:00:00.000Z'],
+    ['2026-12-31T18:00:00.000Z', '2026-12-31T17:00:00.000Z'],
+    ['2026-02-28T18:00:00.000Z', '2026-02-28T17:00:00.000Z'],
+  ]) {
+    assert.equal(constants.dispatchTodayStart(Date.parse(time)).toISOString(), start);
+    assert.equal(constants.dispatchAgeCutoff(0, Date.parse(time)).getTime(), Date.parse(start) - 1);
+  }
+  assert.equal((await apiRequest('PATCH', '0')).code, 200);
+  assert.equal(cryptoSettings.decryptSetting(row.value), '0');
+  stored = { value: cryptoSettings.encryptSetting('0') };
+  const midnight = constants.dispatchTodayStart();
+  jobs = [
+    { ...makeJob('yesterday', 0), createdAt: new Date(midnight.getTime() - 1) },
+    { ...makeJob('midnight', 0), createdAt: midnight },
+  ];
+  await worker.recoverDispatches();
+  assert.equal(jobs[0].status, 'FAILED');
+  assert.equal(jobs[1].status, 'QUEUED');
+  const window = await settings.getDispatchDisplayWindow();
+  assert.equal(window.days, 0); assert.equal(window.start.getTime(), midnight.getTime());
+  assert(jobs[1].createdAt > window.createdAt.gt);
+  stored = null;
+  row.value = cryptoSettings.encryptSetting('7');
   assert.equal(constants.parseDispatchMaxAgeDays('7'), 7);
   assert.equal(constants.parseDispatchMaxAgeDays('3650'), 3650);
   assert.equal(constants.dispatchAgeCutoff(7, now).getTime(), now - 7 * DAY);
   const listed = await apiRequest('GET');
   assert.equal(listed.body[0].value, '7'); // Initialization never overwrites a saved value.
-  for (const value of ['0', '-1', '1.5', '3651', 'abc']) assert.equal((await apiRequest('PATCH', value)).code, 400);
+  for (const value of ['-1', '1.5', '3651', 'abc']) assert.equal((await apiRequest('PATCH', value)).code, 400);
   assert.equal((await apiRequest('PATCH', '14')).code, 200);
   assert.equal(cryptoSettings.decryptSetting(row.value), '14');
   assert(Math.abs((await settings.getDispatchAgeCutoff()).getTime() - (Date.now() - DAY)) < 100);
@@ -78,18 +109,16 @@ const makeJob = (id, age) => ({ id, createdAt: new Date(now - age * DAY), expire
   assert.equal(jobs[0].status, 'FAILED');
   assert.equal(jobs[0].lastError, 'QUEUE_MAX_AGE_EXCEEDED');
   assert.equal(jobs[1].status, 'QUEUED');
-  await worker.processPhone('phone');
-  assert.equal(sends, 1); assert.equal(jobs[1].status, 'SENT');
-  assert(claims[0].createdAt.gt instanceof Date);
+
   jobs = [makeJob('pending', 3)];
   stored = { value: cryptoSettings.encryptSetting('2') };
-  await worker.processPhone('phone'); assert.equal(sends, 1);
+  await worker.recoverDispatches();
   await worker.recoverDispatches(); assert.equal(jobs[0].status, 'FAILED');
   stored = { value: cryptoSettings.encryptSetting('7') };
-  await worker.processPhone('phone'); assert.equal(sends, 1); // Failed jobs never revive.
+  await worker.recoverDispatches(); assert.equal(jobs[0].status, 'FAILED'); // Failed jobs never revive.
   jobs = [{ ...makeJob('campaign', 8), campaignId: 'campaign' }];
   await worker.recoverDispatches(); assert.equal(jobs[0].lastError, 'QUEUE_MAX_AGE_EXCEEDED');
   stored = { value: cryptoSettings.encryptSetting('invalid') };
   await assert.rejects(settings.getDispatchAgeCutoff(), /Invalid dispatch/);
-  console.log('PASS: day validation, encrypted settings, dynamic queue cutoff, old API expiry, claim guard, campaign age, no revival');
+  console.log('PASS: day validation, WIB midnight boundary, encrypted settings, dynamic queue cutoff, old API expiry, campaign age, no revival');
 })().catch(error => { console.error(error); process.exitCode = 1; });

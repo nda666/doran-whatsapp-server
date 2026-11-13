@@ -46,7 +46,7 @@ export default function DispatchPage() {
     } finally { setResetting(false); }
   };
   return <Space direction="vertical" style={{ width: "100%" }} size="middle">
-    <SummaryCards title={uiText("Ringkasan pengiriman")} caption={summaryFiltered ? undefined : uiText("Jumlah pesan dibuat {{v0}}–{{v1}} (WIB){{v2}} • diperbarui otomatis setiap 5 detik", { v0: dayjs(query.start_date).format("DD/MM/YYYY"), v1: dayjs(query.end_date).format("DD/MM/YYYY"), v2: result.max_age_days ? uiText(" • batas usia data {{v0}} hari", { v0: result.max_age_days }) : "" })} items={[{
+    <SummaryCards title={uiText("Ringkasan pengiriman")} caption={summaryFiltered ? undefined : uiText("Jumlah pesan dibuat {{v0}}–{{v1}} (WIB){{v2}} • diperbarui otomatis setiap 5 detik", { v0: dayjs(query.start_date).format("DD/MM/YYYY"), v1: dayjs(query.end_date).format("DD/MM/YYYY"), v2: result.max_age_days === 0 ? uiText(" • hanya hari ini sejak 00.00 WIB") : result.max_age_days ? uiText(" • batas usia data {{v0}} hari", { v0: result.max_age_days }) : "" })} items={[{
       key: "TOTAL", label: uiText("Total Data Antrean Pengiriman"),
       value: api.data ? Object.values(result.counts as Record<string, number>).reduce((sum, count) => sum + count, 0) : undefined,
       color: "#4274d7", icon: <DatabaseOutlined />,

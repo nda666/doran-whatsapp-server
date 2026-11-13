@@ -53,7 +53,7 @@ async function handler(req: AuthNextApiRequest, res: NextApiResponse) {
   if (key === AUTO_REPLY_MAX_AGE_KEY && parseAutoReplyMaxAge(value) === null) return res.status(400).json({ message: AUTO_REPLY_AGE_ERROR });
   if (key === QUOTA_RESET_KEY && !parseQuotaReset(value)) return res.status(400).json({ message: "Pilih reset pukul 00.00 WIB atau 1–168 jam setelah kuota terpenuhi." });
   if (previous && parsed.data.key !== undefined && parsed.data.key !== previous.key) return res.status(409).json({ message: "Key tidak dapat diubah setelah dibuat." });
-  if (key === DISPATCH_MAX_AGE_DAYS_KEY && parseDispatchMaxAgeDays(value) === null) return res.status(400).json({ message: "Maksimal usia data antrean harus berupa bilangan bulat 1–3650 hari." });
+  if (key === DISPATCH_MAX_AGE_DAYS_KEY && parseDispatchMaxAgeDays(value) === null) return res.status(400).json({ message: "Maksimal usia data antrean harus berupa bilangan bulat 0–3650. Nilai 0 berarti hanya hari ini sejak 00.00 WIB." });
   if (key === DISPATCH_QUEUE_ORDER_KEY && parseDispatchQueueOrder(value) === null) return res.status(400).json({ message: "Pilih data terlama dahulu atau data terbaru dahulu." });
   if (key === WARMUP_DAILY_LIMITS_KEY && parseWarmupDailyLimits(value) === null) return res.status(400).json({ message: WARMUP_LIMITS_ERROR });
   if (key === TRAFFIC_GUARD_KEY && parseTrafficPolicy(value) === null) return res.status(400).json({ message: TRAFFIC_GUARD_ERROR });

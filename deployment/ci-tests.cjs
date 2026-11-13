@@ -19,6 +19,7 @@ const tests = [
   'verify-webhook-worker-retry.cjs',
   'verify-messaging-improvements.cjs', 'verify-pm2-optimization.cjs',
   'verify-device-delay-range.cjs', 'verify-dispatch-delay-setting.cjs', 'verify-upgrade.cjs',
+  'verify-dispatch-age-setting.cjs', 'verify-dispatch-display-age.cjs',
   'verify-phone-last-qr-scan.cjs',
   'verify-phone-last-offline.cjs', 'verify-phone-last-send.cjs',
   'verify-phone-sender-group.cjs', 'verify-phone-search-return.cjs',

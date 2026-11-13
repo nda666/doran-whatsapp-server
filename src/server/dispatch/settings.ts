@@ -2,7 +2,7 @@ import { DEFAULT_WARMUP_DAILY_LIMITS, WARMUP_DAILY_LIMITS_KEY, parseWarmupDailyL
 import { DEFAULT_TRAFFIC_POLICY, TRAFFIC_GUARD_KEY, parseTrafficPolicy } from "../../lib/trafficSettings";
 import { prisma } from "../../lib/prisma";
 import { decryptSetting } from "../../lib/globalSettings";
-import { DEFAULT_DISPATCH_MAX_AGE_DAYS, DISPATCH_MAX_AGE_DAYS_KEY, dispatchAgeCutoff, parseDispatchMaxAgeDays } from "../../lib/dispatchSettings";
+import { DEFAULT_DISPATCH_MAX_AGE_DAYS, DISPATCH_MAX_AGE_DAYS_KEY, dispatchAgeCutoff, dispatchTodayStart, parseDispatchMaxAgeDays } from "../../lib/dispatchSettings";
 import { DEFAULT_DISPATCH_QUEUE_ORDER, DISPATCH_QUEUE_ORDER_KEY, parseDispatchQueueOrder } from "../../lib/dispatchSettings";
 import { DEFAULT_DISPATCH_DELAY, DISPATCH_DELAY_KEY, parseDispatchDelayRange } from "../../lib/dispatchSettings";
 
@@ -58,8 +58,9 @@ export async function getDispatchAgeCutoff() {
 export async function getDispatchDisplayWindow() {
   const days = await getDispatchMaxAgeDays();
   const end = new Date();
-  const start = dispatchAgeCutoff(days, end.getTime());
-  return { days, start, end, createdAt: { gt: start } };
+  const cutoff = dispatchAgeCutoff(days, end.getTime());
+  const start = days === 0 ? dispatchTodayStart(end.getTime()) : cutoff;
+  return { days, start, end, createdAt: { gt: cutoff } };
 }
 
 // API jobs use the current global limit, including jobs queued before it changed.
