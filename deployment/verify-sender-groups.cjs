@@ -492,7 +492,12 @@ async function main() {
   assert.equal(assignedSent.attempts, 1); assert.equal(sends.length, beforeAssigned + 1);
   assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id: originOwnId } })).attempts, 0, 'Origin own quota-blocked job is never admitted through assignment bypass');
   assert.equal((await prisma.waDispatch.findUniqueOrThrow({ where: { id: otherAssignedId } })).attempts, 0, 'Waiting assignments for another sender must not run or block the ready replacement');
-  assert((await prisma.waSenderLease.findUniqueOrThrow({ where: { phoneId: primary.id } })).nextSendAt >= sleepUntil, 'Quota recovery may extend the origin reset, but must not block the reassigned sender');
+  // Recovery follows the real quota reset, which can be earlier than our
+  // synthetic one-hour sleep when this test runs near midnight WIB.
+  const originWaiting = await prisma.waDispatch.findUniqueOrThrow({ where: { id: originOwnId } });
+  const originLease = await prisma.waSenderLease.findUniqueOrThrow({ where: { phoneId: primary.id } });
+  assert(originWaiting.nextAttemptAt > new Date(), 'The exhausted origin must keep waiting for its quota reset');
+  assert.equal(originLease.nextSendAt.getTime(), originWaiting.nextAttemptAt.getTime(), 'Origin lease follows quota recovery while the reassigned sender remains independent');
   assert((await prisma.deviceSendPolicy.findUniqueOrThrow({ where: { phoneId: backup.id } })).nextAllowedAt > new Date(0));
   console.log('PASS live polling routes reassigned jobs despite sleeping origin, preserves actual sender interval and origin cooldown, no duplicate sends');
   console.log('SENDER_GROUP_TESTS_PASSED (real MySQL, no real WhatsApp messages)');
