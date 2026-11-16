@@ -24,6 +24,7 @@ import { ACK_TIMEOUT_MS, acknowledgementFailure, retryEligible } from "./retry";
 import { recordDispatchReceipt } from "./receipts";
 import { waitForDispatchAcknowledgement, AckObservation } from "./acknowledgement";
 import { recoverQuotaDispatches } from "./quotaRecovery";
+import { recoverRecipientFrequencyDispatches } from "./recipientRecovery";
 import { selectDispatchSender } from "./senderRouting";
 import { isTelegramDevice } from "../../lib/messagingChannel";
 import { prepareTelegramDispatch, sendTelegramDispatch, telegramDispatchOutcome } from "../telegram/dispatch";
@@ -92,6 +93,7 @@ export async function recoverDispatches() {
   await updateDispatches({ where: { status: "QUEUED", expiresAt: { lte: new Date() }, campaignId: { not: null }, ...runnable() }, data: { status: "FAILED", lastError: "CAMPAIGN_EXPIRED" } });
   await prisma.campaign.updateMany({ where: { status: { in: ["WAITING", "PROCESSING"] }, dispatches: { none: { status: { in: ["QUEUED", "PROCESSING"] } } } }, data: { status: "COMPLETED" } });
   await recoverQuotaDispatches();
+  await recoverRecipientFrequencyDispatches();
 }
 
 export async function processPhone(phoneId: string, assignedOnly = false, assignedSenderId?: string | null) {
@@ -162,7 +164,7 @@ export async function processPhone(phoneId: string, assignedOnly = false, assign
       return;
     }
     if (!telegram) {
-      const verdict = await recipientVerdict(job.userId, job.recipient, await getTrafficPolicy());
+      const verdict = await recipientVerdict(job.userId, job.recipient, job.message, await getTrafficPolicy());
       if (verdict) {
         const terminal = verdict.code === "CONSENT_REQUIRED" || verdict.code === "INVALID_NUMBER";
         await updateDispatches({ where: { id: job.id, status: "QUEUED" }, data: terminal

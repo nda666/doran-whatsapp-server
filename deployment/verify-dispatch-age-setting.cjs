@@ -43,6 +43,7 @@ const events = { updateDispatches: async ({ where, data }) => {
 const socket = { ws: { isOpen: true }, user: { id: 'mock' }, waitForMessage: async () => ({ tag: 'ack', attrs: {} }), sendMessage: async () => { return { key: { id: 'mock-message' } }; } };
 const worker = load('src/server/dispatch/worker.ts', {
   './quotaRecovery': { recoverQuotaDispatches: async () => {} },
+  './recipientRecovery': { recoverRecipientFrequencyDispatches: async () => {} },
   '../libs/phoneMaintenance': { phoneMaintenance: new Set() }, './acknowledgement': { waitForDispatchAcknowledgement: (wait, id) => wait(id, 40000) }, './retry': load('src/server/dispatch/retry.ts'), './receipts': { recordDispatchReceipt: async () => {} },
   '../../lib/prisma': { prisma }, '../dispatchWebhook/events': events, './settings': settings,
   '../../lib/dispatchSettings': constants,

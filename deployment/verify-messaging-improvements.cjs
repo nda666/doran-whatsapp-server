@@ -229,8 +229,11 @@ async function futureScheduleTests() {
   };
   let quotaRecoveries = 0;
   stubs['src/server/dispatch/quotaRecovery.ts'] = { recoverQuotaDispatches: async () => { quotaRecoveries++; } };
+  let recipientRecoveries = 0;
+  stubs['src/server/dispatch/recipientRecovery.ts'] = { recoverRecipientFrequencyDispatches: async () => { recipientRecoveries++; } };
   await loader(stubs)('src/server/dispatch/worker.ts').recoverDispatches();
   assert.equal(quotaRecoveries, 1, 'Periodic/startup recovery must revisit daily-limit sleeps');
+  assert.equal(recipientRecoveries, 1, 'Periodic/startup recovery must revisit recipient-frequency sleeps');
   assert.equal(jobs[0].status, 'QUEUED'); assert.equal(jobs[1].status, 'FAILED'); assert.equal(jobs[2].status, 'FAILED');
   console.log('PASS future campaigns survive queue recovery while expired API/campaign ages remain enforced');
 }

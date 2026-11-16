@@ -26,7 +26,7 @@ export function looksInvalid(failures: number, senders: number, delivered: numbe
 }
 
 /** Checks that must pass before a queued API/campaign message is handed to a transport. */
-export async function recipientVerdict(userId: string, recipient: string, policy: TrafficPolicy, now = new Date()): Promise<RecipientVerdict | null> {
+export async function recipientVerdict(userId: string, recipient: string, message: string, policy: TrafficPolicy, now = new Date()): Promise<RecipientVerdict | null> {
   if (!await ownerCanSend(userId)) return { code: "ACCOUNT_INACTIVE", retryAt: new Date(now.getTime() + 300_000) };
   if (policy.requireConsent) {
     const consent = await prisma.recipientConsent.findFirst({ where: { userId, number: recipient, revokedAt: null }, select: { number: true } });
@@ -38,13 +38,21 @@ export async function recipientVerdict(userId: string, recipient: string, policy
     const total = failed.reduce((sum, row) => sum + row._count._all, 0);
     if (looksInvalid(total, failed.filter(row => row.senderPhoneId).length, delivered)) return { code: "INVALID_NUMBER" };
   }
+  return recipientFrequencyVerdict(userId, recipient, message, policy, now);
+}
+
+/** Only exactly identical text shares a recipient's rolling 24-hour budget. */
+export async function recipientFrequencyVerdict(userId: string, recipient: string, message: string, policy: TrafficPolicy, now = new Date()): Promise<RecipientVerdict | null> {
   if (policy.enabled) {
     const recent = await prisma.waDispatch.findMany({
-      where: { userId, recipient, OR: [{ status: "PROCESSING" }, { status: { in: [...DELIVERED_STATUSES] }, sentAt: { gt: new Date(now.getTime() - DAY_MS) } }] },
-      orderBy: { sentAt: "asc" }, take: policy.recipientPerDay, select: { sentAt: true },
+      where: { userId, recipient, message, OR: [{ status: "PROCESSING" }, { status: { in: [...DELIVERED_STATUSES] }, sentAt: { gt: new Date(now.getTime() - DAY_MS) } }] },
+      orderBy: { sentAt: "asc" }, select: { sentAt: true, message: true },
     });
-    if (recent.length >= policy.recipientPerDay) {
-      const oldest = recent.find(row => row.sentAt)?.sentAt;
+    // MySQL text collation can ignore case, accents or trailing spaces. Verify
+    // exact equality before counting; do not limit the collation candidates.
+    const identical = recent.filter(row => row.message === message);
+    if (identical.length >= policy.recipientPerDay) {
+      const oldest = identical.find(row => row.sentAt)?.sentAt;
       return { code: "RECIPIENT_FREQUENCY", retryAt: new Date(Math.max(now.getTime() + 60_000, (oldest?.getTime() ?? now.getTime()) + DAY_MS)) };
     }
   }

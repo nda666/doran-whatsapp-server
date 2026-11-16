@@ -36,6 +36,7 @@ const tests = [
   'verify-conversations.cjs',
   'verify-auto-reply-age.cjs', 'verify-webhook-sender.cjs',
   'verify-traffic-audit.cjs',
+  'verify-recipient-frequency.cjs',
   'verify-wa-recovery.cjs',
   'verify-dependency-patches.cjs',
 ];

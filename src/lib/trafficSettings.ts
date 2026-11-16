@@ -11,7 +11,7 @@ export type TrafficPolicy = {
   reconnectCooldownSeconds: number;
   rampFirstMinute: number;
   rampSecondMinute: number;
-  /** Messages one recipient may receive in 24 hours from all of an account's numbers combined. */
+  /** Identical texts one recipient may receive in 24 hours across an account's numbers. */
   recipientPerDay: number;
   /** Proactive API/campaign messages need an active recipient consent record. */
   requireConsent: boolean;

@@ -57,7 +57,7 @@ export const dispatchErrorLabels: Record<string, string> = {
   ACCOUNT_INACTIVE: "Akun pemilik tidak aktif atau belum disetujui. Pengiriman ditahan.",
   CONSENT_REQUIRED: "Penerima belum memiliki catatan izin aktif. Pesan tidak dikirim.",
   INVALID_NUMBER: "Nomor berulang kali tidak dapat dijangkau dari beberapa pengirim. Pesan tidak dikirim.",
-  RECIPIENT_FREQUENCY: "Penerima sudah mencapai batas pesan per 24 jam. Menunggu giliran berikutnya.",
+  RECIPIENT_FREQUENCY: "Penerima sudah mencapai batas pesan dengan isi identik per 24 jam. Menunggu giliran berikutnya.",
   DEVICE_DAILY_LIMIT: "Batas percobaan pengiriman harian tercapai.",
   DEVICE_SAFETY_PAUSED: "Pengiriman dijeda oleh pengamanan perangkat.",
   DEVICE_THROTTLED: "Menunggu interval pengiriman perangkat.",
